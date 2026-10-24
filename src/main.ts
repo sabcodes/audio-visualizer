@@ -74,7 +74,7 @@ function fail(error: unknown) {
 function metadata() {
   const state = audio.state;
   return {
-    schemaVersion: 1, stage: 'Stage 2 18-mode port — pending visual parity approval',
+    schemaVersion: 1, stage: 'Stage 3 GPU scaling — in progress',
     timestamp: new Date().toISOString(),
     secureContext: isSecureContext, backendRequested: backend.value, backendActual: engine?.backend ?? 'unavailable',
     startupFailures: engine?.startupFailures ?? [], gpu: 'Record physical GPU and OS in the hardware review.',
@@ -87,6 +87,7 @@ function metadata() {
     output: { toneMapping: 'ACES', antialiasing: 'FXAA after single display transform', exposure: Number(exposure.value), bloom: Number(bloom.value), scale: Number(scale.value) },
     simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
+    timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
   };
 }
 function cancelBenchmark(message: string) {
@@ -134,7 +135,7 @@ async function start() {
     candidate.select(mode.value);
     draw(0);
     if (failed) throw new Error('Graphics validation failed during the first frame.');
-    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 2`;
+    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 3`;
     status.dataset.state = 'ready';
     if (!document.hidden) loop.start(frame);
   } catch (error) {
@@ -184,7 +185,7 @@ function frame(now: number) {
     if (now >= nextDiagnostics) {
       nextDiagnostics = now + 500;
       const stats = summarizeIntervals(intervals);
-      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over 18.33 ms (60 Hz reference)${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
+      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over 18.33 ms (60 Hz reference)\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
     }
   } catch (error) { fail(error); }
 }

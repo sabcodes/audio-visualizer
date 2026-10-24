@@ -3,7 +3,13 @@ import { initializeBackend, type BackendPreference } from './backendSelection';
 import { ModeRegistry, type ModeFrame, type VisualMode } from '../modes/registry';
 import { createOutputPipeline } from './OutputPipeline';
 
+/** CPU submit cost per frame plus the latest resolved GPU time; GPU is null when unmeasurable. */
+export interface FrameBreakdown { cpuUpdateMs: number; gpuMs: number | null }
+
 export class VisualEngine {
+  readonly lastFrame: FrameBreakdown = { cpuUpdateMs: 0, gpuMs: null };
+  private nextResolve = 0;
+  private resolving = false;
   private active?: VisualMode;
   private readonly modes = new ModeRegistry();
   private output?: ReturnType<typeof createOutputPipeline>;
@@ -20,7 +26,7 @@ export class VisualEngine {
   static async create(preference: BackendPreference, onLoss: (message: string) => void) {
     const result = await initializeBackend(
       preference,
-      (forceWebGL) => new THREE.WebGPURenderer({ antialias: false, forceWebGL }),
+      (forceWebGL) => new THREE.WebGPURenderer({ antialias: false, forceWebGL, trackTimestamp: true }),
       async (renderer) => {
         await renderer.init();
         return 'isWebGPUBackend' in renderer.backend && renderer.backend.isWebGPUBackend
@@ -63,8 +69,26 @@ export class VisualEngine {
     if (this.disposed) return;
     this.renderer.toneMappingExposure = exposure;
     const size = this.renderer.getSize(this.logicalSize);
+    const start = performance.now();
     this.active?.update({ ...frame, aspect: size.x / size.y });
     this.output?.render(bloom);
+    this.lastFrame.cpuUpdateMs = performance.now() - start;
+    this.resolveGpuTime(start);
+  }
+
+  get gpuTimingAvailable() {
+    return this.backend === 'webgpu' && this.renderer.hasFeature('timestamp-query');
+  }
+
+  // Resolves at most every 500 ms off the frame path; r186 reports the most recent frame's summed pass durations.
+  private resolveGpuTime(now: number) {
+    if (!this.gpuTimingAvailable || this.resolving || now < this.nextResolve) return;
+    this.nextResolve = now + 500;
+    this.resolving = true;
+    this.renderer.resolveTimestampsAsync('render')
+      .then((total) => { if (typeof total === 'number') this.lastFrame.gpuMs = total; })
+      .catch(() => { this.lastFrame.gpuMs = null; })
+      .finally(() => { this.resolving = false; });
   }
 
   private clearMode() {

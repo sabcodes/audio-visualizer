@@ -10,3 +10,5 @@ playwright-report/
 *.mp3
 *.flac
 .DS_Store
+.claude/
+.superpowers/

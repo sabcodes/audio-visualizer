@@ -215,3 +215,13 @@ describe("diagnostics", () => {
     });
   });
 });
+
+describe("summarizeIntervals refresh budget", () => {
+  it("counts missed frames against a 120 Hz budget", () => {
+    expect(summarizeIntervals([8, 9, 10], 120).missedFrames).toBe(1);
+  });
+  it("defaults to the 60 Hz budget", () => {
+    expect(summarizeIntervals([17, 19], 60).missedFrames).toBe(1);
+    expect(summarizeIntervals([17, 19]).missedFrames).toBe(1);
+  });
+});

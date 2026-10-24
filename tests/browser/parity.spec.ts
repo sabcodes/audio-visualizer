@@ -16,6 +16,8 @@ test('all 18 modes render silently then during Ghost playback and seeking @hardw
   await expect(page.locator('#status')).toContainText(backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility');
   await expect(page.locator('#reduced-flash')).toBeChecked();
   await page.locator('#hide').click();
+  // WebGL2 must say timestamps are unavailable rather than report zeros.
+  await expect(page.locator('#diagnostics')).toHaveText(backend === 'webgpu' ? /gpu (\d+\.\d+ ms|n\/a)/ : /gpu n\/a/);
   for (const id of ids) {
     await page.selectOption('#mode', id, { force: true });
     await page.waitForTimeout(450);
