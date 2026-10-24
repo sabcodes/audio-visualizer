@@ -9,6 +9,9 @@ playwright-report/
 *.wav
 *.mp3
 *.flac
+
+# Exported diagnostics (Export diagnostics JSON) stay local
+visualizer-capabilities*.json
 .DS_Store
 .claude/
 .superpowers/
