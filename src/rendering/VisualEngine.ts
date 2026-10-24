@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { initializeBackend, type BackendPreference } from './backendSelection';
 import { ModeRegistry, type ModeFrame, type VisualMode } from '../modes/registry';
 import { createOutputPipeline } from './OutputPipeline';
+import { basePixelRatio, presetBudget, type QualityBudget } from './quality';
 
 /** CPU submit cost per frame plus the latest resolved GPU time; GPU is null when unmeasurable. */
 export interface FrameBreakdown { cpuUpdateMs: number; gpuMs: number | null }
@@ -16,6 +17,9 @@ export class VisualEngine {
   private disposed = false;
   readonly dimensions = new THREE.Vector2();
   private readonly logicalSize = new THREE.Vector2();
+  private budget: QualityBudget = presetBudget('balanced');
+  private activeId?: string;
+  private readonly lastSize = { width: 1, height: 1, scale: 1 };
 
   private constructor(
     readonly renderer: THREE.WebGPURenderer,
@@ -51,7 +55,8 @@ export class VisualEngine {
   select(mode: string) {
     this.clearMode();
     try {
-      this.active = this.modes.select(mode, this.backend);
+      this.active = this.modes.select(mode, this.backend, this.budget);
+      this.activeId = mode;
       this.output = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter);
     } catch (error) {
       this.clearMode();
@@ -59,8 +64,17 @@ export class VisualEngine {
     }
   }
 
+  /** Re-creates the active mode only when its simulation budget changed; otherwise only re-sizes. */
+  setQuality(budget: QualityBudget) {
+    const rebuild = budget.particleScale !== this.budget.particleScale;
+    this.budget = budget;
+    this.resize(this.lastSize.width, this.lastSize.height, this.lastSize.scale);
+    if (rebuild && this.activeId) this.select(this.activeId);
+  }
+
   resize(width: number, height: number, scale: number) {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * scale);
+    Object.assign(this.lastSize, { width, height, scale });
+    this.renderer.setPixelRatio(basePixelRatio(this.budget, Math.max(1, height), window.devicePixelRatio || 1) * scale);
     this.renderer.setSize(Math.max(1, width), Math.max(1, height));
     this.renderer.getDrawingBufferSize(this.dimensions);
   }
@@ -96,6 +110,7 @@ export class VisualEngine {
     this.output = undefined;
     this.modes.clear();
     this.active = undefined;
+    this.activeId = undefined;
   }
 
   async dispose() {

@@ -1,6 +1,7 @@
 import type { Camera, Scene, TextureNode, Node } from 'three/webgpu';
 import type { AudioFrame } from '../audio/AudioEngine';
 import type { BackendName } from '../rendering/backendSelection';
+import type { QualityBudget } from '../rendering/quality';
 
 export interface VisualResponse {
   bass: number;
@@ -31,5 +32,5 @@ export interface ModeDefinition {
   label: string;
   output: 'scene' | 'fullscreen' | 'dom';
   backends: readonly BackendName[];
-  create(): VisualMode;
+  create(budget: QualityBudget): VisualMode;
 }

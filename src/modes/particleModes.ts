@@ -4,9 +4,10 @@ import type { VisualMode } from './types';
 import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { FlockSimulation } from '../simulations/flock';
+import { presetBudget, type QualityBudget } from '../rendering/quality';
 
-export function createParticleMode(id: 'particles' | 'boids' | 'starTunnel'): VisualMode {
-  if (id === 'particles') return swirl();
+export function createParticleMode(id: 'particles' | 'boids' | 'starTunnel', budget: QualityBudget = presetBudget('balanced')): VisualMode {
+  if (id === 'particles') return swirl(Math.round(8000 * budget.particleScale));
   if (id === 'boids') return flock();
   return stars();
 }
@@ -22,10 +23,10 @@ function spriteMaterial() {
   material.opacityNode = uv().sub(0.5).length().smoothstep(0.08, 0.5).oneMinus().mul(0.8);
   return material;
 }
-function swirl(): VisualMode {
+function swirl(count: number): VisualMode {
   const { scene, camera } = sceneDefaults(115);
   const time = uniform(0), bounce = uniform(0), impact = uniform(0);
-  const random = seededRandom(42), seeds = new Float32Array(8000 * 3);
+  const random = seededRandom(42), seeds = new Float32Array(count * 3);
   for (let i = 0; i < seeds.length; i += 3) { seeds[i] = random() * Math.PI * 2; seeds[i + 1] = 16 + random() * 22; seeds[i + 2] = (random() - 0.5) * 18; }
   const seed = instancedBufferAttribute<'vec3'>(new THREE.InstancedBufferAttribute(seeds, 3), 'vec3');
   const angle = seed.x.add(time.mul(0.6).mul(seed.y.div(40).add(0.2)));
@@ -33,7 +34,7 @@ function swirl(): VisualMode {
   const material = spriteMaterial();
   material.positionNode = vec3(cos(angle).mul(radius), seed.z.mul(bounce.mul(0.5).add(1)), sin(angle).mul(radius));
   material.scaleNode = vec2(impact.mul(0.35).add(0.55));
-  sprite(material, 8000, scene);
+  sprite(material, count, scene);
   const ringMaterial = new THREE.MeshBasicNodeMaterial({ color: 0x333333 });
   scene.add(new THREE.Mesh(new THREE.TorusGeometry(26, 0.12, 8, 128), ringMaterial));
   return {
