@@ -9,7 +9,7 @@ import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 export function createParticleMode(id: 'particles' | 'boids' | 'starTunnel', budget: QualityBudget = presetBudget('balanced')): VisualMode {
   if (id === 'particles') return swirl(Math.round(8000 * budget.particleScale));
-  if (id === 'boids') return flock();
+  if (id === 'boids') return flock(Math.round(220 * budget.particleScale));
   return stars();
 }
 function sprite(material: THREE.SpriteNodeMaterial, count: number, scene: THREE.Scene) {
@@ -46,13 +46,13 @@ function swirl(count: number): VisualMode {
     }, dispose: () => disposeScene(scene),
   };
 }
-function flock(): VisualMode {
+function flock(count: number): VisualMode {
   const { scene, camera } = sceneDefaults();
-  const simulation = new FlockSimulation();
-  const positions = new Float32Array(220 * 3), attribute = new THREE.InstancedBufferAttribute(positions, 3);
+  const simulation = new FlockSimulation(count);
+  const positions = new Float32Array(count * 3), attribute = new THREE.InstancedBufferAttribute(positions, 3);
   const size = uniform(0.7), material = spriteMaterial();
   material.positionNode = instancedBufferAttribute<'vec3'>(attribute, 'vec3');
-  material.scaleNode = vec2(size); sprite(material, 220, scene);
+  material.scaleNode = vec2(size); sprite(material, count, scene);
   return {
     scene, camera,
     update(frame) {

@@ -21,3 +21,11 @@ it('scales the swirl particle count with the preset', () => {
   });
   expect(counts).toEqual([4000, 8000, 16000]);
 });
+it('scales the boid count with the preset', () => {
+  const counts = (['compatibility', 'balanced', 'high', 'ultra'] as const).map((preset) => {
+    const mode = createParticleMode('boids', presetBudget(preset));
+    const count = (mode.scene.children.find((child) => child instanceof Sprite) as Sprite).count;
+    mode.dispose(); return count;
+  });
+  expect(counts).toEqual([110, 220, 440, 440]);
+});
