@@ -26,7 +26,8 @@
     </div>
     <div class="row">
       <label>Quality <select id="quality"><option value="compatibility">Compatibility (1080p, half particles)</option><option value="balanced" selected>Balanced (1080p)</option><option value="high">High (1440p)</option><option value="ultra">Ultra (native)</option></select></label>
-      <label>Render scale <select id="scale"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option></select></label>
+      <label>Render scale <select id="scale"><option value="auto" selected>Auto</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+      <label>Target <select id="target-hz"><option value="60" selected>60 Hz</option><option value="120">120 Hz</option></select></label>
       <label>Exposure <input id="exposure" type="range" min="0.25" max="2" value="1" step="0.05"></label>
       <label>Bloom <input id="bloom" type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
     </div>

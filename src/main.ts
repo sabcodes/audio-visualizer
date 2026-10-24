@@ -6,6 +6,7 @@ import { ControlPanel } from './ui/ControlPanel';
 import { FrameLoop } from './rendering/FrameLoop';
 import { modeDefinitions } from './modes/registry';
 import { ResponseEnvelope } from './audio/VisualResponse';
+import { AdaptiveResolution } from './rendering/AdaptiveResolution';
 import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
 
 const element = <T extends HTMLElement>(id: string) => {
@@ -20,6 +21,10 @@ const backend = element<HTMLSelectElement>('backend');
 const mode = element<HTMLSelectElement>('mode');
 const scale = element<HTMLSelectElement>('scale');
 const quality = element<HTMLSelectElement>('quality');
+const targetHz = element<HTMLSelectElement>('target-hz');
+const adaptive = new AdaptiveResolution();
+const refreshHz = () => Number(targetHz.value);
+const renderScale = () => (scale.value === 'auto' ? adaptive.scale : Number(scale.value));
 const exposure = element<HTMLInputElement>('exposure');
 const bloom = element<HTMLInputElement>('bloom');
 const motion = element<HTMLInputElement>('motion');
@@ -88,7 +93,7 @@ function metadata() {
     time: frozen ? fixedTime : clock, reducedMotion: motion.checked,
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
-    quality: quality.value, output: { toneMapping: 'ACES', antialiasing: 'FXAA after single display transform', exposure: Number(exposure.value), bloom: Number(bloom.value), scale: Number(scale.value) },
+    quality: quality.value, output: { toneMapping: 'ACES', antialiasing: 'FXAA after single display transform', exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
     simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
     timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
@@ -104,10 +109,12 @@ function resetTiming() {
   lastFrame = 0;
   warmUntil = performance.now() + 5000;
   intervals = [];
+  adaptive.reset(performance.now());
   cancelBenchmark('Benchmark cancelled: settings, playback, viewport, scene, or visibility changed.');
 }
 function resize() {
-  engine?.resize(innerWidth, innerHeight, Number(scale.value));
+  adaptive.lock(scale.value === 'auto' ? null : Number(scale.value));
+  engine?.resize(innerWidth, innerHeight, renderScale());
   resetTiming();
 }
 async function releaseGraphics() {
@@ -180,8 +187,11 @@ function frame(now: number) {
       if (intervals.length > 7200) intervals.shift();
       if (benchmarkRun) benchmarkRun.samples.push(deltaMs);
     }
+    // Automatic steps keep the benchmark window: only explicit setting changes reset timing.
+    const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now) : null;
+    if (nextScale !== null) engine?.resize(innerWidth, innerHeight, nextScale);
     if (benchmarkRun && now - benchmarkRun.start >= 60000) {
-      reports.push({ ...metadata(), durationSeconds: 60, timings: summarizeIntervals(benchmarkRun.samples) });
+      reports.push({ ...metadata(), durationSeconds: 60, timings: summarizeIntervals(benchmarkRun.samples, refreshHz()) });
       if (reports.length > 12) reports.shift();
       benchmarkRun = undefined;
       benchmark.disabled = false;
@@ -189,8 +199,8 @@ function frame(now: number) {
     }
     if (now >= nextDiagnostics) {
       nextDiagnostics = now + 500;
-      const stats = summarizeIntervals(intervals);
-      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over 18.33 ms (60 Hz reference)\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
+      const stats = summarizeIntervals(intervals, refreshHz());
+      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over ${(1100 / refreshHz()).toFixed(2)} ms (${refreshHz()} Hz target) · render scale ${renderScale()} (${scale.value === 'auto' ? 'auto' : 'locked'})\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
     }
   } catch (error) { fail(error); }
 }
@@ -209,6 +219,7 @@ quality.addEventListener('change', () => {
   try { engine.setQuality(budget()); resetTiming(); }
   catch (error) { fail(error); }
 });
+targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
 for (const control of [exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
 freeze.setAttribute('aria-pressed', String(frozen));
 freeze.addEventListener('click', () => { frozen = !frozen; freeze.setAttribute('aria-pressed', String(frozen)); resetTiming(); });
@@ -219,7 +230,7 @@ benchmark.addEventListener('click', () => {
   benchmarkStatus.textContent = 'Recording 60 seconds after warmup. Keep this tab visible and settings unchanged.';
 });
 element('export').addEventListener('click', () => {
-  const data = { current: { ...metadata(), timings: summarizeIntervals(intervals) }, benchmarks: reports };
+  const data = { current: { ...metadata(), timings: summarizeIntervals(intervals, refreshHz()) }, benchmarks: reports };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'visualizer-capabilities.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
