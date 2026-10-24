@@ -28,3 +28,19 @@ export function disposeScene(scene: THREE.Scene) {
   materials.forEach((material) => material.dispose());
   scene.clear();
 }
+/** Spectrum bytes as a bins×1 red texture so vertex nodes can sample it without per-instance CPU writes. */
+export function createSpectrumTexture(bins = 512) {
+  const data = new Uint8Array(bins);
+  const texture = new THREE.DataTexture(data, bins, 1, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.minFilter = texture.magFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return {
+    texture,
+    update(spectrum: Uint8Array) {
+      data.fill(0);
+      data.set(spectrum.length > bins ? spectrum.subarray(0, bins) : spectrum);
+      texture.needsUpdate = true;
+    },
+    dispose: () => texture.dispose(),
+  };
+}

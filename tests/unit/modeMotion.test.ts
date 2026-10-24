@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { Line, Mesh, Group } from 'three/webgpu';
+import { Line, Mesh, Group, MeshBasicMaterial, InstancedMesh } from 'three/webgpu';
+import { createSpectrumTexture } from '../../src/modes/shared';
 import { createLineMode } from '../../src/modes/lineModes';
 import { createSpatialMode } from '../../src/modes/spatialModes';
 import { glitchAmounts } from '../../src/modes/filterModes';
@@ -45,4 +46,22 @@ it('glitch FX keeps the legacy RGB shift in silence and gates bursts behind redu
   const times = Array.from({ length: 600 }, (_, i) => i / 60);
   expect(times.some((time) => glitchAmounts({ ...f, time }).burst > 0)).toBe(true);
   expect(glitchAmounts({ ...f, response: { ...f.response, impact: 1 }, reducedFlash: true }).shift).toBeLessThanOrEqual(0.003);
+});
+it('city writes its 784 instance matrices once, then animates from the spectrum on the GPU', () => {
+  const mode = createSpatialMode('city'), f = frame();
+  const city = mode.scene.children.find((child) => child instanceof InstancedMesh) as InstancedMesh;
+  const before = city.instanceMatrix.version;
+  f.audio.spectrum.fill(200);
+  for (let i = 0; i < 3; i++) mode.update(f);
+  expect(city.instanceMatrix.version).toBe(before);
+  mode.dispose();
+});
+it('spectrum texture copies each frame and bumps its version once per update', () => {
+  const spectrum = createSpectrumTexture();
+  const before = spectrum.texture.version;
+  const data = new Uint8Array(512).fill(7);
+  for (let i = 0; i < 3; i++) spectrum.update(data);
+  expect(spectrum.texture.version).toBe(before + 3);
+  expect((spectrum.texture.image.data as Uint8Array)[511]).toBe(7);
+  spectrum.dispose();
 });
