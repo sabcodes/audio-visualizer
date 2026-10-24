@@ -21,3 +21,12 @@ export function smoothEnergy(previous: number, target: number, delta: number, ta
   const dt = Number.isFinite(delta) ? Math.max(0, Math.min(delta, 1)) : 0;
   return previous + (target - previous) * (1 - Math.exp(-dt / tau));
 }
+
+/** Maps u ∈ [0, 1] log-uniformly from minHz to maxHz and returns the FFT bin holding that frequency. */
+export function logBin(u: number, bins: number, sampleRate: number, minHz = 30, maxHz = 16000): number {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0 || bins <= 0) return 0;
+  const t = Number.isFinite(u) ? Math.max(0, Math.min(1, u)) : 0;
+  const nyquist = sampleRate / 2;
+  const hz = Math.min(nyquist, minHz * (maxHz / minHz) ** t);
+  return Math.max(0, Math.min(bins - 1, Math.floor(hz / nyquist * bins)));
+}

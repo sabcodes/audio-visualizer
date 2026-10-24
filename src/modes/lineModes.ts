@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { ModeFrame, VisualMode } from './types';
-import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap } from './shared';
+import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap, spectrumBin } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 
 type LineMode = 'circle' | 'spiral' | 'star' | 'cube' | 'lissajous' | 'fftTunnel' | 'glitchRing';
@@ -50,7 +50,7 @@ export function createLineMode(id: LineMode): VisualMode {
         } else if (id === 'star') {
           const spike = Math.floor(i / 2), d = spike * 3;
           if (i % 2 === 0) { pos[p] = pos[p + 1] = pos[p + 2] = 0; continue; }
-          const bin = Math.floor((spike / 159) ** 1.2 * (audio.spectrum.length - 1));
+          const bin = spectrumBin(frame, spike / 159, Math.floor((spike / 159) ** 1.2 * (audio.spectrum.length - 1)));
           let energy = 0;
           for (let k = -2; k <= 2; k++) energy += audio.spectrum[Math.max(0, Math.min(audio.spectrum.length - 1, bin + k))] || 0;
           ema[spike] += (energy / 1275 - ema[spike]) * (1 - Math.exp(-Math.max(0, delta) / 0.047));
@@ -63,7 +63,7 @@ export function createLineMode(id: LineMode): VisualMode {
           pos[p + 1] = Math.sin((2 + Math.round(audio.highs * 5)) * phase) * (18 + pump * 16);
           pos[p + 2] = Math.sin(phase * 0.5 + ph) * audio.highs * 10 + (lineIndex - 1) * 6;
         } else if (id === 'fftTunnel') {
-          const energy = (audio.spectrum[Math.min(audio.spectrum.length - 1, Math.floor(u * audio.spectrum.length))] || 0) / 255;
+          const energy = (audio.spectrum[spectrumBin(frame, u, Math.min(audio.spectrum.length - 1, Math.floor(u * audio.spectrum.length)))] || 0) / 255;
           const radius = (18 + lineIndex * 0.6) * (1 + energy * 0.6 + pump * 0.45);
           pos[p] = Math.cos(phase) * radius; pos[p + 1] = Math.sin(phase) * radius; pos[p + 2] = line.z;
         } else {

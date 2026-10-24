@@ -85,6 +85,8 @@ export class AudioEngine {
   }
 
   get state(): Readonly<AudioState> { return { ...this.current }; }
+  /** Analysis sample rate; silent frames assume 48 kHz until a context exists. */
+  get sampleRate(): number { return this.context?.sampleRate ?? 48000; }
   subscribe(listener: (state: Readonly<AudioState>) => void): () => void {
     if (this.disposed) return () => {};
     this.listeners.add(listener);

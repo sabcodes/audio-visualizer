@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { ModeFrame } from './types';
+import { logBin } from '../audio/analysis';
 
 export function sceneDefaults(z = 85) {
   const scene = new THREE.Scene();
@@ -13,6 +14,10 @@ export function resizeCamera(camera: THREE.PerspectiveCamera, aspect: number) {
 export const wrap = (value: number, low: number, high: number) => low + ((value - low) % (high - low) + high - low) % (high - low);
 export function colorize(material: THREE.Material & { color: THREE.Color }, frame: ModeFrame, offset = 0) {
   material.color.setHSL(wrap(frame.hue + offset, 0, 1), 1, 0.52 + (frame.reducedFlash ? 0 : frame.response.impact * 0.12));
+}
+/** Bin for position u along a mode's frequency axis: the mode's own linear bin, or a 30 Hz–16 kHz log bin. */
+export function spectrumBin(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleRate' | 'audio'>, u: number, linearBin: number) {
+  return frame.spectrumMapping === 'log' ? logBin(u, frame.audio.spectrum.length, frame.sampleRate) : linearBin;
 }
 /** Dispose shared geometry/material/texture resources once, never through a global cache. */
 export function disposeScene(scene: THREE.Scene) {

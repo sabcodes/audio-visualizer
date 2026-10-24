@@ -6,7 +6,7 @@ import { createSpatialMode } from '../../src/modes/spatialModes';
 import { StarTunnelSimulation } from '../../src/simulations/starTunnel';
 import { glitchAmounts } from '../../src/modes/filterModes';
 import type { ModeFrame } from '../../src/modes/types';
-const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9,
+const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectrumMapping: 'linear', sampleRate: 48000,
   hue: 0.3, reducedMotion: false, reducedFlash: true,
   response: { bass: 0, loudness: 0, impact: 0, bounce: 0 },
   audio: { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 2 },
@@ -90,4 +90,14 @@ it('bloom tunnel shimmer matches the legacy rate (ms clock → seconds × 4)', (
   };
   expect(lightness(0)).toBeCloseTo(0.6, 6);
   expect(lightness(Math.PI / 8)).toBeCloseTo(1, 6);
+});
+it('fft tunnel reads log-spaced bins when spectrum mapping is log', () => {
+  const radiusAtMidpoint = (mapping: 'linear' | 'log') => {
+    const mode = createLineMode('fftTunnel'), f = { ...frame(), spectrumMapping: mapping, sampleRate: 48000 };
+    f.audio.spectrum[14] = 255; // ≈ 690 Hz, where u = 0.5 lands on a 30 Hz–16 kHz log axis
+    mode.update(f);
+    const positions = (mode.scene.children[0] as Line).geometry.attributes.position;
+    const radius = Math.hypot(positions.getX(64), positions.getY(64)); mode.dispose(); return radius;
+  };
+  expect(radiusAtMidpoint('log')).toBeGreaterThan(radiusAtMidpoint('linear') * 1.3);
 });

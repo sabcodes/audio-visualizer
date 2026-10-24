@@ -5,6 +5,7 @@ import { AudioEngine, type AudioFrame } from './audio/AudioEngine';
 import { ControlPanel } from './ui/ControlPanel';
 import { FrameLoop } from './rendering/FrameLoop';
 import { modeDefinitions } from './modes/registry';
+import type { SpectrumMapping } from './modes/types';
 import { ResponseEnvelope } from './audio/VisualResponse';
 import { AdaptiveResolution } from './rendering/AdaptiveResolution';
 import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
@@ -24,6 +25,7 @@ const scale = element<HTMLSelectElement>('scale');
 const quality = element<HTMLSelectElement>('quality');
 const toneMapping = element<HTMLSelectElement>('tone-mapping');
 const antialiasing = element<HTMLSelectElement>('aa');
+const spectrum = element<HTMLSelectElement>('spectrum');
 const targetHz = element<HTMLSelectElement>('target-hz');
 const adaptive = new AdaptiveResolution();
 const refreshHz = () => Number(targetHz.value);
@@ -50,6 +52,7 @@ if (['auto', 'webgpu', 'webgl2'].includes(params.get('backend') ?? '')) backend.
 if (modeDefinitions.some((definition) => definition.id === params.get('mode'))) mode.value = params.get('mode')!;
 if (qualityPresets.includes(params.get('quality') as QualityPreset)) quality.value = params.get('quality')!;
 const budget = () => presetBudget(quality.value as QualityPreset);
+if (['linear', 'log'].includes(params.get('spectrum') ?? '')) spectrum.value = params.get('spectrum')!;
 const initialOutput = parseOutputSettings(params);
 toneMapping.value = initialOutput.toneMapping; antialiasing.value = initialOutput.aa;
 const outputSettings = () => ({ toneMapping: toneMapping.value as ToneMappingName, aa: antialiasing.value as AntialiasingName });
@@ -102,7 +105,7 @@ function metadata() {
     time: frozen ? fixedTime : clock, reducedMotion: motion.checked,
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
-    quality: quality.value, output: { toneMapping: toneMapping.value, antialiasing: `${antialiasing.value} after single display transform`, exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
+    quality: quality.value, spectrumMapping: spectrum.value, output: { toneMapping: toneMapping.value, antialiasing: `${antialiasing.value} after single display transform`, exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
     simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
     timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
@@ -181,7 +184,7 @@ function draw(delta: number) {
   const source = synthetic.checked ? fixture : snapshot;
   const response = envelope.update(source, delta, Number(sensitivity.value), motion.checked);
   if (!frozen && !paused && !motion.checked) hueClock += delta / Number(colorSpeed.value);
-  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked }, Number(exposure.value), Number(bloom.value));
+  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked, spectrumMapping: spectrum.value as SpectrumMapping, sampleRate: audio.sampleRate }, Number(exposure.value), Number(bloom.value));
 }
 function frame(now: number) {
   if (shutdown || failed || document.hidden) { loop.stop(); return; }
@@ -243,7 +246,7 @@ for (const control of [toneMapping, antialiasing]) control.addEventListener('cha
   try { engine.setOutput(outputSettings()); resetTiming(); } catch (error) { fail(error); }
 });
 targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
-for (const control of [exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
+for (const control of [spectrum, exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
 freeze.setAttribute('aria-pressed', String(frozen));
 freeze.addEventListener('click', () => { frozen = !frozen; freeze.setAttribute('aria-pressed', String(frozen)); resetTiming(); });
 benchmark.addEventListener('click', () => {

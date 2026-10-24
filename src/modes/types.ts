@@ -9,6 +9,7 @@ export interface VisualResponse {
   impact: number;
   bounce: number;
 }
+export type SpectrumMapping = 'linear' | 'log';
 export interface ModeFrame {
   time: number;
   delta: number;
@@ -18,6 +19,9 @@ export interface ModeFrame {
   hue: number;
   reducedMotion: boolean;
   reducedFlash: boolean;
+  /** How modes that read the spectrum as a frequency axis pick bins. */
+  spectrumMapping: SpectrumMapping;
+  sampleRate: number;
 }
 export interface VisualMode {
   scene: Scene;

@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { VisualMode, ModeFrame } from './types';
 import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap, createSpectrumTexture } from './shared';
-import { float, instanceIndex, positionLocal, texture as sampleTexture, uniform, vec2, vec3 } from 'three/tsl';
+import { float, instanceIndex, mix, positionLocal, pow, texture as sampleTexture, uniform, vec2, vec3 } from 'three/tsl';
 import { seededRandom } from '../rendering/diagnostics';
 
 const CITY_GRID = 28;
@@ -15,13 +15,16 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
   if (id === 'city') {
     const spacing = 2.4;
     const spectrum = createSpectrumTexture();
-    const bounce = uniform(0);
+    const bounce = uniform(0), logMapping = uniform(0), nyquist = uniform(24000);
     const material = new THREE.MeshBasicNodeMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
     // positionLocal is already instance-transformed here; rebuild the cell centre from the instance index.
     const index = float(instanceIndex);
     const gx = index.div(CITY_GRID).floor(), gz = index.mod(CITY_GRID);
     const centre = vec3(gx.sub(CITY_GRID / 2).mul(spacing), 0, gz.sub(CITY_GRID / 2).mul(spacing));
-    const bin = gx.div(CITY_GRID).mul(0.6).add(gz.div(CITY_GRID).mul(0.4)).mul(512).floor().min(511);
+    const u = gx.div(CITY_GRID).mul(0.6).add(gz.div(CITY_GRID).mul(0.4));
+    // Same 30 Hz–16 kHz log axis as logBin(); the flag picks it per frame without a recompile.
+    const logHz = pow(float(16000 / 30), u).mul(30).min(nyquist);
+    const bin = mix(u.mul(512), logHz.div(nyquist).mul(512), logMapping).floor().min(511);
     const energy = sampleTexture(spectrum.texture, vec2(bin.add(0.5).div(512), 0.5)).r;
     const height = energy.mul(18).add(0.5).add(bounce.mul(18));
     const local = positionLocal.sub(centre);
@@ -59,6 +62,8 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
         camera.lookAt(0, 0, 0);
         spectrum.update(frame.audio.spectrum);
         bounce.value = frame.response.bounce;
+        logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0;
+        nyquist.value = frame.sampleRate / 2;
         material.opacity = frame.reducedFlash ? 0.9 : 0.78 + 0.22 * frame.response.impact;
         colorize(material, frame);
         resizeCamera(camera, frame.aspect);
