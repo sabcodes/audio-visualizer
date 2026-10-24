@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { VisualMode, ModeFrame } from './types';
-import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap } from './shared';
+import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap, createSpectrumTexture } from './shared';
+import { float, instanceIndex, mix, positionLocal, pow, texture as sampleTexture, uniform, vec2, vec3 } from 'three/tsl';
 import { seededRandom } from '../rendering/diagnostics';
 
 const CITY_GRID = 28;
@@ -12,32 +13,35 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
   const { scene, camera } = sceneDefaults(85);
 
   if (id === 'city') {
-    const geom = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.95,
-    });
-    const cityCount = CITY_GRID * CITY_GRID;
-    const cityMesh = new THREE.InstancedMesh(geom, material, cityCount);
-    cityMesh.name = 'vis-city';
-    cityMesh.frustumCulled = false; // CPU instance heights change after static bounds are computed.
-
     const spacing = 2.4;
+    const spectrum = createSpectrumTexture();
+    const bounce = uniform(0), logMapping = uniform(0), nyquist = uniform(24000);
+    const material = new THREE.MeshBasicNodeMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+    // positionLocal is already instance-transformed here; rebuild the cell centre from the instance index.
+    const index = float(instanceIndex);
+    const gx = index.div(CITY_GRID).floor(), gz = index.mod(CITY_GRID);
+    const centre = vec3(gx.sub(CITY_GRID / 2).mul(spacing), 0, gz.sub(CITY_GRID / 2).mul(spacing));
+    const u = gx.div(CITY_GRID).mul(0.6).add(gz.div(CITY_GRID).mul(0.4));
+    // Same 30 Hz–16 kHz log axis as logBin(); the flag picks it per frame without a recompile.
+    const logHz = pow(float(16000 / 30), u).mul(30).min(nyquist);
+    const bin = mix(u.mul(512), logHz.div(nyquist).mul(512), logMapping).floor().min(511);
+    const energy = sampleTexture(spectrum.texture, vec2(bin.add(0.5).div(512), 0.5)).r;
+    const height = energy.mul(18).add(0.5).add(bounce.mul(18));
+    const local = positionLocal.sub(centre);
+    material.positionNode = vec3(centre.x.add(local.x.mul(1.05)), local.y.add(0.5).mul(height), centre.z.add(local.z.mul(1.05)));
+
+    const cityMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, CITY_GRID * CITY_GRID);
+    cityMesh.name = 'vis-city';
+    cityMesh.frustumCulled = false; // Heights come from the vertex node, outside the static bounds.
     const dummyObject3D = new THREE.Object3D();
     for (let x = 0; x < CITY_GRID; x++) {
       for (let z = 0; z < CITY_GRID; z++) {
-        dummyObject3D.position.set(
-          (x - CITY_GRID / 2) * spacing,
-          0,
-          (z - CITY_GRID / 2) * spacing
-        );
-        dummyObject3D.scale.set(1, 1, 1);
+        dummyObject3D.position.set((x - CITY_GRID / 2) * spacing, 0, (z - CITY_GRID / 2) * spacing);
         dummyObject3D.updateMatrix();
         cityMesh.setMatrixAt(x * CITY_GRID + z, dummyObject3D.matrix);
       }
     }
-    cityMesh.instanceMatrix!.needsUpdate = true;
+    cityMesh.instanceMatrix.needsUpdate = true;
     scene.add(cityMesh);
 
     let cityOrbit = 0;
@@ -56,34 +60,15 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
           Math.sin(cityOrbit) * orbitR
         );
         camera.lookAt(0, 0, 0);
-
-        let i = 0;
-        for (let x = 0; x < CITY_GRID; x++) {
-          for (let z = 0; z < CITY_GRID; z++) {
-            const nx = x / CITY_GRID;
-            const nz = z / CITY_GRID;
-            const bin = Math.min(
-              frame.audio.spectrum.length - 1,
-              Math.floor((nx * 0.6 + nz * 0.4) * frame.audio.spectrum.length)
-            );
-            const e = (frame.audio.spectrum[bin] || 0) / 255;
-            const h = 0.5 + e * 18 + frame.response.bounce * 18;
-            dummyObject3D.position.set(
-              (x - CITY_GRID / 2) * spacing,
-              h / 2,
-              (z - CITY_GRID / 2) * spacing
-            );
-            dummyObject3D.scale.set(1.05, h, 1.05);
-            dummyObject3D.updateMatrix();
-            cityMesh.setMatrixAt(i++, dummyObject3D.matrix);
-          }
-        }
-        cityMesh.instanceMatrix!.needsUpdate = true;
+        spectrum.update(frame.audio.spectrum);
+        bounce.value = frame.response.bounce;
+        logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0;
+        nyquist.value = frame.sampleRate / 2;
         material.opacity = frame.reducedFlash ? 0.9 : 0.78 + 0.22 * frame.response.impact;
         colorize(material, frame);
         resizeCamera(camera, frame.aspect);
       },
-      dispose: () => disposeScene(scene),
+      dispose: () => { disposeScene(scene); spectrum.dispose(); },
     };
   }
 
@@ -124,7 +109,7 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
             torusMesh.position.z = -TUNNEL_DEPTH;
           }
           const L =
-            0.6 + 0.4 * Math.sin(i * 0.3 + frame.time * 0.004 + frame.audio.highs * 2.0);
+            0.6 + 0.4 * Math.sin(i * 0.3 + frame.time * 4 + frame.audio.highs * 2.0);
           const mat = torusMesh.material as THREE.MeshBasicMaterial;
           mat.color.setHSL(wrap(frame.hue + i * 0.01, 0, 1), 1, L);
           mat.opacity = frame.reducedFlash ? 0.8 : 0.7 + 0.3 * frame.response.impact;

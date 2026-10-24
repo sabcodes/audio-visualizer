@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from '../../src/audio/AudioEngine';
-import { calculateBandEnergy, calculateRMS, smoothEnergy } from '../../src/audio/analysis';
+import { calculateBandEnergy, calculateRMS, logBin, smoothEnergy } from '../../src/audio/analysis';
 
 class Media extends EventTarget {
   src = ''; preload = ''; currentTime = 0; duration = 12; error: { message: string } | null = null;
@@ -123,5 +123,19 @@ describe('audio analysis', () => {
     const values = [30, 60, 120].map((hz) => { let value = 0; for (let i = 0; i < hz; i++) value = smoothEnergy(value, 1, 1 / hz); return value; });
     expect(values[0]).toBeCloseTo(values[1], 12); expect(values[1]).toBeCloseTo(values[2], 12);
     expect(smoothEnergy(0.5, 1, NaN)).toBe(0.5);
+  });
+});
+
+describe('logBin', () => {
+  it('maps the ends of the range to 30 Hz and 16 kHz bins', () => {
+    expect(logBin(0, 512, 48000)).toBe(Math.floor(30 / 24000 * 512));
+    expect(logBin(1, 512, 48000)).toBe(341);
+  });
+  it('is monotonic non-decreasing', () => {
+    const bins = Array.from({ length: 100 }, (_, i) => logBin(i / 99, 512, 48000));
+    expect(bins.every((bin, i) => i === 0 || bin >= bins[i - 1])).toBe(true);
+  });
+  it('returns bin 0 for a non-finite sample rate', () => {
+    expect(logBin(0.5, 512, Number.NaN)).toBe(0);
   });
 });

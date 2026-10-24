@@ -5,7 +5,7 @@
 
 /**
  * Frame timing statistics: count, median, p95, p99 percentiles, and missed-frame count.
- * 60 Hz threshold: 1.1 * 1000 / 60 ≈ 18.33 ms
+ * Missed-frame threshold: 1.1 × the refresh budget (18.33 ms at 60 Hz, 9.17 ms at 120 Hz).
  */
 export interface FrameTimingStats {
   count: number;
@@ -20,9 +20,10 @@ export interface FrameTimingStats {
  * Filters to positive finite values only, calculates nearest-rank percentiles, and counts frames exceeding 60 Hz threshold.
  * 
  * @param samplesMs Array of frame interval measurements in milliseconds
+ * @param refreshHz Refresh rate the missed-frame budget is measured against
  * @returns Frame timing statistics with positive filtering and nearest-rank quantiles
  */
-export function summarizeIntervals(samplesMs: number[]): FrameTimingStats {
+export function summarizeIntervals(samplesMs: number[], refreshHz = 60): FrameTimingStats {
   // Filter to positive finite values only (invalid intervals excluded)
   const finite = samplesMs.filter((v) => Number.isFinite(v) && v > 0);
 
@@ -49,9 +50,9 @@ export function summarizeIntervals(samplesMs: number[]): FrameTimingStats {
   const p95Ms = getPercentile(95);
   const p99Ms = getPercentile(99);
 
-  // Count missed frames: 60 Hz threshold is 1.1 * 1000/60 ≈ 18.33 ms
-  const threshold60HzMs = (1.1 * 1000) / 60;
-  const missedFrames = finite.filter((v) => v > threshold60HzMs).length;
+  // Count missed frames: 1.1 × the refresh budget
+  const thresholdMs = (1.1 * 1000) / refreshHz;
+  const missedFrames = finite.filter((v) => v > thresholdMs).length;
 
   return {
     count: finite.length,

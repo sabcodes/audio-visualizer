@@ -1,15 +1,22 @@
 import { seededRandom } from '../rendering/diagnostics';
 import { wrap } from '../modes/shared';
 export interface Boid { px: number; py: number; pz: number; vx: number; vy: number; vz: number; }
-export function initializeFlock(): Boid[] {
+export function initializeFlock(count = 220): Boid[] {
   const random = seededRandom(42);
-  return Array.from({ length: 220 }, () => ({ px: (random() - 0.5) * 70, py: (random() - 0.5) * 40, pz: (random() - 0.5) * 70, vx: (random() - 0.5) * 10, vy: (random() - 0.5) * 10, vz: (random() - 0.5) * 10 }));
+  return Array.from({ length: count }, () => ({ px: (random() - 0.5) * 70, py: (random() - 0.5) * 40, pz: (random() - 0.5) * 70, vx: (random() - 0.5) * 10, vy: (random() - 0.5) * 10, vz: (random() - 0.5) * 10 }));
 }
-/** Bounded CPU adapter for parity: fixed step, double buffered, no per-agent allocation. */
+/**
+ * Bounded CPU adapter: fixed step, double buffered, no per-agent allocation. A full neighbour scan
+ * measured faster than a uniform grid up to 440 boids (flocks cluster), so spatial bins wait for larger GPU flocks.
+ */
 export class FlockSimulation {
-  readonly boids = initializeFlock();
-  private readonly previous = this.boids.map((b) => ({ ...b }));
+  readonly boids: Boid[];
+  private readonly previous: Boid[];
   private remainder = 0;
+  constructor(count = 220) {
+    this.boids = initializeFlock(count);
+    this.previous = this.boids.map((b) => ({ ...b }));
+  }
   advance(seconds: number, impact: number) {
     this.remainder += Number.isFinite(seconds) ? Math.max(0, Math.min(0.05, seconds)) : 0;
     while (this.remainder + 1e-10 >= 1 / 120) {

@@ -1,4 +1,5 @@
 import type { BackendName } from '../rendering/backendSelection';
+import { presetBudget, type QualityBudget } from '../rendering/quality';
 import type { ModeDefinition, VisualMode } from './types';
 import { createSpikeScene } from './spikeScenes';
 import { createLineMode } from './lineModes';
@@ -9,23 +10,23 @@ import { createFullscreenMode } from './fullscreenModes';
 import { createGlitchMode, createKaleidoscopeMode } from './filterModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
-const definition = (id: string, label: string, create: () => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
+const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
 export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('circle', 'Circle Waveform', () => createLineMode('circle')),
   definition('spiral', 'Spiral', () => createLineMode('spiral')),
   definition('star', 'Star Burst 3D', () => createLineMode('star')),
   definition('cube', 'Cubic Field', () => createLineMode('cube')),
-  definition('particles', 'Neon Swirl Particles', () => createParticleMode('particles')),
+  definition('particles', 'Neon Swirl Particles', (budget) => createParticleMode('particles', budget)),
   definition('errors', 'Vintage Errors (Win95)', createErrorMode, 'dom'),
   definition('lissajous', 'Laser Lissajous', () => createLineMode('lissajous')),
-  definition('boids', 'Boids + Beat Bursts', () => createParticleMode('boids')),
+  definition('boids', 'Boids + Beat Bursts', (budget) => createParticleMode('boids', budget)),
   definition('fftTunnel', 'FFT Tunnel (Lines)', () => createLineMode('fftTunnel')),
   definition('kaleidoPlane', 'Kaleidoscope Plane', createKaleidoscopeMode),
   definition('city', 'Instanced Cityscape', () => createSpatialMode('city')),
   definition('glitchRing', 'Glitch Ring', () => createLineMode('glitchRing')),
   definition('vjRings', 'VJ Smooth Rings (FS)', () => createFullscreenMode('vjRings'), 'fullscreen'),
   definition('neonKaleido', 'Neon Kaleido Blink (FS)', () => createFullscreenMode('neonKaleido'), 'fullscreen'),
-  definition('starTunnel', 'Stars Tunnel', () => createParticleMode('starTunnel')),
+  definition('starTunnel', 'Stars Tunnel', (budget) => createParticleMode('starTunnel', budget)),
   definition('bloomTunnel', 'Bloom Tunnel (Neon)', () => createSpatialMode('bloomTunnel')),
   definition('glitchFX', 'Glitch FX (RGB Split)', createGlitchMode),
   definition('godrays', 'God Rays (Stylized Cones)', () => createSpatialMode('godrays')),
@@ -46,12 +47,17 @@ export class ModeRegistry {
       this.definitions.set(definition.id, definition);
     }
   }
-  select(id: string, backend: BackendName): VisualMode {
+  /** Builds an unowned instance without touching the active mode; the caller disposes it. */
+  create(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
     const definition = this.definitions.get(id);
     if (!definition) throw new Error(`Unknown visual mode: ${id}`);
     if (!definition.backends.includes(backend)) throw new Error(`${definition.label} is unavailable on ${backend}`);
+    return definition.create(budget);
+  }
+  select(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
+    const next = this.create(id, backend, budget);
     this.clear();
-    this.active = definition.create();
+    this.active = next;
     return this.active;
   }
   clear() { const previous = this.active; this.active = undefined; previous?.dispose(); }

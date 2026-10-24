@@ -1,6 +1,7 @@
 import type { Camera, Scene, TextureNode, Node } from 'three/webgpu';
 import type { AudioFrame } from '../audio/AudioEngine';
 import type { BackendName } from '../rendering/backendSelection';
+import type { QualityBudget } from '../rendering/quality';
 
 export interface VisualResponse {
   bass: number;
@@ -8,6 +9,7 @@ export interface VisualResponse {
   impact: number;
   bounce: number;
 }
+export type SpectrumMapping = 'linear' | 'log';
 export interface ModeFrame {
   time: number;
   delta: number;
@@ -17,6 +19,9 @@ export interface ModeFrame {
   hue: number;
   reducedMotion: boolean;
   reducedFlash: boolean;
+  /** How modes that read the spectrum as a frequency axis pick bins. */
+  spectrumMapping: SpectrumMapping;
+  sampleRate: number;
 }
 export interface VisualMode {
   scene: Scene;
@@ -31,5 +36,7 @@ export interface ModeDefinition {
   label: string;
   output: 'scene' | 'fullscreen' | 'dom';
   backends: readonly BackendName[];
-  create(): VisualMode;
+  /** Bloom strength the slider moves to when this mode is selected; absent keeps the current value. */
+  bloom?: number;
+  create(budget: QualityBudget): VisualMode;
 }

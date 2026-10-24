@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { ModeFrame } from './types';
+import { logBin } from '../audio/analysis';
 
 export function sceneDefaults(z = 85) {
   const scene = new THREE.Scene();
@@ -14,6 +15,10 @@ export const wrap = (value: number, low: number, high: number) => low + ((value 
 export function colorize(material: THREE.Material & { color: THREE.Color }, frame: ModeFrame, offset = 0) {
   material.color.setHSL(wrap(frame.hue + offset, 0, 1), 1, 0.52 + (frame.reducedFlash ? 0 : frame.response.impact * 0.12));
 }
+/** Bin for position u along a mode's frequency axis: the mode's own linear bin, or a 30 Hz–16 kHz log bin. */
+export function spectrumBin(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleRate' | 'audio'>, u: number, linearBin: number) {
+  return frame.spectrumMapping === 'log' ? logBin(u, frame.audio.spectrum.length, frame.sampleRate) : linearBin;
+}
 /** Dispose shared geometry/material/texture resources once, never through a global cache. */
 export function disposeScene(scene: THREE.Scene) {
   const geometries = new Set<THREE.BufferGeometry>();
@@ -27,4 +32,20 @@ export function disposeScene(scene: THREE.Scene) {
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());
   scene.clear();
+}
+/** Spectrum bytes as a bins×1 red texture so vertex nodes can sample it without per-instance CPU writes. */
+export function createSpectrumTexture(bins = 512) {
+  const data = new Uint8Array(bins);
+  const texture = new THREE.DataTexture(data, bins, 1, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.minFilter = texture.magFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return {
+    texture,
+    update(spectrum: Uint8Array) {
+      data.fill(0);
+      data.set(spectrum.length > bins ? spectrum.subarray(0, bins) : spectrum);
+      texture.needsUpdate = true;
+    },
+    dispose: () => texture.dispose(),
+  };
 }

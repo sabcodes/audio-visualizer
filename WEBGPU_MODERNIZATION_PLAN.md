@@ -226,6 +226,8 @@ GPU deformation must supply safe bounds; transparent billboards need deliberate 
 
 ### Stage 3 — GPU scaling and image-quality tuning
 
+**Status (2026-10-24):** Implemented on `sabcodex/stage-3-gpu-scaling`; results and measurements in `docs/stage3-results.md`. Awaiting approval to merge.
+
 - Move proven hotspots to GPU vertex/compute work, fix time-dependent physics, and reduce allocations/draw calls/overdraw where measurements justify it.
 - Tune the output pipeline, bloom, antialiasing, exposure, and spectrum response using reference scenes.
 - Implement quality presets and adaptive rendering with a rolling window, hysteresis, bounded scale steps, and a manual lock. Do not lower quality because of a one-time shader compile alone.

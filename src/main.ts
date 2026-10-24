@@ -1,11 +1,15 @@
 import { VisualEngine } from './rendering/VisualEngine';
-import { clampDelta, summarizeIntervals } from './rendering/diagnostics';
+import { clampDelta, summarizeIntervals, type FrameTimingStats } from './rendering/diagnostics';
 import type { BackendPreference } from './rendering/backendSelection';
 import { AudioEngine, type AudioFrame } from './audio/AudioEngine';
 import { ControlPanel } from './ui/ControlPanel';
 import { FrameLoop } from './rendering/FrameLoop';
 import { modeDefinitions } from './modes/registry';
+import type { SpectrumMapping } from './modes/types';
 import { ResponseEnvelope } from './audio/VisualResponse';
+import { AdaptiveResolution } from './rendering/AdaptiveResolution';
+import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
+import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
 
 const element = <T extends HTMLElement>(id: string) => {
   const found = document.getElementById(id);
@@ -18,6 +22,14 @@ const diagnostics = element('diagnostics');
 const backend = element<HTMLSelectElement>('backend');
 const mode = element<HTMLSelectElement>('mode');
 const scale = element<HTMLSelectElement>('scale');
+const quality = element<HTMLSelectElement>('quality');
+const toneMapping = element<HTMLSelectElement>('tone-mapping');
+const antialiasing = element<HTMLSelectElement>('aa');
+const spectrum = element<HTMLSelectElement>('spectrum');
+const targetHz = element<HTMLSelectElement>('target-hz');
+const adaptive = new AdaptiveResolution();
+const refreshHz = () => Number(targetHz.value);
+const renderScale = () => (scale.value === 'auto' ? adaptive.scale : Number(scale.value));
 const exposure = element<HTMLInputElement>('exposure');
 const bloom = element<HTMLInputElement>('bloom');
 const motion = element<HTMLInputElement>('motion');
@@ -38,6 +50,13 @@ const params = new URLSearchParams(location.search);
 mode.replaceChildren(...modeDefinitions.map((definition) => new Option(definition.label, definition.id)));
 if (['auto', 'webgpu', 'webgl2'].includes(params.get('backend') ?? '')) backend.value = params.get('backend')!;
 if (modeDefinitions.some((definition) => definition.id === params.get('mode'))) mode.value = params.get('mode')!;
+if (qualityPresets.includes(params.get('quality') as QualityPreset)) quality.value = params.get('quality')!;
+const budget = () => presetBudget(quality.value as QualityPreset);
+if (['linear', 'log'].includes(params.get('spectrum') ?? '')) spectrum.value = params.get('spectrum')!;
+const initialOutput = parseOutputSettings(params);
+toneMapping.value = initialOutput.toneMapping; antialiasing.value = initialOutput.aa;
+const outputSettings = () => ({ toneMapping: toneMapping.value as ToneMappingName, aa: antialiasing.value as AntialiasingName });
+const applyModeBloom = () => { const strength = modeDefinitions.find((definition) => definition.id === mode.value)?.bloom; if (strength !== undefined) bloom.value = String(strength); };
 const requestedTime = Number(params.get('time'));
 const validTime = params.has('time') && Number.isFinite(requestedTime) && requestedTime >= 0;
 const fixedTime = validTime ? requestedTime : 2;
@@ -59,6 +78,8 @@ let nextDiagnostics = 0;
 let intervals: number[] = [];
 let benchmarkRun: { start: number; samples: number[] } | undefined;
 const reports: unknown[] = [];
+export interface BenchResult { raf: FrameTimingStats; cpu: FrameTimingStats; gpu: FrameTimingStats | null; drawingBuffer: { width: number; height: number } }
+let benchHook: { until: number; raf: number[]; cpu: number[]; gpu: number[]; lastGpu: number | null; done: (result: BenchResult) => void } | undefined;
 const audio = new AudioEngine();
 const player = new ControlPanel(audio, resetTiming);
 const fixture: AudioFrame = { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 0 };
@@ -74,7 +95,7 @@ function fail(error: unknown) {
 function metadata() {
   const state = audio.state;
   return {
-    schemaVersion: 1, stage: 'Stage 2 18-mode port — pending visual parity approval',
+    schemaVersion: 1, stage: 'Stage 3 GPU scaling — in progress',
     timestamp: new Date().toISOString(),
     secureContext: isSecureContext, backendRequested: backend.value, backendActual: engine?.backend ?? 'unavailable',
     startupFailures: engine?.startupFailures ?? [], gpu: 'Record physical GPU and OS in the hardware review.',
@@ -84,14 +105,18 @@ function metadata() {
     time: frozen ? fixedTime : clock, reducedMotion: motion.checked,
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
-    output: { toneMapping: 'ACES', antialiasing: 'FXAA after single display transform', exposure: Number(exposure.value), bloom: Number(bloom.value), scale: Number(scale.value) },
+    quality: quality.value, spectrumMapping: spectrum.value, output: { toneMapping: toneMapping.value, antialiasing: `${antialiasing.value} after single display transform`, exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
     simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
+    timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
   };
 }
+/** Re-applies the Render scale select's Auto/locked choice, e.g. after a benchmark held the scale. */
+function applyScaleMode() { adaptive.lock(scale.value === 'auto' ? null : Number(scale.value)); }
 function cancelBenchmark(message: string) {
   if (!benchmarkRun) return;
   benchmarkRun = undefined;
+  applyScaleMode();
   benchmark.disabled = false;
   benchmarkStatus.textContent = message;
 }
@@ -99,10 +124,12 @@ function resetTiming() {
   lastFrame = 0;
   warmUntil = performance.now() + 5000;
   intervals = [];
+  adaptive.reset(performance.now());
   cancelBenchmark('Benchmark cancelled: settings, playback, viewport, scene, or visibility changed.');
 }
 function resize() {
-  engine?.resize(innerWidth, innerHeight, Number(scale.value));
+  if (!benchmarkRun) applyScaleMode();
+  engine?.resize(innerWidth, innerHeight, renderScale());
   resetTiming();
 }
 async function releaseGraphics() {
@@ -129,12 +156,16 @@ async function start() {
     });
     if (shutdown || generation !== epoch) { await candidate.dispose(); return; }
     engine = candidate;
+    await candidate.setQuality(budget());
+    candidate.setOutput(outputSettings());
+    applyModeBloom();
     viewport.replaceChildren(candidate.renderer.domElement);
     resize();
-    candidate.select(mode.value);
+    await candidate.select(mode.value);
+    if (shutdown || generation !== epoch) return;
     draw(0);
     if (failed) throw new Error('Graphics validation failed during the first frame.');
-    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 2`;
+    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 3`;
     status.dataset.state = 'ready';
     if (!document.hidden) loop.start(frame);
   } catch (error) {
@@ -156,7 +187,7 @@ function draw(delta: number) {
   const source = synthetic.checked ? fixture : snapshot;
   const response = envelope.update(source, delta, Number(sensitivity.value), motion.checked);
   if (!frozen && !paused && !motion.checked) hueClock += delta / Number(colorSpeed.value);
-  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked }, Number(exposure.value), Number(bloom.value));
+  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked, spectrumMapping: spectrum.value as SpectrumMapping, sampleRate: audio.sampleRate }, Number(exposure.value), Number(bloom.value));
 }
 function frame(now: number) {
   if (shutdown || failed || document.hidden) { loop.stop(); return; }
@@ -174,17 +205,32 @@ function frame(now: number) {
       if (intervals.length > 7200) intervals.shift();
       if (benchmarkRun) benchmarkRun.samples.push(deltaMs);
     }
+    if (benchHook && engine && deltaMs > 0) {
+      benchHook.raf.push(deltaMs); benchHook.cpu.push(engine.lastFrame.cpuUpdateMs);
+      const gpu = engine.lastFrame.gpuMs;
+      if (gpu !== null && gpu !== benchHook.lastGpu) { benchHook.gpu.push(gpu); benchHook.lastGpu = gpu; }
+      if (now >= benchHook.until) {
+        const { raf, cpu, gpu: gpuSamples, done } = benchHook; benchHook = undefined;
+        done({ raf: summarizeIntervals(raf, refreshHz()), cpu: summarizeIntervals(cpu, refreshHz()), gpu: gpuSamples.length ? summarizeIntervals(gpuSamples, refreshHz()) : null, drawingBuffer: { width: engine.dimensions.x, height: engine.dimensions.y } });
+      }
+    }
+    // Automatic steps keep the benchmark window: only explicit setting changes reset timing.
+    const gpuMs = engine?.lastFrame.gpuMs;
+    const frameCost = engine && gpuMs != null ? engine.lastFrame.cpuUpdateMs + gpuMs : null;
+    const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now, frameCost) : null;
+    if (nextScale !== null) engine?.resize(innerWidth, innerHeight, nextScale);
     if (benchmarkRun && now - benchmarkRun.start >= 60000) {
-      reports.push({ ...metadata(), durationSeconds: 60, timings: summarizeIntervals(benchmarkRun.samples) });
+      reports.push({ ...metadata(), durationSeconds: 60, timings: summarizeIntervals(benchmarkRun.samples, refreshHz()) });
       if (reports.length > 12) reports.shift();
       benchmarkRun = undefined;
+      applyScaleMode();
       benchmark.disabled = false;
       benchmarkStatus.textContent = '60-second report recorded. Export diagnostics to save it.';
     }
     if (now >= nextDiagnostics) {
       nextDiagnostics = now + 500;
-      const stats = summarizeIntervals(intervals);
-      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over 18.33 ms (60 Hz reference)${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
+      const stats = summarizeIntervals(intervals, refreshHz());
+      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over ${(1100 / refreshHz()).toFixed(2)} ms (${refreshHz()} Hz target) · render scale ${renderScale()} (${scale.value === 'auto' ? 'auto' : 'locked'})\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
     }
   } catch (error) { fail(error); }
 }
@@ -194,21 +240,34 @@ backend.addEventListener('change', () => void start());
 compatibility.addEventListener('click', () => { backend.value = 'webgl2'; void start(); });
 mode.addEventListener('change', () => {
   if (!engine || failed || starting) return;
-  try { engine.select(mode.value); clock = 0; resetTiming(); }
-  catch (error) { fail(error); }
+  // Hold adaptive scaling through the compile: a one-time shader compile must not lower quality.
+  adaptive.reset(performance.now());
+  engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); resetTiming(); } }).catch(fail);
 });
 scale.addEventListener('change', resize);
-for (const control of [exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
+quality.addEventListener('change', () => {
+  if (!engine || failed || starting) return;
+  adaptive.reset(performance.now());
+  engine.setQuality(budget()).then(resetTiming).catch(fail);
+});
+for (const control of [toneMapping, antialiasing]) control.addEventListener('change', () => {
+  if (!engine || failed || starting) return;
+  try { engine.setOutput(outputSettings()); resetTiming(); } catch (error) { fail(error); }
+});
+targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
+for (const control of [spectrum, exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
 freeze.setAttribute('aria-pressed', String(frozen));
 freeze.addEventListener('click', () => { frozen = !frozen; freeze.setAttribute('aria-pressed', String(frozen)); resetTiming(); });
 benchmark.addEventListener('click', () => {
   if (!engine || failed || starting) { benchmarkStatus.textContent = 'Initialize a working renderer first.'; return; }
+  // One resolution for the whole run (spec §9 records the actual drawing buffer).
+  adaptive.lock(renderScale());
   benchmarkRun = { start: Math.max(performance.now(), warmUntil), samples: [] };
   benchmark.disabled = true;
   benchmarkStatus.textContent = 'Recording 60 seconds after warmup. Keep this tab visible and settings unchanged.';
 });
 element('export').addEventListener('click', () => {
-  const data = { current: { ...metadata(), timings: summarizeIntervals(intervals) }, benchmarks: reports };
+  const data = { current: { ...metadata(), timings: summarizeIntervals(intervals, refreshHz()) }, benchmarks: reports };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'visualizer-capabilities.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -252,4 +311,15 @@ window.addEventListener('pagehide', (event) => {
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) { shutdown = false; void start(); }
 });
+if (import.meta.env.DEV) {
+  // Test-only window into lifecycle state; absent from production builds.
+  Object.assign(window, { __visualizerDebug: {
+    get activeMode() { return engine?.activeMode; },
+    get pipelineAa() { return engine?.pipelineAa; },
+    get adaptiveHolding() { return adaptive.isHolding(performance.now()); },
+    get adaptiveLocked() { return adaptive.isLocked; },
+    setCompileDelay(ms: number) { if (engine) engine.compileDelayMs = ms; },
+    bench: (seconds: number) => new Promise<BenchResult>((done) => { benchHook = { until: performance.now() + seconds * 1000, raf: [], cpu: [], gpu: [], lastGpu: null, done }; }),
+  } });
+}
 void start();
