@@ -3,6 +3,7 @@ import { Line, Mesh, Group, MeshBasicMaterial, InstancedMesh } from 'three/webgp
 import { createSpectrumTexture } from '../../src/modes/shared';
 import { createLineMode } from '../../src/modes/lineModes';
 import { createSpatialMode } from '../../src/modes/spatialModes';
+import { StarTunnelSimulation } from '../../src/simulations/starTunnel';
 import { glitchAmounts } from '../../src/modes/filterModes';
 import type { ModeFrame } from '../../src/modes/types';
 const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9,
@@ -64,4 +65,17 @@ it('spectrum texture copies each frame and bumps its version once per update', (
   expect(spectrum.texture.version).toBe(before + 3);
   expect((spectrum.texture.image.data as Uint8Array)[511]).toBe(7);
   spectrum.dispose();
+});
+it('star tunnel spring stays bounded and frame-rate independent', () => {
+  const run = (hz: number) => {
+    const simulation = new StarTunnelSimulation();
+    const f = frame(); f.delta = 1 / hz;
+    for (let i = 0; i < hz * 2; i++) { f.time = i / hz; f.audio = { ...f.audio, onset: i === 0 }; simulation.advance(f); }
+    return Float32Array.from(simulation.offsets);
+  };
+  const slow = run(30), fast = run(120);
+  expect(Math.min(...fast)).toBeGreaterThanOrEqual(-18);
+  expect(Math.max(...fast)).toBeLessThanOrEqual(40);
+  expect(Math.max(...fast.map((v) => Math.abs(v)))).toBeGreaterThan(0);
+  slow.forEach((value, i) => expect(value).toBeCloseTo(fast[i], 6));
 });

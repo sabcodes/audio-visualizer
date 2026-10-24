@@ -1,9 +1,10 @@
 import * as THREE from 'three/webgpu';
-import { cos, instancedBufferAttribute, sin, uniform, uv, vec2, vec3, texture as sampleTexture } from 'three/tsl';
+import { cos, float, instanceIndex, instancedBufferAttribute, sin, uniform, uv, vec2, vec3, texture as sampleTexture } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, colorize, disposeScene, wrap } from './shared';
+import { sceneDefaults, resizeCamera, colorize, disposeScene } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { FlockSimulation } from '../simulations/flock';
+import { StarTunnelSimulation, STAR_RINGS, STARS_PER_RING } from '../simulations/starTunnel';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 export function createParticleMode(id: 'particles' | 'boids' | 'starTunnel', budget: QualityBudget = presetBudget('balanced')): VisualMode {
@@ -64,59 +65,32 @@ function flock(): VisualMode {
 }
 function stars(): VisualMode {
   const { scene, camera } = sceneDefaults(70);
-  const count = 40 * 44, depth = 1400, spacing = depth / 40;
-  const positions = new Float32Array(count * 3), colors = new Float32Array(count * 3);
-  const offsets = new Float32Array(count), velocities = new Float32Array(count);
-  const z = Float32Array.from({ length: 40 }, (_, i) => -i * spacing);
-  const rotation = new Float32Array(40), color = new THREE.Color();
-  const positionAttribute = new THREE.InstancedBufferAttribute(positions, 3);
-  const colorAttribute = new THREE.InstancedBufferAttribute(colors, 3);
+  const simulation = new StarTunnelSimulation(), rings = STAR_RINGS, perRing = STARS_PER_RING;
+  // Per-ring (z, rotation, pulse, hue): 160 floats per frame instead of 10,560 position/colour floats.
+  const ringTexture = new THREE.DataTexture(simulation.ringState, rings, 1, THREE.RGBAFormat, THREE.FloatType);
+  ringTexture.minFilter = ringTexture.magFilter = THREE.NearestFilter;
+  const offsetAttribute = new THREE.InstancedBufferAttribute(simulation.offsets, 1);
   const texture = starTexture(), material = new THREE.SpriteNodeMaterial({ map: texture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  const size = uniform(2.4);
-  material.positionNode = instancedBufferAttribute<'vec3'>(positionAttribute, 'vec3');
-  material.colorNode = instancedBufferAttribute<'vec3'>(colorAttribute, 'vec3');
+  const size = uniform(2.4), bounce = uniform(0);
+  const index = float(instanceIndex), ring = index.div(perRing).floor(), slot = index.mod(perRing);
+  const state = sampleTexture(ringTexture, vec2(ring.add(0.5).div(rings), 0.5));
+  const angle = slot.mul((Math.sqrt(5) - 1) * Math.PI).add(ring.mul(0.15)).add(state.y);
+  const base = sin(ring.div(rings - 1).mul(Math.PI)).mul(10).add(24);
+  const radius = base.mul(bounce.mul(0.55).add(state.z.mul(0.2)).add(1)).add(instancedBufferAttribute<'float'>(offsetAttribute, 'float')).clamp(2, 120);
+  material.positionNode = vec3(cos(angle).mul(radius), sin(angle).mul(radius), state.x);
+  // HSL(h, 1, 0.5) in the working space, matching THREE.Color.setHSL.
+  material.colorNode = vec3(state.w, state.w.add(2 / 3), state.w.add(1 / 3)).fract().mul(6).sub(3).abs().sub(1).clamp(0, 1);
   material.opacityNode = sampleTexture(texture, uv()).a;
-  material.scaleNode = vec2(size); sprite(material, count, scene);
-  const pulses: { z: number; amplitude: number }[] = [];
-  let accumulator = 0, lastOnsetTime = -Infinity;
+  material.scaleNode = vec2(size); sprite(material, simulation.count, scene);
   return {
     scene, camera,
     update(frame) {
-      const dt = Math.max(0, Math.min(0.05, frame.delta));
-      if (frame.audio.onset && dt > 0 && frame.time - lastOnsetTime > 0.18) {
-        lastOnsetTime = frame.time;
-        pulses.push({ z: -depth + 80, amplitude: 1 }); if (pulses.length > 8) pulses.shift();
-        for (let i = 0; i < count; i += 7) velocities[i] += 40 + frame.response.impact * 60;
-      }
-      const forward = (200 + 700 * frame.response.bass) * dt;
-      for (const pulse of pulses) { pulse.z += forward * 1.7; pulse.amplitude *= Math.exp(-dt * 0.5); }
-      for (let i = pulses.length - 1; i >= 0; i--) if (pulses[i].z > 80 || pulses[i].amplitude < 0.05) pulses.splice(i, 1);
-      accumulator += dt;
-      while (accumulator + 1e-10 >= 1 / 120) {
-        for (let i = 0; i < count; i++) {
-          velocities[i] += -offsets[i] * 65 / 120; velocities[i] *= Math.exp(-5 / 120);
-          offsets[i] = Math.max(-18, Math.min(40, offsets[i] + velocities[i] / 120));
-        }
-        accumulator = Math.max(0, accumulator - 1 / 120);
-      }
-      for (let ring = 0; ring < 40; ring++) {
-        z[ring] = wrap(z[ring] + forward, -depth, 40);
-        rotation[ring] += dt * (0.15 + frame.audio.mid * 2);
-        let pulse = 0;
-        for (const wave of pulses) pulse += wave.amplitude * Math.exp(-(((z[ring] - wave.z) / 110) ** 2) / 2);
-        color.setHSL(wrap(frame.hue + ring * 0.01, 0, 1), 1, 0.5);
-        for (let s = 0; s < 44; s++) {
-          const i = ring * 44 + s, a = s * (Math.sqrt(5) - 1) * Math.PI + ring * 0.15 + rotation[ring];
-          const base = 24 + 10 * Math.sin(ring / 39 * Math.PI);
-          const radius = Math.max(2, Math.min(120, base * (1 + frame.response.bounce * 0.55 + pulse * 0.2) + offsets[i]));
-          positions[i * 3] = Math.cos(a) * radius; positions[i * 3 + 1] = Math.sin(a) * radius; positions[i * 3 + 2] = z[ring];
-          colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
-        }
-      }
+      simulation.advance(frame);
+      bounce.value = frame.response.bounce;
       size.value = 2.4 + frame.audio.highs * 2 + frame.response.impact;
-      positionAttribute.needsUpdate = colorAttribute.needsUpdate = true;
+      ringTexture.needsUpdate = offsetAttribute.needsUpdate = true;
       resizeCamera(camera, frame.aspect);
-    }, dispose() { disposeScene(scene); texture.dispose(); },
+    }, dispose() { disposeScene(scene); texture.dispose(); ringTexture.dispose(); },
   };
 }
 function starTexture(): THREE.CanvasTexture {
