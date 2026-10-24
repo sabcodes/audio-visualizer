@@ -73,3 +73,19 @@ test('Win95 windows drag, dismiss, remain bounded, and clean up @hardware', asyn
   await page.selectOption('#mode', 'circle', { force: true });
   await expect(page.locator('#viewport-errors')).toHaveCount(0);
 });
+
+test('rapid mode changes settle on the last request without leaks @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await page.locator('#hide').click();
+  for (const id of ['kaleidoPlane', 'city', 'godrays', 'particles']) await page.selectOption('#mode', id, { force: true });
+  await page.waitForTimeout(1000);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await expect(page.locator('#viewport-errors')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __visualizerDebug: { activeMode: string } }).__visualizerDebug.activeMode)).toBe('particles');
+  expect(errors).toEqual([]);
+});

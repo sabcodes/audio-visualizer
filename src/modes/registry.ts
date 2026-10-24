@@ -47,12 +47,17 @@ export class ModeRegistry {
       this.definitions.set(definition.id, definition);
     }
   }
-  select(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
+  /** Builds an unowned instance without touching the active mode; the caller disposes it. */
+  create(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
     const definition = this.definitions.get(id);
     if (!definition) throw new Error(`Unknown visual mode: ${id}`);
     if (!definition.backends.includes(backend)) throw new Error(`${definition.label} is unavailable on ${backend}`);
+    return definition.create(budget);
+  }
+  select(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
+    const next = this.create(id, backend, budget);
     this.clear();
-    this.active = definition.create(budget);
+    this.active = next;
     return this.active;
   }
   clear() { const previous = this.active; this.active = undefined; previous?.dispose(); }

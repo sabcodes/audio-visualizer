@@ -141,10 +141,11 @@ async function start() {
     });
     if (shutdown || generation !== epoch) { await candidate.dispose(); return; }
     engine = candidate;
-    candidate.setQuality(budget());
+    await candidate.setQuality(budget());
     viewport.replaceChildren(candidate.renderer.domElement);
     resize();
-    candidate.select(mode.value);
+    await candidate.select(mode.value);
+    if (shutdown || generation !== epoch) return;
     draw(0);
     if (failed) throw new Error('Graphics validation failed during the first frame.');
     status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 3`;
@@ -210,14 +211,12 @@ backend.addEventListener('change', () => void start());
 compatibility.addEventListener('click', () => { backend.value = 'webgl2'; void start(); });
 mode.addEventListener('change', () => {
   if (!engine || failed || starting) return;
-  try { engine.select(mode.value); clock = 0; resetTiming(); }
-  catch (error) { fail(error); }
+  engine.select(mode.value).then((active) => { if (active) { clock = 0; resetTiming(); } }).catch(fail);
 });
 scale.addEventListener('change', resize);
 quality.addEventListener('change', () => {
   if (!engine || failed || starting) return;
-  try { engine.setQuality(budget()); resetTiming(); }
-  catch (error) { fail(error); }
+  engine.setQuality(budget()).then(resetTiming).catch(fail);
 });
 targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
 for (const control of [exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
@@ -274,4 +273,8 @@ window.addEventListener('pagehide', (event) => {
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) { shutdown = false; void start(); }
 });
+if (import.meta.env.DEV) {
+  // Test-only window into lifecycle state; absent from production builds.
+  Object.assign(window, { __visualizerDebug: { get activeMode() { return engine?.activeMode; } } });
+}
 void start();

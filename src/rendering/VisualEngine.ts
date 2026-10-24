@@ -19,6 +19,7 @@ export class VisualEngine {
   private readonly logicalSize = new THREE.Vector2();
   private budget: QualityBudget = presetBudget('balanced');
   private activeId?: string;
+  private selectGeneration = 0;
   private readonly lastSize = { width: 1, height: 1, scale: 1 };
 
   private constructor(
@@ -52,24 +53,39 @@ export class VisualEngine {
     return engine;
   }
 
-  select(mode: string) {
-    this.clearMode();
+  get activeMode() { return this.activeId; }
+
+  /**
+   * Compiles the requested mode off-screen, then swaps it in. The previous mode keeps rendering
+   * meanwhile. Resolves false when a newer request superseded this one; only the selected mode is compiled.
+   */
+  async select(mode: string): Promise<boolean> {
+    const generation = ++this.selectGeneration;
+    let candidate: VisualMode | undefined;
+    let output: ReturnType<typeof createOutputPipeline> | undefined;
     try {
-      this.active = this.modes.select(mode, this.backend, this.budget);
-      this.activeId = mode;
-      this.output = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter);
+      candidate = this.modes.create(mode, this.backend, this.budget);
+      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter);
+      await this.renderer.compileAsync(candidate.scene, candidate.camera);
     } catch (error) {
-      this.clearMode();
+      output?.dispose(); candidate?.dispose();
+      if (generation !== this.selectGeneration || this.disposed) return false;
       throw error;
     }
+    if (generation !== this.selectGeneration || this.disposed) { output.dispose(); candidate.dispose(); return false; }
+    this.clearMode();
+    this.active = candidate;
+    this.output = output;
+    this.activeId = mode;
+    return true;
   }
 
   /** Re-creates the active mode only when its simulation budget changed; otherwise only re-sizes. */
-  setQuality(budget: QualityBudget) {
+  async setQuality(budget: QualityBudget): Promise<void> {
     const rebuild = budget.particleScale !== this.budget.particleScale;
     this.budget = budget;
     this.resize(this.lastSize.width, this.lastSize.height, this.lastSize.scale);
-    if (rebuild && this.activeId) this.select(this.activeId);
+    if (rebuild && this.activeId) await this.select(this.activeId);
   }
 
   resize(width: number, height: number, scale: number) {
@@ -108,7 +124,7 @@ export class VisualEngine {
   private clearMode() {
     this.output?.dispose();
     this.output = undefined;
-    this.modes.clear();
+    this.active?.dispose();
     this.active = undefined;
     this.activeId = undefined;
   }
@@ -116,6 +132,7 @@ export class VisualEngine {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.selectGeneration++;
     this.clearMode();
     this.renderer.domElement.remove();
     await this.renderer.dispose();
