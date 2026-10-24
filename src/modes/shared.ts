@@ -1,5 +1,8 @@
 import * as THREE from 'three/webgpu';
+import { float, mix, pow, texture as sampleTexture, vec2 } from 'three/tsl';
 import type { ModeFrame } from './types';
+
+type F = THREE.Node<'float'>;
 import { logBin } from '../audio/analysis';
 
 export function sceneDefaults(z = 85) {
@@ -48,4 +51,33 @@ export function createSpectrumTexture(bins = 512) {
     },
     dispose: () => texture.dispose(),
   };
+}
+/** Mean energy (0–1) of `count` equal slices of the mode's frequency axis, honouring the log/linear setting. */
+export function bandEnergies(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleRate' | 'audio'>, count: number, out = new Float32Array(count)) {
+  const spectrum = frame.audio.spectrum, bins = spectrum.length;
+  for (let band = 0; band < count; band++) {
+    const start = spectrumBin(frame, band / count, Math.floor(band / count * bins));
+    const end = Math.max(start + 1, spectrumBin(frame, (band + 1) / count, Math.floor((band + 1) / count * bins)));
+    let total = 0;
+    for (let i = start; i < end; i++) total += spectrum[i] || 0;
+    out[band] = total / ((end - start) * 255);
+  }
+  return out;
+}
+/** Exponential approach toward target with the same response at any frame rate. */
+export const approach = (current: number, target: number, delta: number, tau: number) => current + (target - current) * (1 - Math.exp(-Math.max(0, delta) / tau));
+/** Fires at most once per `interval` seconds of mode time, on onsets or when the caller forces it. */
+export function beatGate(interval: number) {
+  let last = -Infinity;
+  return (time: number, onset: boolean) => {
+    if (time < last) last = -Infinity; // Clock reset (track change or seek): re-arm.
+    if (!onset || time - last < interval) return false;
+    last = time; return true;
+  };
+}
+/** Spectrum energy node for u ∈ [0, 1] along the same 30 Hz–16 kHz log axis as logBin(); `log` is a 0/1 uniform. */
+export function spectrumAxisNode(spectrum: THREE.DataTexture, u: F, log: F, nyquist: F, bins = 512) {
+  const logHz = pow(float(16000 / 30), u).mul(30).min(nyquist);
+  const bin = mix(u.mul(bins), logHz.div(nyquist).mul(bins), log).floor().clamp(0, bins - 1);
+  return sampleTexture(spectrum, vec2(bin.add(0.5).div(bins), 0.5)).r;
 }

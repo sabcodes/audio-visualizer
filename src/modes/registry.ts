@@ -8,6 +8,11 @@ import { createSpatialMode } from './spatialModes';
 import { createErrorMode } from './errorMode';
 import { createFullscreenMode } from './fullscreenModes';
 import { createGlitchMode, createKaleidoscopeMode } from './filterModes';
+import { createEpicycleMode, createPendulumMode, createPolyhedraMode } from './geometricModes';
+import { createInkMarbleMode, createVoronoiMode } from './shaderModes';
+import { createAuroraMode, createGalaxyMode, createRidgelineMode, createSynthwaveMode } from './landscapeModes';
+import { createRobotMode } from './robotMode';
+import { createNeonCityMode } from './neonCityMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -31,12 +36,26 @@ export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('glitchFX', 'Glitch FX (RGB Split)', createGlitchMode),
   definition('godrays', 'God Rays (Stylized Cones)', () => createSpatialMode('godrays')),
 ];
+// First wave of the 32 candidates in docs/research/2026-10-24-new-visualization-modes.md.
+export const waveOneModeDefinitions: readonly ModeDefinition[] = [
+  definition('epicycles', 'Fourier Epicycles', createEpicycleMode),
+  definition('polyhedra', 'Polyhedra Morph', createPolyhedraMode),
+  definition('pendulumWave', 'Pendulum Wave', createPendulumMode),
+  definition('voronoi', 'Voronoi Crystal Mosaic (FS)', createVoronoiMode, 'fullscreen'),
+  definition('inkMarble', 'Ink Marble / Oil Slick (FS)', createInkMarbleMode, 'fullscreen'),
+  definition('aurora', 'Aurora Curtains', createAuroraMode),
+  definition('ridgeline', 'Pulsar Ridgeline', createRidgelineMode),
+  definition('synthwave', 'Synthwave Sunset Grid', createSynthwaveMode),
+  definition('galaxy', 'FFT Galaxy', (budget) => createGalaxyMode(budget)),
+  definition('robot', 'Robot Dancer', createRobotMode),
+  definition('neonCity', 'Neon Megacity', (budget) => createNeonCityMode(budget)),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();
