@@ -100,14 +100,14 @@ export function ridgeProfile(frame: Parameters<typeof spectrumBin>[0] & Pick<Mod
     const bin = spectrumBin(frame, u, Math.floor(Math.pow(u, 1.6) * (bins - 1)));
     // Smooth per-row ripples instead of per-point noise keep each line a clean ridge.
     const ripple = Math.sin(x * 13 + phase) * 0.6 + Math.sin(x * 31 + phase * 2.3) * 0.35 + 1;
-    out[i] = window * ((frame.audio.spectrum[bin] || 0) / 255 * 30 + ripple * 3.2 + response * 6);
+    out[i] = window * (Math.pow((frame.audio.spectrum[bin] || 0) / 255, 1.6) * 16 + ripple * 2.4 + response * 4);
   }
   return out;
 }
 
 export function createRidgelineMode(): VisualMode {
   const { scene, camera } = sceneDefaults(0);
-  camera.position.set(0, 26, 66); camera.lookAt(0, 8, -24);
+  camera.position.set(0, 30, 92); camera.lookAt(0, 6, -26);
   const random = seededRandom(19);
   const rows = Array.from({ length: RIDGE_ROWS }, () => {
     const heights = new Float32Array(RIDGE_POINTS);
@@ -146,7 +146,7 @@ export function createRidgelineMode(): VisualMode {
         scroll -= 1; newest = (newest + 1) % RIDGE_ROWS;
         const row = rows[newest];
         ridgeProfile(frame, row.heights, random);
-        if (frame.response.impact > 0.5) for (let i = 0; i < RIDGE_POINTS; i++) row.heights[i] *= 1 + frame.response.impact * 0.5;
+        if (frame.response.impact > 0.5) for (let i = 0; i < RIDGE_POINTS; i++) row.heights[i] *= 1 + frame.response.impact * 0.25;
         draw(row);
       }
       for (let k = 0; k < RIDGE_ROWS; k++) {
@@ -240,7 +240,7 @@ export function createGalaxyMode(budget: QualityBudget = presetBudget('balanced'
   const material = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   material.positionNode = vec3(cos(angle).mul(radius), seed.z.mul(40).add(energy.mul(seed.w.sub(0.5)).mul(6)), sin(angle).mul(radius));
   const core = vec3(1.6, 1.15, 0.7), outer = hsl(hue.add(seed.w.mul(0.12)), 0.6);
-  const brightness = energy.mul(1.6).add(0.35).add(waveHit.mul(2.2)).add(r.smoothstep(0.12, 0).mul(bass.mul(2).add(1)));
+  const brightness = energy.mul(1.6).add(0.35).add(waveHit.mul(2.2)).add(r.smoothstep(0.12, 0).mul(bass.mul(0.6).add(0.5)));
   material.colorNode = mix(core, outer, r.smoothstep(0.05, 0.45)).mul(brightness);
   material.opacityNode = uv().sub(0.5).length().smoothstep(0.5, 0.05).mul(0.55);
   material.scaleNode = vec2(seed.w.mul(0.35).add(0.25).add(waveHit.mul(0.4)));

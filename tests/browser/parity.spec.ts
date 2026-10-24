@@ -2,9 +2,9 @@ import { test, expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajous', 'boids', 'fftTunnel', 'kaleidoPlane', 'city', 'glitchRing', 'vjRings', 'neonKaleido', 'starTunnel', 'bloomTunnel', 'glitchFX', 'godrays',
-  'epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot'];
+  'epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot', 'neonCity'];
 
-test('all 28 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 29 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
   test.setTimeout(180000);
   const errors: string[] = [];

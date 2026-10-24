@@ -16,9 +16,9 @@ const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectr
 });
 
 describe('wave one modes', () => {
-  it('registers ten new ids after the legacy 18, all on both backends', () => {
-    expect(waveOneModeDefinitions.map((mode) => mode.id)).toEqual(['epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot']);
-    expect(modeDefinitions.slice(18, 28)).toEqual(waveOneModeDefinitions);
+  it('registers eleven new ids after the legacy 18, all on both backends', () => {
+    expect(waveOneModeDefinitions.map((mode) => mode.id)).toEqual(['epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot', 'neonCity']);
+    expect(modeDefinitions.slice(18, 29)).toEqual(waveOneModeDefinitions);
     for (const mode of waveOneModeDefinitions) expect(mode.backends).toEqual(['webgpu', 'webgl2']);
   });
   it('each mode builds, survives silence, loud onsets and a stalled frame, then disposes', () => {
@@ -86,7 +86,7 @@ describe('ridgeline', () => {
     const quiet = ridgeProfile(f, new Float32Array(141), () => 0.5)[70];
     f.audio.spectrum.fill(180);
     const profile = ridgeProfile(f, new Float32Array(141), () => 0.5);
-    expect(profile[70]).toBeGreaterThan(quiet + 15);
+    expect(profile[70]).toBeGreaterThan(quiet + 8);
     expect(profile[0]).toBeLessThan(profile[70] * 0.01);
     expect(profile[140]).toBeLessThan(profile[70] * 0.01);
   });

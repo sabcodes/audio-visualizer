@@ -12,6 +12,7 @@ import { createEpicycleMode, createPendulumMode, createPolyhedraMode } from './g
 import { createInkMarbleMode, createVoronoiMode } from './shaderModes';
 import { createAuroraMode, createGalaxyMode, createRidgelineMode, createSynthwaveMode } from './landscapeModes';
 import { createRobotMode } from './robotMode';
+import { createNeonCityMode } from './neonCityMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -47,6 +48,7 @@ export const waveOneModeDefinitions: readonly ModeDefinition[] = [
   definition('synthwave', 'Synthwave Sunset Grid', createSynthwaveMode),
   definition('galaxy', 'FFT Galaxy', (budget) => createGalaxyMode(budget)),
   definition('robot', 'Robot Dancer', createRobotMode),
+  definition('neonCity', 'Neon Megacity', (budget) => createNeonCityMode(budget)),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
