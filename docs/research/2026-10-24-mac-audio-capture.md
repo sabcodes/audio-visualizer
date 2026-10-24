@@ -68,6 +68,20 @@ context.createMediaStreamSource(new MediaStream([audio])).connect(analyser); // 
 - **A background tab can't open the picker.** `getDisplayMedia` rejects with `InvalidStateError` when the page isn't the focused tab. The UI explains this.
 - **The graph.** The file player now runs `source → destination` and `source → analyser` (the analyser is a side branch), so the live `MediaStreamAudioSourceNode` shares the same analyser without ever reaching the speakers.
 
+### Hand test (Entire Screen + "Also share system audio", Chrome 155, macOS 27)
+
+| Source | Result |
+|---|---|
+| Music app, local file | Works: visuals react. |
+| Spotify app | Works: visuals react. |
+| Apple Music, protected (DRM) track | Not tested yet. |
+| YouTube tab | Not tested yet. |
+
+Two diagnostics exports from these runs both report `fixture: "system audio capture"`, `audio.source: "system"`, mode Lissajous and Cube. Observations to follow up:
+
+- **Sensitivity.** The tester raised Bounce sensitivity to 2.9 and 3.75, from the default 1.8. Live capture follows the player's volume, so a higher default for system audio may be worth it.
+- **Frame pacing.** Both runs were forced to WebGL2 (`?backend=webgl2`) and paced at about 33.3 ms (30 Hz) for the whole 60-second benchmark. That's not yet compared with the same scene without capture, so whether screen sharing caused the 30 Hz cap is unknown.
+
 ## Still unverified — test before committing to a design
 
 - **DRM.** Does Apple Music (protected tracks), the Spotify app, or a Widevine tab (Spotify Web) go silent through taps or tab capture? There's no authoritative source either way, only one anecdotal 2020 report of tabCapture muting.
