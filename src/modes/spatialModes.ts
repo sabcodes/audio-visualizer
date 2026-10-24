@@ -104,7 +104,7 @@ export function createSpatialMode(id: 'city' | 'bloomTunnel' | 'godrays'): Visua
             torusMesh.position.z = -TUNNEL_DEPTH;
           }
           const L =
-            0.6 + 0.4 * Math.sin(i * 0.3 + frame.time * 0.004 + frame.audio.highs * 2.0);
+            0.6 + 0.4 * Math.sin(i * 0.3 + frame.time * 4 + frame.audio.highs * 2.0);
           const mat = torusMesh.material as THREE.MeshBasicMaterial;
           mat.color.setHSL(wrap(frame.hue + i * 0.01, 0, 1), 1, L);
           mat.opacity = frame.reducedFlash ? 0.8 : 0.7 + 0.3 * frame.response.impact;

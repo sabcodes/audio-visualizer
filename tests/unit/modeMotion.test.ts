@@ -79,3 +79,15 @@ it('star tunnel spring stays bounded and frame-rate independent', () => {
   expect(Math.max(...fast.map((v) => Math.abs(v)))).toBeGreaterThan(0);
   slow.forEach((value, i) => expect(value).toBeCloseTo(fast[i], 6));
 });
+it('bloom tunnel shimmer matches the legacy rate (ms clock → seconds × 4)', () => {
+  const lightness = (time: number) => {
+    const mode = createSpatialMode('bloomTunnel'), f = frame();
+    f.time = time; f.delta = 0; mode.update(f);
+    const torus = (mode.scene.children[0] as Group).children[0] as Mesh;
+    const hsl = { h: 0, s: 0, l: 0 };
+    ((Array.isArray(torus.material) ? torus.material[0] : torus.material) as MeshBasicMaterial).color.getHSL(hsl);
+    mode.dispose(); return hsl.l;
+  };
+  expect(lightness(0)).toBeCloseTo(0.6, 6);
+  expect(lightness(Math.PI / 8)).toBeCloseTo(1, 6);
+});
