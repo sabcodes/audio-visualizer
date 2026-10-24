@@ -1,0 +1,34 @@
+{
+  "browser": "Chrome (desktop)",
+  "visibility": "visible",
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "device": "",
+    "description": "",
+    "isFallbackAdapter": false
+  },
+  "requestedBrowserChannel": "installed chrome",
+  "browserDownloaded": false,
+  "capturedAt": "2026-10-24T09:29:50.313Z",
+  "durationSeconds": 60,
+  "baselineFile": "visualizer-capabilities.json",
+  "webgpuFile": "benchmark-results/webgpu-particles-60s.json",
+  "webgpu": {
+    "count": 7201,
+    "medianMs": 8.30000000000291,
+    "p95Ms": 9.399999999997817,
+    "p99Ms": 9.400000000001455,
+    "missedFrames": 0
+  },
+  "webgl2Baseline": {
+    "count": 7201,
+    "medianMs": 8.30000000000291,
+    "p95Ms": 9.299999999995634,
+    "p99Ms": 9.400000000001455,
+    "missedFrames": 0
+  },
+  "notes": "Sequential runs, not simultaneous or controlled repeated trials. Frame intervals are display-paced, not GPU execution times; no throughput speedup claim follows.",
+  "pageErrors": [],
+  "consoleErrors": []
+}

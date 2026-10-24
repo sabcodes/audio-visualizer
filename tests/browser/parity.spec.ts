@@ -1,0 +1,73 @@
+import { test, expect } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajous', 'boids', 'fftTunnel', 'kaleidoPlane', 'city', 'glitchRing', 'vjRings', 'neonKaleido', 'starTunnel', 'bloomTunnel', 'glitchFX', 'godrays'];
+
+test('all 18 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  test.setTimeout(180000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
+  await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&time=2`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await expect(page.locator('#status')).toContainText(backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility');
+  await expect(page.locator('#reduced-flash')).toBeChecked();
+  await page.locator('#hide').click();
+  for (const id of ids) {
+    await page.selectOption('#mode', id, { force: true });
+    await page.waitForTimeout(450);
+    await expect(page.locator('#status'), `silent: ${id}`).toHaveAttribute('data-state', 'ready');
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await page.locator('canvas').screenshot({ path: info.outputPath(`silent-${id}.png`) });
+    await expect(page.locator('#viewport-errors')).toHaveCount(id === 'errors' ? 1 : 0);
+  }
+  // Real fixture is user-supplied and never bundled. Silent coverage still runs without it.
+  if (existsSync(resolve('ghost.wav'))) {
+    await page.locator('#show').click();
+    await page.locator('#freeze').click();
+    await page.locator('#audio-upload').setInputFiles(resolve('ghost.wav'));
+    await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'ready');
+    await page.locator('#seek-slider').fill('96');
+    await page.locator('#play-btn').click();
+    await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'playing');
+    await page.locator('#sensitivity').fill('2.5');
+    for (const id of ids) {
+      await page.selectOption('#mode', id);
+      await page.waitForTimeout(400);
+      await expect(page.locator('#status'), `playback: ${id}`).toHaveAttribute('data-state', 'ready');
+    }
+    await page.locator('#play-btn').click();
+    await page.locator('#seek-slider').fill('120');
+    await page.locator('#play-btn').click();
+    await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'playing');
+  }
+  for (const id of [...ids].reverse()) await page.selectOption('#mode', id, { force: true });
+  await page.setViewportSize({ width: 390, height: 740 });
+  await page.selectOption('#mode', 'city', { force: true });
+  await page.selectOption('#mode', 'circle', { force: true });
+  await page.waitForTimeout(500);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  expect(errors).toEqual([]);
+});
+
+test('Win95 windows drag, dismiss, remain bounded, and clean up @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=errors`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await page.locator('#motion').check();
+  await page.locator('#hide').click();
+  const title = page.locator('.win95-title').first();
+  const box = await title.boundingBox(); expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + 30, box!.y + 10); await page.mouse.down();
+  await page.mouse.move(100, 100); await page.mouse.up();
+  const moved = await title.boundingBox(); expect(moved!.x).toBeLessThan(110);
+  const before = await page.locator('.win95-window').count();
+  await page.locator('.win95-title button').first().click();
+  await expect(page.locator('.win95-window')).toHaveCount(before - 1);
+  await page.selectOption('#mode', 'circle', { force: true });
+  await expect(page.locator('#viewport-errors')).toHaveCount(0);
+});

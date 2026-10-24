@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>EDM Visuals — Modern foundation</title>
+  <link rel="stylesheet" href="/src/spike.css">
+</head>
+<body>
+  <main id="viewport" aria-label="Experimental visualizer canvas"></main>
+  <section id="controls" aria-labelledby="title">
+    <h1 id="title">EDM Visuals <small>Stage 2 · 18-mode port for review</small></h1>
+    <p>The original 18-mode visualizer is unchanged. <a href="./index.html">Open legacy entry</a> (development server).</p>
+    <fieldset id="player">
+      <legend>Local audio · stays on this device</legend>
+      <label>Load track <input id="audio-upload" type="file" accept="audio/*"></label>
+      <div class="row"><button id="play-btn" type="button" disabled>Play</button><span id="track-name">No track loaded</span><output id="time-current">0:00</output><span>/</span><output id="time-total">0:00</output></div>
+      <label id="seek-label">Seek <input id="seek-slider" type="range" min="0" max="0" step="0.01" value="0" disabled></label>
+      <p id="audio-status" role="status" aria-live="polite">Silent startup · load a local audio file to begin.</p>
+    </fieldset>
+    <div class="row">
+      <label>Backend <select id="backend"><option value="auto">Automatic</option><option value="webgpu">WebGPU only</option><option value="webgl2">Force WebGL2</option></select></label>
+      <label>Scene <select id="mode"><option value="scene">Basic neon scene</option><option value="rings">TSL fullscreen rings</option><option value="particles">8,000 analytic GPU sprites</option></select></label>
+      <button id="restart" type="button">Restart renderer</button>
+    </div>
+    <div class="row">
+      <label>Render scale <select id="scale"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option></select></label>
+      <label>Exposure <input id="exposure" type="range" min="0.25" max="2" value="1" step="0.05"></label>
+      <label>Bloom <input id="bloom" type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
+    </div>
+    <div class="row">
+      <label>Bounce sensitivity <input id="sensitivity" type="range" min="0.25" max="4" step="0.05" value="1.8"></label>
+      <label>Color change (sec) <input id="color-speed-slider" type="range" min="0.1" max="5" step="0.1" value="0.5"></label>
+      <label><input id="reduced-flash" type="checkbox" checked> Reduced flash</label>
+    </div>
+    <div class="row">
+      <label><input id="motion" type="checkbox"> Reduced motion</label>
+      <label><input id="synthetic" type="checkbox"> Synthetic bass fixture (testing)</label>
+      <button id="freeze" type="button" aria-pressed="false">Freeze at 2s</button>
+      <button id="fullscreen" type="button">Fullscreen</button>
+      <button id="hide" type="button">Hide controls</button>
+    </div>
+    <p>Audio is played and analyzed locally; no upload or analytics. The synthetic fixture is optional and overrides track analysis for tests. Space plays/pauses a loaded track (otherwise pauses motion); H hides controls; F enters fullscreen outside native controls. No strobe effects.</p>
+    <p id="status" role="status" aria-live="polite">Initializing renderer…</p>
+    <pre id="diagnostics" aria-label="Rendering diagnostics">Waiting for first frame.</pre>
+    <div class="row"><button id="benchmark" type="button">Benchmark this scene (60s)</button><button id="export" type="button">Export diagnostics JSON</button><button id="compatibility" type="button" hidden>Restart in WebGL2</button></div>
+    <p id="benchmark-status" role="status"></p>
+    <p>All 18 legacy mode ports are available for visual review, plus two labeled probes. God Rays uses stylized additive cones, not volumetric scattering. Flash modulation is opt-in: keep Reduced flash enabled for steady brightness.</p>
+  </section>
+  <button id="show" type="button" hidden>Show controls</button>
+  <noscript>This visualizer requires JavaScript and a usable WebGPU or WebGL2 backend.</noscript>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

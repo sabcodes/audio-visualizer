@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.npm-cache/
+test-results/
+playwright-report/
+*.local
+
+# User-supplied audio fixtures stay local
+*.wav
+*.mp3
+*.flac
+.DS_Store

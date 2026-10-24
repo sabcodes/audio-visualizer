@@ -1,0 +1,85 @@
+{
+  "current": {
+    "schemaVersion": 1,
+    "stage": "Stage 0 capability spike \u2014 not visual parity approval",
+    "timestamp": "2026-10-24T09:20:28.761Z",
+    "secureContext": true,
+    "backendRequested": "webgl2",
+    "backendActual": "webgl2",
+    "startupFailures": [],
+    "gpu": "Not collected; record physical GPU and OS in the hardware review.",
+    "mode": "particles",
+    "seed": 42,
+    "fixture": "synthetic bass: 0.25 + 0.2*sin(time*3)",
+    "time": 78.36590000000494,
+    "reducedMotion": false,
+    "viewport": {
+      "width": 1512,
+      "height": 861,
+      "dpr": 2
+    },
+    "drawingBuffer": {
+      "width": 3024,
+      "height": 1722
+    },
+    "output": {
+      "toneMapping": "ACES",
+      "antialiasing": "FXAA after single display transform",
+      "exposure": 1,
+      "bloom": 0.6,
+      "scale": 1
+    },
+    "simulation": "8,000 analytic instanced sprites; no compute/storage required on either backend",
+    "metric": "requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference",
+    "timings": {
+      "count": 7200,
+      "medianMs": 8.30000000000291,
+      "p95Ms": 9.299999999995634,
+      "p99Ms": 9.39999999999418,
+      "missedFrames": 0
+    }
+  },
+  "benchmarks": [
+    {
+      "schemaVersion": 1,
+      "stage": "Stage 0 capability spike \u2014 not visual parity approval",
+      "timestamp": "2026-10-24T09:20:26.416Z",
+      "secureContext": true,
+      "backendRequested": "webgl2",
+      "backendActual": "webgl2",
+      "startupFailures": [],
+      "gpu": "Not collected; record physical GPU and OS in the hardware review.",
+      "mode": "particles",
+      "seed": 42,
+      "fixture": "synthetic bass: 0.25 + 0.2*sin(time*3)",
+      "time": 76.02510000000488,
+      "reducedMotion": false,
+      "viewport": {
+        "width": 1512,
+        "height": 861,
+        "dpr": 2
+      },
+      "drawingBuffer": {
+        "width": 3024,
+        "height": 1722
+      },
+      "output": {
+        "toneMapping": "ACES",
+        "antialiasing": "FXAA after single display transform",
+        "exposure": 1,
+        "bloom": 0.6,
+        "scale": 1
+      },
+      "simulation": "8,000 analytic instanced sprites; no compute/storage required on either backend",
+      "metric": "requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference",
+      "durationSeconds": 60,
+      "timings": {
+        "count": 7201,
+        "medianMs": 8.30000000000291,
+        "p95Ms": 9.299999999995634,
+        "p99Ms": 9.400000000001455,
+        "missedFrames": 0
+      }
+    }
+  ]
+}
