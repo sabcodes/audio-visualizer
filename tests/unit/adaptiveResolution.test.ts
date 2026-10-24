@@ -65,3 +65,34 @@ describe('AdaptiveResolution', () => {
     expect(feed(controller, repeat(9.5, 120), 0).changes).toEqual([0.875]);
   });
 });
+
+describe('AdaptiveResolution on vsync-capped displays', () => {
+  it('probes back up from a transient downscale when steady at the 60 Hz cap', () => {
+    const controller = new AdaptiveResolution();
+    const down = feed(controller, repeat(22, 120), 0);
+    expect(controller.scale).toBe(0.875);
+    expect(feed(controller, repeat(16.7, 360), down.now + 2000).changes).toEqual([1]);
+  });
+  it('reverts a probe that makes frames slow again and backs off', () => {
+    const controller = new AdaptiveResolution();
+    const down = feed(controller, repeat(22, 120), 0);
+    const probe = feed(controller, repeat(16.7, 360), down.now + 2000);
+    expect(probe.changes).toEqual([1]);
+    const regress = feed(controller, repeat(22, 120), probe.now + 2000);
+    expect(regress.changes).toEqual([0.875]);
+    // Backed off: three more good windows are not enough for another probe straight away.
+    expect(feed(controller, repeat(16.7, 360), regress.now + 2000).changes).toEqual([]);
+  });
+  it('does not downscale a steady 50 Hz display when measured frame cost is low', () => {
+    const controller = new AdaptiveResolution();
+    let now = 0; const changes: number[] = [];
+    for (let i = 0; i < 600; i++) { now += 20; const next = controller.sample(20, now, 3); if (next !== null) changes.push(next); }
+    expect(changes).toEqual([]);
+  });
+  it('still downscales slow frames when measured frame cost is high', () => {
+    const controller = new AdaptiveResolution();
+    let now = 0; const changes: number[] = [];
+    for (let i = 0; i < 120; i++) { now += 22; const next = controller.sample(22, now, 19); if (next !== null) changes.push(next); }
+    expect(changes).toEqual([0.875]);
+  });
+});

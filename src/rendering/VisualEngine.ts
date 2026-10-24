@@ -20,8 +20,13 @@ export class VisualEngine {
   private readonly logicalSize = new THREE.Vector2();
   private budget: QualityBudget = presetBudget('balanced');
   private activeId?: string;
+  /** Latest requested mode, which can differ from activeId while a select is compiling. */
+  private requestedId?: string;
   private selectGeneration = 0;
   private outputSettings: OutputSettings = { ...defaultOutput };
+  private pipelineSettings?: OutputSettings;
+  /** Test seam (DEV debug hook only): stretches the compile window so lifecycle races are reproducible. */
+  compileDelayMs = 0;
   private readonly lastSize = { width: 1, height: 1, scale: 1 };
 
   private constructor(
@@ -57,6 +62,8 @@ export class VisualEngine {
 
   get activeMode() { return this.activeId; }
   get output() { return { ...this.outputSettings }; }
+  /** AA the active pipeline was actually built with (can lag `output` while a select is pending). */
+  get pipelineAa() { return this.pipelineSettings?.aa; }
 
   /** Tone mapping applies immediately; changing AA rebuilds only the active output pipeline. */
   setOutput(settings: OutputSettings) {
@@ -66,6 +73,7 @@ export class VisualEngine {
     if (rebuild && this.active) {
       this.pipeline?.dispose();
       this.pipeline = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter, { aa: settings.aa });
+      this.pipelineSettings = { ...settings };
     }
   }
 
@@ -75,21 +83,31 @@ export class VisualEngine {
    */
   async select(mode: string): Promise<boolean> {
     const generation = ++this.selectGeneration;
+    this.requestedId = mode;
     let candidate: VisualMode | undefined;
     let output: ReturnType<typeof createOutputPipeline> | undefined;
+    const candidateSettings = { ...this.outputSettings };
     try {
       candidate = this.modes.create(mode, this.backend, this.budget);
-      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: this.outputSettings.aa });
+      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa });
       await this.renderer.compileAsync(candidate.scene, candidate.camera);
+      if (this.compileDelayMs > 0) await new Promise((done) => setTimeout(done, this.compileDelayMs));
     } catch (error) {
       output?.dispose(); candidate?.dispose();
       if (generation !== this.selectGeneration || this.disposed) return false;
       throw error;
     }
     if (generation !== this.selectGeneration || this.disposed) { output.dispose(); candidate.dispose(); return false; }
+    if (candidateSettings.aa !== this.outputSettings.aa) {
+      // AA changed while compiling; rebuild so the swapped-in pipeline matches the current setting.
+      output.dispose();
+      Object.assign(candidateSettings, this.outputSettings);
+      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa });
+    }
     this.clearMode();
     this.active = candidate;
     this.pipeline = output;
+    this.pipelineSettings = candidateSettings;
     this.activeId = mode;
     return true;
   }
@@ -99,7 +117,8 @@ export class VisualEngine {
     const rebuild = budget.particleScale !== this.budget.particleScale;
     this.budget = budget;
     this.resize(this.lastSize.width, this.lastSize.height, this.lastSize.scale);
-    if (rebuild && this.activeId) await this.select(this.activeId);
+    const target = this.requestedId ?? this.activeId;
+    if (rebuild && target) await this.select(target);
   }
 
   resize(width: number, height: number, scale: number) {

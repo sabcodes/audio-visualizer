@@ -110,3 +110,55 @@ test('AgX tone mapping and SMAA render every mode family without errors @hardwar
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   expect(errors).toEqual([]);
 });
+
+type Debug = { activeMode: string; pipelineAa: string; adaptiveHolding: boolean; adaptiveLocked: boolean };
+const slowCompiles = (page: import('@playwright/test').Page) => page.evaluate(() => (window as unknown as { __visualizerDebug: { setCompileDelay(ms: number): void } }).__visualizerDebug.setCompileDelay(1500));
+const debug = (page: import('@playwright/test').Page) => page.evaluate(() => (window as unknown as { __visualizerDebug: Debug }).__visualizerDebug).then((d) => d);
+
+test('changing quality while a mode compiles keeps the newly requested mode @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await slowCompiles(page);
+  await page.selectOption('#mode', 'kaleidoPlane');
+  await page.selectOption('#quality', 'high');
+  await page.waitForTimeout(4000);
+  expect((await debug(page)).activeMode).toBe('kaleidoPlane');
+});
+
+test('changing antialiasing while a mode compiles applies to the swapped-in mode @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await slowCompiles(page);
+  await page.selectOption('#mode', 'kaleidoPlane');
+  await page.selectOption('#aa', 'smaa');
+  await page.waitForTimeout(2500);
+  expect((await debug(page)).activeMode).toBe('kaleidoPlane');
+  expect((await debug(page)).pipelineAa).toBe('smaa');
+});
+
+test('a mode switch pauses adaptive scaling while the new mode compiles @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await page.waitForTimeout(5500);
+  await slowCompiles(page);
+  expect((await debug(page)).adaptiveHolding).toBe(false);
+  await page.selectOption('#mode', 'kaleidoPlane');
+  expect((await debug(page)).adaptiveHolding).toBe(true);
+});
+
+test('the 60 s benchmark locks adaptive scaling for its duration @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await page.locator('#benchmark').click();
+  expect((await debug(page)).adaptiveLocked).toBe(true);
+  await page.locator('#exposure').fill('1.2'); // any setting change cancels the run
+  expect((await debug(page)).adaptiveLocked).toBe(false);
+});

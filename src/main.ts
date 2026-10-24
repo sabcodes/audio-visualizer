@@ -111,9 +111,12 @@ function metadata() {
     timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
   };
 }
+/** Re-applies the Render scale select's Auto/locked choice, e.g. after a benchmark held the scale. */
+function applyScaleMode() { adaptive.lock(scale.value === 'auto' ? null : Number(scale.value)); }
 function cancelBenchmark(message: string) {
   if (!benchmarkRun) return;
   benchmarkRun = undefined;
+  applyScaleMode();
   benchmark.disabled = false;
   benchmarkStatus.textContent = message;
 }
@@ -125,7 +128,7 @@ function resetTiming() {
   cancelBenchmark('Benchmark cancelled: settings, playback, viewport, scene, or visibility changed.');
 }
 function resize() {
-  adaptive.lock(scale.value === 'auto' ? null : Number(scale.value));
+  if (!benchmarkRun) applyScaleMode();
   engine?.resize(innerWidth, innerHeight, renderScale());
   resetTiming();
 }
@@ -212,12 +215,15 @@ function frame(now: number) {
       }
     }
     // Automatic steps keep the benchmark window: only explicit setting changes reset timing.
-    const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now) : null;
+    const gpuMs = engine?.lastFrame.gpuMs;
+    const frameCost = engine && gpuMs != null ? engine.lastFrame.cpuUpdateMs + gpuMs : null;
+    const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now, frameCost) : null;
     if (nextScale !== null) engine?.resize(innerWidth, innerHeight, nextScale);
     if (benchmarkRun && now - benchmarkRun.start >= 60000) {
       reports.push({ ...metadata(), durationSeconds: 60, timings: summarizeIntervals(benchmarkRun.samples, refreshHz()) });
       if (reports.length > 12) reports.shift();
       benchmarkRun = undefined;
+      applyScaleMode();
       benchmark.disabled = false;
       benchmarkStatus.textContent = '60-second report recorded. Export diagnostics to save it.';
     }
@@ -234,11 +240,14 @@ backend.addEventListener('change', () => void start());
 compatibility.addEventListener('click', () => { backend.value = 'webgl2'; void start(); });
 mode.addEventListener('change', () => {
   if (!engine || failed || starting) return;
+  // Hold adaptive scaling through the compile: a one-time shader compile must not lower quality.
+  adaptive.reset(performance.now());
   engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); resetTiming(); } }).catch(fail);
 });
 scale.addEventListener('change', resize);
 quality.addEventListener('change', () => {
   if (!engine || failed || starting) return;
+  adaptive.reset(performance.now());
   engine.setQuality(budget()).then(resetTiming).catch(fail);
 });
 for (const control of [toneMapping, antialiasing]) control.addEventListener('change', () => {
@@ -251,6 +260,8 @@ freeze.setAttribute('aria-pressed', String(frozen));
 freeze.addEventListener('click', () => { frozen = !frozen; freeze.setAttribute('aria-pressed', String(frozen)); resetTiming(); });
 benchmark.addEventListener('click', () => {
   if (!engine || failed || starting) { benchmarkStatus.textContent = 'Initialize a working renderer first.'; return; }
+  // One resolution for the whole run (spec §9 records the actual drawing buffer).
+  adaptive.lock(renderScale());
   benchmarkRun = { start: Math.max(performance.now(), warmUntil), samples: [] };
   benchmark.disabled = true;
   benchmarkStatus.textContent = 'Recording 60 seconds after warmup. Keep this tab visible and settings unchanged.';
@@ -304,6 +315,10 @@ if (import.meta.env.DEV) {
   // Test-only window into lifecycle state; absent from production builds.
   Object.assign(window, { __visualizerDebug: {
     get activeMode() { return engine?.activeMode; },
+    get pipelineAa() { return engine?.pipelineAa; },
+    get adaptiveHolding() { return adaptive.isHolding(performance.now()); },
+    get adaptiveLocked() { return adaptive.isLocked; },
+    setCompileDelay(ms: number) { if (engine) engine.compileDelayMs = ms; },
     bench: (seconds: number) => new Promise<BenchResult>((done) => { benchHook = { until: performance.now() + seconds * 1000, raf: [], cpu: [], gpu: [], lastGpu: null, done }; }),
   } });
 }
