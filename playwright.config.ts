@@ -12,5 +12,6 @@ export default defineConfig({
     { name: 'compatibility', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } } },
     { name: 'unsupported', testMatch: '**/unsupported.spec.ts', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--disable-webgl', '--disable-webgpu'] } } },
     { name: 'hardware-webgpu', use: { channel: 'chrome', headless: false }, grep: /@hardware/ },
+    { name: 'benchmark', testMatch: '**/benchmark.spec.ts', timeout: 15 * 60 * 1000, use: { channel: 'chrome', headless: false, viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 }, grep: /@benchmark/ },
   ],
 });

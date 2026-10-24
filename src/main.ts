@@ -1,5 +1,5 @@
 import { VisualEngine } from './rendering/VisualEngine';
-import { clampDelta, summarizeIntervals } from './rendering/diagnostics';
+import { clampDelta, summarizeIntervals, type FrameTimingStats } from './rendering/diagnostics';
 import type { BackendPreference } from './rendering/backendSelection';
 import { AudioEngine, type AudioFrame } from './audio/AudioEngine';
 import { ControlPanel } from './ui/ControlPanel';
@@ -68,6 +68,8 @@ let nextDiagnostics = 0;
 let intervals: number[] = [];
 let benchmarkRun: { start: number; samples: number[] } | undefined;
 const reports: unknown[] = [];
+export interface BenchResult { raf: FrameTimingStats; cpu: FrameTimingStats; gpu: FrameTimingStats | null; drawingBuffer: { width: number; height: number } }
+let benchHook: { until: number; raf: number[]; cpu: number[]; gpu: number[]; lastGpu: number | null; done: (result: BenchResult) => void } | undefined;
 const audio = new AudioEngine();
 const player = new ControlPanel(audio, resetTiming);
 const fixture: AudioFrame = { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 0 };
@@ -188,6 +190,15 @@ function frame(now: number) {
       if (intervals.length > 7200) intervals.shift();
       if (benchmarkRun) benchmarkRun.samples.push(deltaMs);
     }
+    if (benchHook && engine && deltaMs > 0) {
+      benchHook.raf.push(deltaMs); benchHook.cpu.push(engine.lastFrame.cpuUpdateMs);
+      const gpu = engine.lastFrame.gpuMs;
+      if (gpu !== null && gpu !== benchHook.lastGpu) { benchHook.gpu.push(gpu); benchHook.lastGpu = gpu; }
+      if (now >= benchHook.until) {
+        const { raf, cpu, gpu: gpuSamples, done } = benchHook; benchHook = undefined;
+        done({ raf: summarizeIntervals(raf, refreshHz()), cpu: summarizeIntervals(cpu, refreshHz()), gpu: gpuSamples.length ? summarizeIntervals(gpuSamples, refreshHz()) : null, drawingBuffer: { width: engine.dimensions.x, height: engine.dimensions.y } });
+      }
+    }
     // Automatic steps keep the benchmark window: only explicit setting changes reset timing.
     const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now) : null;
     if (nextScale !== null) engine?.resize(innerWidth, innerHeight, nextScale);
@@ -275,6 +286,9 @@ window.addEventListener('pageshow', (event) => {
 });
 if (import.meta.env.DEV) {
   // Test-only window into lifecycle state; absent from production builds.
-  Object.assign(window, { __visualizerDebug: { get activeMode() { return engine?.activeMode; } } });
+  Object.assign(window, { __visualizerDebug: {
+    get activeMode() { return engine?.activeMode; },
+    bench: (seconds: number) => new Promise<BenchResult>((done) => { benchHook = { until: performance.now() + seconds * 1000, raf: [], cpu: [], gpu: [], lastGpu: null, done }; }),
+  } });
 }
 void start();
