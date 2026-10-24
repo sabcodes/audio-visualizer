@@ -27,6 +27,11 @@ export class ControlPanel {
       if (file) { audio.load(file); changed(); }
       input.value = '';
     }, options);
+    const listen = get<HTMLButtonElement>('listen-btn');
+    if (!audio.systemAudioSupported) { listen.disabled = true; listen.title = 'Needs current Chrome with screen sharing.'; }
+    // listen() must start inside this handler: the share picker needs the click's activation.
+    listen.addEventListener('click', () => { void audio.listen().then(changed); }, options);
+    get('stop-listen-btn').addEventListener('click', () => { audio.stopListening(); changed(); }, options);
     this.play.addEventListener('click', () => { void this.togglePlayback(); }, options);
     this.seek.addEventListener('input', () => {
       this.seeking = true;
@@ -41,9 +46,17 @@ export class ControlPanel {
     this.unsubscribe = audio.subscribe((state) => {
       const statusChanged = this.state.status !== state.status;
       this.state = state;
+      const live = state.source === 'system';
       get('track-name').textContent = state.trackName || 'No track loaded';
-      get('audio-status').textContent = state.error ? `Playback error: ${state.error} Retry Play or load another file.` : state.status === 'empty' ? 'Silent startup · load a local audio file to begin.' : `${state.status} · audio remains local`;
-      get('audio-status').dataset.state = state.status;
+      get('file-controls').hidden = get('seek-label').hidden = live;
+      get('live-controls').hidden = !live;
+      get('listen-btn').textContent = !audio.systemAudioSupported ? 'System audio needs current Chrome · load a file instead'
+        : live ? 'Choose another source' : 'Use audio playing on this Mac';
+      get('audio-status').textContent = state.error ? `Playback error: ${state.error} Retry Play or load another file.`
+        : state.notice ? state.notice
+        : live ? 'Listening to system audio · analyzed locally, nothing is recorded or uploaded.'
+        : state.status === 'empty' ? 'Silent startup · load a local audio file or use audio playing on this Mac.' : `${state.status} · audio remains local`;
+      get('audio-status').dataset.state = live ? 'listening' : state.status;
       this.play.disabled = state.status === 'empty' || state.status === 'loading';
       this.play.textContent = state.status === 'playing' ? 'Pause' : state.status === 'ended' ? 'Replay' : 'Play';
       this.play.setAttribute('aria-pressed', String(state.status === 'playing'));
@@ -55,7 +68,7 @@ export class ControlPanel {
     });
   }
   async togglePlayback() {
-    if (this.play.disabled) return;
+    if (this.play.disabled || this.audio.state.source === 'system') return;
     if (this.audio.state.status === 'playing') this.audio.pause();
     else { try { await this.audio.play(); } catch { /* Engine publishes the actionable error. */ } }
     this.changed();

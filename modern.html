@@ -15,8 +15,10 @@
     <fieldset id="player">
       <legend>Local audio · stays on this device</legend>
       <label>Load track <input id="audio-upload" type="file" accept="audio/*"></label>
-      <div class="row"><button id="play-btn" type="button" disabled>Play</button><span id="track-name">No track loaded</span><output id="time-current">0:00</output><span>/</span><output id="time-total">0:00</output></div>
+      <div class="row"><button id="listen-btn" type="button">Use audio playing on this Mac</button></div>
+      <div class="row" id="file-controls"><button id="play-btn" type="button" disabled>Play</button><span id="track-name">No track loaded</span><output id="time-current">0:00</output><span>/</span><output id="time-total">0:00</output></div>
       <label id="seek-label">Seek <input id="seek-slider" type="range" min="0" max="0" step="0.01" value="0" disabled></label>
+      <div class="row" id="live-controls" hidden><span>Listening to system audio ·</span><button id="stop-listen-btn" type="button">Stop</button></div>
       <p id="audio-status" role="status" aria-live="polite">Silent startup · load a local audio file to begin.</p>
     </fieldset>
     <div class="row">

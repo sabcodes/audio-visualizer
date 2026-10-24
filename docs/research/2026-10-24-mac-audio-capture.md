@@ -1,6 +1,6 @@
 # Visualizing audio already playing on the Mac — research
 
-**Date:** 2026-10-24 · **Status:** research only, nothing implemented · **Scope note:** the modernization plan (§1) lists microphone/system-audio capture as out of scope for the initial release, so this is a new feature to schedule, not part of Stage 3.
+**Date:** 2026-10-24 · **Status:** v1 implemented on `sabcodex/system-audio-capture` (see *Verified findings* below) · **Scope note:** the modernization plan (§1) lists microphone/system-audio capture as out of scope for the initial release, so this is a new feature to schedule, not part of Stage 3.
 
 ## Recommendation
 
@@ -43,7 +43,7 @@ context.createMediaStreamSource(new MediaStream([audio])).connect(analyser); // 
 - **Older macOS.** Below 14.2 the system-audio toggle doesn't exist. Fall back to tab capture or a loopback device.
 - **Processing.** Disable AGC, echo cancellation and noise suppression explicitly. Verify with `track.getSettings()`, and check `channelCount` for mono downmix.
 - **Level.** Captured level follows the player's volume. `ResponseEnvelope` already adapts to level, but sensitivity may need a different default for live input.
-- **Track lifetime.** Not verified: whether the audio track survives after stopping only the video track. Test this first.
+- **Track lifetime.** Verified: the audio track stays `live` and keeps delivering samples after the video tracks are stopped (see below).
 
 ## Alternatives (ranked)
 
@@ -59,7 +59,30 @@ context.createMediaStreamSource(new MediaStream([audio])).connect(analyser); // 
 4. **ScreenCaptureKit audio (`capturesAudio`).** macOS 13+, with per-app filters, but it needs full Screen Recording permission. It's heavier than a tap for audio-only capture.
 5. **An Electron or Tauri wrapper.** This removes the WebSocket hop, but it's the desktop wrapper the plan rules out, and the permission story is unchanged.
 
-## Unverified — test before committing to a design
+## Verified findings (Chrome 155, macOS 27, 2026-10-24)
+
+- **Audio survives stopping the video track.** With real tab capture (headed Chrome, `--auto-select-tab-capture-source-by-title`), the analyser read a 110 Hz tone at full scale before and for 3 s after `getVideoTracks().forEach(stop)`. The audio track's `readyState` stayed `live`. The fake capture device (`--use-fake-device-for-media-stream`) behaves the same.
+- **Processing is off as requested.** `getSettings()` on the captured track reports `echoCancellation`, `noiseSuppression` and `autoGainControl` all `false`, with `channelCount: 2` (no mono downmix).
+- **Headless Chrome renders no tab audio.** Tab capture succeeds headless but every sample is silent, so the real-capture browser test is `@hardware` (headed). The headless suite uses Chrome's fake capture device instead.
+- **`--use-fake-ui-for-media-stream` breaks the tab-title auto-select.** Combined, Chrome picks the screen and fails with `NotReadableError: Could not start video source`. Use the title flag alone.
+- **A background tab can't open the picker.** `getDisplayMedia` rejects with `InvalidStateError` when the page isn't the focused tab. The UI explains this.
+- **The graph.** The file player now runs `source → destination` and `source → analyser` (the analyser is a side branch), so the live `MediaStreamAudioSourceNode` shares the same analyser without ever reaching the speakers.
+
+### Hand test (Entire Screen + "Also share system audio", Chrome 155, macOS 27)
+
+| Source | Result |
+|---|---|
+| Music app, local file | Works: visuals react. |
+| Spotify app | Works: visuals react. |
+| Apple Music, protected (DRM) track | Not tested yet. |
+| YouTube tab | Not tested yet. |
+
+Two diagnostics exports from these runs both report `fixture: "system audio capture"`, `audio.source: "system"`, mode Lissajous and Cube. Observations to follow up:
+
+- **Sensitivity.** The tester raised Bounce sensitivity to 2.9 and 3.75, from the default 1.8. Live capture follows the player's volume, so a higher default for system audio may be worth it.
+- **Frame pacing.** Both runs were forced to WebGL2 (`?backend=webgl2`) and paced at about 33.3 ms (30 Hz) for the whole 60-second benchmark. That's not yet compared with the same scene without capture, so whether screen sharing caused the 30 Hz cap is unknown.
+
+## Still unverified — test before committing to a design
 
 - **DRM.** Does Apple Music (protected tracks), the Spotify app, or a Widevine tab (Spotify Web) go silent through taps or tab capture? There's no authoritative source either way, only one anecdotal 2020 report of tabCapture muting.
 - Whether the audio track survives stopping the video track.

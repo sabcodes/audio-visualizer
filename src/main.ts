@@ -100,8 +100,8 @@ function metadata() {
     secureContext: isSecureContext, backendRequested: backend.value, backendActual: engine?.backend ?? 'unavailable',
     startupFailures: engine?.startupFailures ?? [], gpu: 'Record physical GPU and OS in the hardware review.',
     mode: mode.value, seed: 42, sensitivity: Number(sensitivity.value), colorInterval: Number(colorSpeed.value), reducedFlash: reducedFlash.checked,
-    fixture: synthetic.checked ? 'synthetic bass: 0.25 + 0.2*sin(time*3)' : state.status === 'playing' ? 'local audio' : 'silent',
-    audio: { status: state.status, time: state.currentTime, duration: state.duration, fftSize: 1024 },
+    fixture: synthetic.checked ? 'synthetic bass: 0.25 + 0.2*sin(time*3)' : state.source === 'system' ? 'system audio capture' : state.status === 'playing' ? 'local audio' : 'silent',
+    audio: { status: state.status, source: state.source, time: state.currentTime, duration: state.duration, fftSize: 1024 },
     time: frozen ? fixedTime : clock, reducedMotion: motion.checked,
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
@@ -179,7 +179,7 @@ async function start() {
 }
 function draw(delta: number) {
   const snapshot = audio.sample(delta);
-  if (!synthetic.checked && audio.state.trackName && !frozen && !paused && !motion.checked) clock = snapshot.time;
+  if (!synthetic.checked && audio.state.source === 'file' && audio.state.trackName && !frozen && !paused && !motion.checked) clock = snapshot.time;
   if (synthetic.checked) {
     fixture.time = frozen ? fixedTime : clock;
     fixture.bass = 0.25 + 0.2 * Math.sin(fixture.time * 3);
@@ -195,7 +195,8 @@ function frame(now: number) {
   lastFrame = now;
   const delta = clampDelta(deltaMs / 1000);
   if (!frozen && !paused && !motion.checked) {
-    clock = !synthetic.checked && audio.state.trackName ? audio.state.currentTime : clock + delta;
+    // A live source has no timeline, so it runs on wall-clock time like the silent state.
+    clock = !synthetic.checked && audio.state.source === 'file' && audio.state.trackName ? audio.state.currentTime : clock + delta;
   }
   try {
     draw(delta);
@@ -291,7 +292,7 @@ window.addEventListener('keydown', (event) => {
   if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, select, textarea, button, a'))) return;
   if (event.code === 'Space') {
     event.preventDefault();
-    if (audio.state.trackName) void player.togglePlayback(); else paused = !paused;
+    if (audio.state.source === 'file' && audio.state.trackName) void player.togglePlayback(); else paused = !paused;
     resetTiming();
   }
   if (event.key.toLowerCase() === 'h') toggleControls();
@@ -303,7 +304,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !failed && !starting && !shutdown) loop.start(frame);
 });
 window.addEventListener('pagehide', (event) => {
-  shutdown = true; ++epoch; starting = false; loop.stop(); resetTiming(); audio.pause();
+  shutdown = true; ++epoch; starting = false; loop.stop(); resetTiming(); audio.stopListening(); audio.pause();
   void releaseGraphics();
   // Keep the lightweight player for bfcache; release its graph if navigating away.
   if (!event.persisted) { player.dispose(); void audio.dispose().catch(console.error); }
