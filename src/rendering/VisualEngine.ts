@@ -3,6 +3,7 @@ import { initializeBackend, type BackendPreference } from './backendSelection';
 import { ModeRegistry, type ModeFrame, type VisualMode } from '../modes/registry';
 import { createOutputPipeline } from './OutputPipeline';
 import { basePixelRatio, presetBudget, type QualityBudget } from './quality';
+import { defaultOutput, toneMappingConstant, type OutputSettings } from './outputSettings';
 
 /** CPU submit cost per frame plus the latest resolved GPU time; GPU is null when unmeasurable. */
 export interface FrameBreakdown { cpuUpdateMs: number; gpuMs: number | null }
@@ -13,13 +14,14 @@ export class VisualEngine {
   private resolving = false;
   private active?: VisualMode;
   private readonly modes = new ModeRegistry();
-  private output?: ReturnType<typeof createOutputPipeline>;
+  private pipeline?: ReturnType<typeof createOutputPipeline>;
   private disposed = false;
   readonly dimensions = new THREE.Vector2();
   private readonly logicalSize = new THREE.Vector2();
   private budget: QualityBudget = presetBudget('balanced');
   private activeId?: string;
   private selectGeneration = 0;
+  private outputSettings: OutputSettings = { ...defaultOutput };
   private readonly lastSize = { width: 1, height: 1, scale: 1 };
 
   private constructor(
@@ -39,7 +41,7 @@ export class VisualEngine {
       },
     );
     const engine = new VisualEngine(result.renderer, result.backend, result.failures);
-    engine.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    engine.renderer.toneMapping = toneMappingConstant(defaultOutput.toneMapping);
     engine.renderer.outputColorSpace = THREE.SRGBColorSpace;
     engine.renderer.setClearColor(0x03040a);
     engine.renderer.onDeviceLost = (info) => {
@@ -54,6 +56,18 @@ export class VisualEngine {
   }
 
   get activeMode() { return this.activeId; }
+  get output() { return { ...this.outputSettings }; }
+
+  /** Tone mapping applies immediately; changing AA rebuilds only the active output pipeline. */
+  setOutput(settings: OutputSettings) {
+    const rebuild = settings.aa !== this.outputSettings.aa;
+    this.outputSettings = { ...settings };
+    this.renderer.toneMapping = toneMappingConstant(settings.toneMapping);
+    if (rebuild && this.active) {
+      this.pipeline?.dispose();
+      this.pipeline = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter, { aa: settings.aa });
+    }
+  }
 
   /**
    * Compiles the requested mode off-screen, then swaps it in. The previous mode keeps rendering
@@ -65,7 +79,7 @@ export class VisualEngine {
     let output: ReturnType<typeof createOutputPipeline> | undefined;
     try {
       candidate = this.modes.create(mode, this.backend, this.budget);
-      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter);
+      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: this.outputSettings.aa });
       await this.renderer.compileAsync(candidate.scene, candidate.camera);
     } catch (error) {
       output?.dispose(); candidate?.dispose();
@@ -75,7 +89,7 @@ export class VisualEngine {
     if (generation !== this.selectGeneration || this.disposed) { output.dispose(); candidate.dispose(); return false; }
     this.clearMode();
     this.active = candidate;
-    this.output = output;
+    this.pipeline = output;
     this.activeId = mode;
     return true;
   }
@@ -101,7 +115,7 @@ export class VisualEngine {
     const size = this.renderer.getSize(this.logicalSize);
     const start = performance.now();
     this.active?.update({ ...frame, aspect: size.x / size.y });
-    this.output?.render(bloom);
+    this.pipeline?.render(bloom);
     this.lastFrame.cpuUpdateMs = performance.now() - start;
     this.resolveGpuTime(start);
   }
@@ -122,8 +136,8 @@ export class VisualEngine {
   }
 
   private clearMode() {
-    this.output?.dispose();
-    this.output = undefined;
+    this.pipeline?.dispose();
+    this.pipeline = undefined;
     this.active?.dispose();
     this.active = undefined;
     this.activeId = undefined;

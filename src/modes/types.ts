@@ -32,5 +32,7 @@ export interface ModeDefinition {
   label: string;
   output: 'scene' | 'fullscreen' | 'dom';
   backends: readonly BackendName[];
+  /** Bloom strength the slider moves to when this mode is selected; absent keeps the current value. */
+  bloom?: number;
   create(budget: QualityBudget): VisualMode;
 }

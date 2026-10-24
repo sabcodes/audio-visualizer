@@ -7,6 +7,7 @@ import { FrameLoop } from './rendering/FrameLoop';
 import { modeDefinitions } from './modes/registry';
 import { ResponseEnvelope } from './audio/VisualResponse';
 import { AdaptiveResolution } from './rendering/AdaptiveResolution';
+import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
 import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
 
 const element = <T extends HTMLElement>(id: string) => {
@@ -21,6 +22,8 @@ const backend = element<HTMLSelectElement>('backend');
 const mode = element<HTMLSelectElement>('mode');
 const scale = element<HTMLSelectElement>('scale');
 const quality = element<HTMLSelectElement>('quality');
+const toneMapping = element<HTMLSelectElement>('tone-mapping');
+const antialiasing = element<HTMLSelectElement>('aa');
 const targetHz = element<HTMLSelectElement>('target-hz');
 const adaptive = new AdaptiveResolution();
 const refreshHz = () => Number(targetHz.value);
@@ -47,6 +50,10 @@ if (['auto', 'webgpu', 'webgl2'].includes(params.get('backend') ?? '')) backend.
 if (modeDefinitions.some((definition) => definition.id === params.get('mode'))) mode.value = params.get('mode')!;
 if (qualityPresets.includes(params.get('quality') as QualityPreset)) quality.value = params.get('quality')!;
 const budget = () => presetBudget(quality.value as QualityPreset);
+const initialOutput = parseOutputSettings(params);
+toneMapping.value = initialOutput.toneMapping; antialiasing.value = initialOutput.aa;
+const outputSettings = () => ({ toneMapping: toneMapping.value as ToneMappingName, aa: antialiasing.value as AntialiasingName });
+const applyModeBloom = () => { const strength = modeDefinitions.find((definition) => definition.id === mode.value)?.bloom; if (strength !== undefined) bloom.value = String(strength); };
 const requestedTime = Number(params.get('time'));
 const validTime = params.has('time') && Number.isFinite(requestedTime) && requestedTime >= 0;
 const fixedTime = validTime ? requestedTime : 2;
@@ -95,7 +102,7 @@ function metadata() {
     time: frozen ? fixedTime : clock, reducedMotion: motion.checked,
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
-    quality: quality.value, output: { toneMapping: 'ACES', antialiasing: 'FXAA after single display transform', exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
+    quality: quality.value, output: { toneMapping: toneMapping.value, antialiasing: `${antialiasing.value} after single display transform`, exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
     simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
     timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
@@ -144,6 +151,8 @@ async function start() {
     if (shutdown || generation !== epoch) { await candidate.dispose(); return; }
     engine = candidate;
     await candidate.setQuality(budget());
+    candidate.setOutput(outputSettings());
+    applyModeBloom();
     viewport.replaceChildren(candidate.renderer.domElement);
     resize();
     await candidate.select(mode.value);
@@ -222,12 +231,16 @@ backend.addEventListener('change', () => void start());
 compatibility.addEventListener('click', () => { backend.value = 'webgl2'; void start(); });
 mode.addEventListener('change', () => {
   if (!engine || failed || starting) return;
-  engine.select(mode.value).then((active) => { if (active) { clock = 0; resetTiming(); } }).catch(fail);
+  engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); resetTiming(); } }).catch(fail);
 });
 scale.addEventListener('change', resize);
 quality.addEventListener('change', () => {
   if (!engine || failed || starting) return;
   engine.setQuality(budget()).then(resetTiming).catch(fail);
+});
+for (const control of [toneMapping, antialiasing]) control.addEventListener('change', () => {
+  if (!engine || failed || starting) return;
+  try { engine.setOutput(outputSettings()); resetTiming(); } catch (error) { fail(error); }
 });
 targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
 for (const control of [exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);

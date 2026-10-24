@@ -89,3 +89,24 @@ test('rapid mode changes settle on the last request without leaks @hardware', as
   expect(await page.evaluate(() => (window as unknown as { __visualizerDebug: { activeMode: string } }).__visualizerDebug.activeMode)).toBe('particles');
   expect(errors).toEqual([]);
 });
+
+test('AgX tone mapping and SMAA render every mode family without errors @hardware', async ({ page }, info) => {
+  test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
+  const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
+  await page.goto(`/modern.html?backend=${backend}&tone=agx&aa=smaa&mode=circle`);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  await expect(page.locator('#tone-mapping')).toHaveValue('agx');
+  await expect(page.locator('#aa')).toHaveValue('smaa');
+  for (const id of ['particles', 'kaleidoPlane', 'vjRings', 'glitchFX', 'city']) {
+    await page.selectOption('#mode', id);
+    await page.waitForTimeout(300);
+  }
+  await page.selectOption('#aa', 'none');
+  await page.selectOption('#aa', 'fxaa');
+  await page.waitForTimeout(300);
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
+  expect(errors).toEqual([]);
+});
