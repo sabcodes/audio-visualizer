@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { exp, float, fract, max, mix, mx_noise_float, normalize, pow, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { exp, float, fract, max, mix, mx_noise_float, normalize, pow, sin, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import type { VisualMode } from './types';
 import type { QualityBudget } from '../rendering/quality';
 import { disposeScene, approach, settleStep } from './shared';
@@ -37,50 +37,53 @@ export function handVisit(age: number) {
   return { phase: 'away', reach: 0 } as const;
 }
 
-/** The hand's angle, from the clip: forearm in from the top right, wrist bent, hand side-on so finger curls read. */
-const HAND_ANGLE = { roll: 3.1, pitch: -0.2, yaw: -1.9, scale: 0.25 } as const;
-/** What the fingers do while the hand is in the water, from the clip; the hand moves through them on the beat. */
-export const FINGER_GESTURES = ['tap', 'spread', 'ripple', 'claw', 'trail'] as const;
+/** The hand's angle, from the clip: forearm on a shallow diagonal from the top right, wrist dropped, fingers arched down. */
+const HAND_ANGLE = { roll: 2.7, pitch: 0, yaw: -2, scale: 0.25 } as const;
+/**
+ * What the hand does in the water, from the original clip: the index dabs in first, the hand sinks with the
+ * fingers spreading, a slow wave runs through the fingers, and the hand drifts across the surface. The fingers
+ * stay arched like fingertips resting on a table; most of the motion is the whole hand.
+ */
+export const FINGER_GESTURES = ['dab', 'sink', 'stir', 'drift'] as const;
 type Gesture = (typeof FINGER_GESTURES)[number];
 interface Shape { curl: [number, number, number, number]; thumb: number; spread: number; wrist: number; dip: number }
 /** Base shape of each gesture (curl index → pinky, thumb, finger fan, wrist bend, how far the hand sinks). */
 export const HAND_SHAPES: Record<Gesture | 'reach' | 'lift', Shape> = {
-  reach: { curl: [0.2, 0.3, 0.35, 0.4], thumb: 0.3, spread: 0.05, wrist: 0.35, dip: 0 },
-  tap: { curl: [0.02, 0.75, 0.8, 0.85], thumb: 0.5, spread: 0, wrist: 0.45, dip: 0 },
-  spread: { curl: [0.06, 0.06, 0.08, 0.1], thumb: 0.05, spread: 0.25, wrist: 0.5, dip: 0.022 },
-  ripple: { curl: [0.35, 0.4, 0.45, 0.5], thumb: 0.3, spread: 0.08, wrist: 0.45, dip: 0.01 },
-  claw: { curl: [0.7, 0.75, 0.75, 0.8], thumb: 0.45, spread: 0.02, wrist: 0.55, dip: 0.03 },
-  trail: { curl: [0.12, 0.12, 0.15, 0.18], thumb: 0.2, spread: 0.1, wrist: 0.4, dip: 0.01 },
-  lift: { curl: [0.45, 0.5, 0.55, 0.6], thumb: 0.4, spread: 0.03, wrist: 0.3, dip: 0 },
+  reach: { curl: [0.3, 0.38, 0.42, 0.48], thumb: 0.4, spread: 0.12, wrist: 0.55, dip: 0 },
+  dab: { curl: [0.25, 0.45, 0.5, 0.55], thumb: 0.45, spread: 0.1, wrist: 0.6, dip: 0.014 },
+  sink: { curl: [0.4, 0.42, 0.45, 0.5], thumb: 0.4, spread: 0.2, wrist: 0.6, dip: 0.04 },
+  stir: { curl: [0.4, 0.42, 0.45, 0.5], thumb: 0.4, spread: 0.15, wrist: 0.6, dip: 0.026 },
+  drift: { curl: [0.35, 0.38, 0.42, 0.46], thumb: 0.38, spread: 0.16, wrist: 0.55, dip: 0.022 },
+  lift: { curl: [0.45, 0.5, 0.55, 0.6], thumb: 0.45, spread: 0.08, wrist: 0.5, dip: 0 },
 };
 
 /**
- * Finger targets for a gesture `age` seconds in: the gesture's base shape plus its own motion. `tap` is the
- * beat envelope (1 on a hit, decaying) and `pace` how fast the music drives the fingers.
+ * Finger targets for a gesture `age` seconds in: the gesture's base shape plus its own slow motion. `tap` is
+ * the beat envelope (1 on a hit, decaying) and `pace` how fast the music drives the fingers.
  */
 export function gestureShape(gesture: Gesture | 'reach' | 'lift', age: number, tap: number, pace: number): Shape {
   const base = HAND_SHAPES[gesture], curl = [...base.curl] as Shape['curl'];
-  let { thumb, spread, dip } = base;
-  if (gesture === 'tap') {
-    // The index lifts between beats and stabs down into the water on each one.
-    curl[0] = 0.02 + 0.45 * (1 - tap) * (0.6 + 0.4 * Math.sin(age * 5 * pace) ** 2);
-  } else if (gesture === 'spread') {
-    // The hand opens wide under the water and closes again.
-    const open = 0.5 + 0.5 * Math.sin(age * 2.2 * pace - Math.PI / 2);
-    for (let i = 0; i < 4; i++) curl[i] = 0.5 + (base.curl[i] - 0.5) * open;
-    spread = base.spread * open; thumb = 0.4 - 0.35 * open;
-  } else if (gesture === 'ripple') {
-    // A wave runs across the fingers, index to pinky, each one dipping in turn.
-    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] + 0.3 * Math.sin(age * 5 * pace - i * 1.1);
-  } else if (gesture === 'claw') {
-    // The curled fingers dig and release with the beat.
-    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] - 0.25 * tap;
-    dip += 0.01 * tap;
-  } else if (gesture === 'trail') {
-    // Fingers trailing in the water flutter a little as the hand drags.
-    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] + 0.06 * Math.sin(age * 8 * pace + i * 1.7);
+  let { thumb, spread, dip, wrist } = base;
+  if (gesture === 'dab') {
+    // The index leads: it reaches down on each beat and draws back, the others following a little behind.
+    curl[0] = base.curl[0] + 0.2 * (1 - tap) * (0.5 + 0.5 * Math.sin(age * 2.4 * pace));
+    for (let i = 1; i < 4; i++) curl[i] = base.curl[i] - 0.08 * tap * (1 - i * 0.2);
+    dip += 0.008 * tap;
+  } else if (gesture === 'sink') {
+    // The hand settles deeper, fingers fanning wider as it goes, then eases back up.
+    const settle = 0.5 - 0.5 * Math.cos(age * 1.4 * pace);
+    dip = 0.014 + (base.dip - 0.014) * settle; spread = 0.1 + 0.12 * settle; wrist = base.wrist + 0.08 * settle;
+    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] - 0.06 * settle;
+  } else if (gesture === 'stir') {
+    // A slow wave through the fingers, index to pinky, each tip dipping in turn.
+    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] + 0.14 * Math.sin(age * 2.6 * pace - i * 1.1);
+    thumb = base.thumb + 0.06 * Math.sin(age * 2.6 * pace + 1);
+  } else if (gesture === 'drift') {
+    // Trailing through the water the fingers flutter slightly and the fan breathes.
+    for (let i = 0; i < 4; i++) curl[i] = base.curl[i] + 0.05 * Math.sin(age * 5 * pace + i * 1.7);
+    spread = base.spread + 0.05 * Math.sin(age * 1.2 * pace);
   }
-  return { curl, thumb, spread, wrist: base.wrist, dip };
+  return { curl, thumb, spread, wrist, dip };
 }
 
 /**
@@ -156,8 +159,11 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
   const lit = skin.add(colour.mul(under.mul(0.1).add(rim.mul(1.3))).mul(handLight)).mul(traced.occlusion.mul(0.5).add(0.5));
   // Below the waterline the fingers are seen through the water: dimmer, tinted, partly transparent.
   const submerged = hp.y.lessThan(waterline);
-  handMaterial.colorNode = submerged.select(lit.mul(0.35).add(colour.mul(0.04)), lit);
-  handMaterial.opacityNode = traced.closest.smoothstep(0.0015, 0).max(traced.hit).mul(submerged.select(float(0.45), float(1))).mul(handAlpha);
+  // Below the waterline, where the hand itself is not, its dark reflection wavers in the water, as in the clip.
+  const below = waterline.sub(hp.y), mirrored = hand.trace(vec2(hp.x.add(sin(hp.y.mul(90).add(time.mul(3))).mul(0.003)), waterline.add(below)));
+  const reflection = mirrored.hit.mul(traced.hit.oneMinus()).mul(below.smoothstep(0, 0.01)).mul(below.smoothstep(0.3, 0.05)).mul(0.6);
+  handMaterial.colorNode = traced.hit.greaterThan(0.5).or(traced.closest.lessThan(0.0015)).select(submerged.select(lit.mul(0.35).add(colour.mul(0.04)), lit), vec3(0.003, 0.002, 0.004));
+  handMaterial.opacityNode = traced.closest.smoothstep(0.0015, 0).max(traced.hit).mul(submerged.select(float(0.45), float(1))).max(submerged.select(reflection, float(0))).mul(handAlpha);
   const handQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), handMaterial); handQuad.renderOrder = 1; handQuad.frustumCulled = false;
   scene.add(handQuad);
   const pose: HandPose & Shape = { ...HAND_SHAPES.reach, curl: [...HAND_SHAPES.reach.curl] };
@@ -173,7 +179,7 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
   // fades; while it is away the pond keeps answering the beat on its own, then the hand comes back somewhere new.
   let visitAge = 0, awayFor = 20 + random() * 10, wasIn = false;
   const gestures = variantSequence(FINGER_GESTURES.length, 3);
-  let gesture: Gesture = 'tap', gestureAge = 0, tap = 0, tipY = 0;
+  let gesture: Gesture = 'dab', gestureAge = 0, tap = 0, tipY = 0;
   // Each fingertip builds up "press" while it is in the water and moving; the most pressed one makes the next ring.
   const fingerPress = new Float32Array(5), lastTips = Array.from({ length: 5 }, () => new THREE.Vector2());
   const toUv = (x: number, z: number) => [(x - POND.left) / (POND.right - POND.left), (z - POND.near) / (POND.far - POND.near)] as const;
@@ -194,18 +200,18 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
       const visit = handVisit(visitAge), inWater = visit.reach > 0.97;
       // In the water the hand moves through the clip's finger gestures, changing on a beat every couple of seconds.
       gestureAge += step;
-      if (visit.phase !== 'touch') { gesture = 'tap'; gestureAge = 0; }
-      else if (!still && ((hits.fired && gestureAge > 2.2) || gestureAge > 3.5)) { gesture = FINGER_GESTURES[gestures.next()]; gestureAge = 0; }
+      if (visit.phase !== 'touch') { gesture = 'dab'; gestureAge = 0; }
+      else if (!still && ((hits.fired && gestureAge > 3) || gestureAge > 5)) { gesture = FINGER_GESTURES[gestures.next()]; gestureAge = 0; }
       if (hits.fired) tap = 1;
       tap *= Math.exp(-step / 0.22);
-      // Trailing drags the fingertips across the water; otherwise they drift slowly.
-      const drag = visit.phase === 'touch' && !still ? (gesture === 'trail' ? 0.22 : 0.08) * Math.min(1, (visitAge - descend) / 1.5) : 0;
-      touch.set(anchor.x + Math.sin(sway * (gesture === 'trail' ? 0.9 : 0.35)) * drag, anchor.y + Math.sin(sway * 0.5) * drag * 0.4);
+      // The whole hand wanders slowly across the water, as in the clip, further while drifting.
+      const drag = visit.phase === 'touch' && !still ? (gesture === 'drift' ? 0.24 : 0.12) * Math.min(1, (visitAge - descend) / 2) : 0;
+      touch.set(anchor.x + Math.sin(sway * 0.45) * drag, anchor.y + Math.sin(sway * 0.3 + 1) * drag * 0.5);
       // A hit swaps the light's colour and sends a ring out: from the leading finger when the hand is in the
       // water, from a fresh spot on the pond when it is away.
       if (hits.fired) {
         colourIndex = 1 - colourIndex; target.set(...(colourIndex ? BLUE : MAGENTA));
-        if (inWater) { fingerPress[gesture === 'tap' ? 0 : 1] += 3; if (!still) plunge = gesture === 'claw' || gesture === 'spread' ? 1 : 0.4; }
+        if (inWater) { fingerPress[gesture === 'dab' ? 0 : 1] += 3; if (!still) plunge = gesture === 'sink' ? 1 : 0.5; }
         else if (visit.phase === 'away') { const z = 1.1 + random() * 1.4; ripple.set((random() - 0.5) * 0.9 * z, z); press(1, 0.07 + frame.response.bass * 0.07); }
       }
       plunge = Math.max(0, plunge - step / 0.7);
@@ -213,12 +219,12 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
       // Finger targets for this moment, eased so gestures blend into each other; taps stay crisp.
       const pace = 0.8 + frame.response.bounce * 0.8;
       const shape = still ? HAND_SHAPES.reach : gestureShape(visit.phase === 'touch' ? gesture : visit.phase === 'lift' ? 'lift' : 'reach', gestureAge, tap, pace);
-      const ease = gesture === 'tap' ? 0.05 : 0.14;
-      for (let i = 0; i < 4; i++) pose.curl[i] = approach(pose.curl[i], shape.curl[i] + (still ? 0 : Math.sin(sway * 1.7 + i * 2) * 0.03), step, ease);
+      const ease = gesture === 'dab' ? 0.08 : 0.2;
+      for (let i = 0; i < 4; i++) pose.curl[i] = approach(pose.curl[i], shape.curl[i] + (still ? 0 : Math.sin(sway * 1.3 + i * 2) * 0.025), step, ease);
       pose.thumb = approach(pose.thumb, shape.thumb, step, 0.15);
       pose.spread = approach(pose.spread, shape.spread, step, 0.15);
-      pose.wrist = approach(pose.wrist, shape.wrist, step, 0.2);
-      pose.dip = approach(pose.dip, shape.dip * visit.reach, step, 0.2);
+      pose.wrist = approach(pose.wrist, shape.wrist, step, 0.3);
+      pose.dip = approach(pose.dip, shape.dip * visit.reach, step, 0.3);
       handAlpha.value = Math.min(1, visit.reach / 0.4);
       handQuad.visible = handAlpha.value > 0.001;
       const [screenX, screenY] = pondScreen(touch.x, touch.y);
