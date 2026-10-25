@@ -3,7 +3,7 @@ import type { Node } from 'three/webgpu';
 import { abs, cameraPosition, exp, float, max, min, mix, normalize, positionLocal, reflect, uniform, vec2, vec3 } from 'three/tsl';
 import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode, settleStep } from './shared';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 type F = Node<'float'>;
@@ -52,12 +52,12 @@ export function createMetaballMode(budget: QualityBudget = presetBudget('balance
     update(frame) {
       resizeCamera(camera, frame.aspect);
       if (push(frame.time, frame.audio.onset)) impulse = 1;
-      impulse = Math.max(0, impulse - frame.delta * 2.5);
+      impulse = Math.max(0, impulse - settleStep(frame) * 2.5);
       bandEnergies(frame, METABALLS, bands);
       blobs.reset();
       const t = frame.time * 0.5, spread = 0.2 + impulse * 0.1 + frame.response.bounce * 0.04;
       for (let i = 0; i < METABALLS; i++) {
-        level[i] = approach(level[i], bands[i], frame.delta, 0.1);
+        level[i] = approach(level[i], bands[i], settleStep(frame), 0.1);
         const a = t * (0.6 + i * 0.13) + i * 2.1, b = t * (0.45 + i * 0.09) + i * 1.3;
         const r = spread * (0.6 + level[i] * 0.8);
         blobs.addBall(0.5 + Math.sin(a) * Math.cos(b) * r, 0.5 + Math.sin(b * 1.3) * r * 0.8, 0.5 + Math.cos(a) * Math.cos(b) * r, 0.28 + level[i] * 0.55 + frame.response.bounce * 0.25, 12);
@@ -124,10 +124,10 @@ export function createFerrofluidMode(): VisualMode {
       resizeCamera(camera, frame.aspect);
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
-      bass.value = approach(bass.value, frame.response.bounce, frame.delta, 0.06);
+      bass.value = approach(bass.value, frame.response.bounce, settleStep(frame), 0.06);
       hue.value = frame.hue; time.value = frame.time;
       if (wave(frame.time, frame.audio.onset)) rippleAge = 0;
-      if (rippleAge >= 0) { rippleAge += frame.delta; if (rippleAge > 1.2) rippleAge = -1; }
+      if (rippleAge >= 0) { rippleAge += settleStep(frame); if (rippleAge > 1.2) rippleAge = -1; }
       ripple.value = rippleAge < 0 ? -1 : rippleAge;
       orbit += frame.delta * 0.07;
       camera.position.set(Math.sin(orbit) * 62, 44 + Math.sin(frame.time * 0.2) * 4, Math.cos(orbit) * 62);

@@ -9,6 +9,8 @@ import { presetBudget, type QualityBudget } from '../rendering/quality';
 // ---------------------------------------------------------------- Beat fireworks
 
 export const FIREWORK_SLOTS = 24, FUSE = 0.9;
+/** Kind and age (seconds after bursting) of the bursts shown as a still under reduced motion. */
+const STILL_BURSTS: [FireworkKind, number][] = [[0, 0.7], [1, 1.5], [2, 0.5], [0, 1.1], [1, 0.9]];
 export type FireworkKind = 0 | 1 | 2; // peony, willow, crackle
 /** Kick-heavy beats burst as peonies, mid-heavy as willows, hat-heavy as crackle. */
 export function fireworkKind(low: number, mid: number, high: number): FireworkKind {
@@ -80,15 +82,15 @@ export function createFireworksMode(budget: QualityBudget = presetBudget('balanc
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), skyMaterial), shore, water);
 
   const launchGate = beatGate(0.18), bands = new Float32Array(3), colour = new THREE.Color();
-  let time = 0, next = 0, idle = 0;
-  const launch = (kind: FireworkKind, hue: number) => {
+  let time = 0, next = 0, idle = 0, tableau = false;
+  const launch = (kind: FireworkKind, hue: number, start = time) => {
     const i = next; next = (next + 1) % FIREWORK_SLOTS;
     const x = (random() - 0.5) * 150, y = 48 + random() * 50, z = (random() - 0.5) * 70 - 20;
     if (kind === 1) colour.setRGB(2.2, 1.4, 0.45);
     else if (kind === 2) colour.setRGB(2.4, 2.4, 2.6);
     else colour.setHSL(wrap(hue + random() * 0.5, 0, 1), 1, 0.55).multiplyScalar(1.4);
-    for (let k = i * perBurst; k < (i + 1) * perBurst; k++) { origins.set([x, y, z, time], k * 4); looks.set([colour.r, colour.g, colour.b, kind], k * 4); }
-    rockets.set([x, y, z, time], i * 4);
+    for (let k = i * perBurst; k < (i + 1) * perBurst; k++) { origins.set([x, y, z, start], k * 4); looks.set([colour.r, colour.g, colour.b, kind], k * 4); }
+    rockets.set([x, y, z, start], i * 4);
     originAttribute.needsUpdate = lookAttribute.needsUpdate = rocketAttribute.needsUpdate = true;
   };
   return {
@@ -96,8 +98,12 @@ export function createFireworksMode(budget: QualityBudget = presetBudget('balanc
     update(frame) {
       resizeCamera(camera, frame.aspect);
       time += Math.max(0, Math.min(frame.delta, 0.25)); idle += frame.delta;
-      if (launchGate(frame.time, frame.audio.onset || frame.response.impact > 0.55)) { bandEnergies(frame, 3, bands); launch(fireworkKind(bands[0], bands[1], bands[2]), frame.hue); idle = 0; }
+      if (frame.reducedMotion) {
+        // The clock is frozen: stage one still of bursts at different ages instead of launching on beats.
+        if (!tableau) { STILL_BURSTS.forEach(([kind, age]) => launch(kind, frame.hue, time - FUSE - age)); tableau = true; }
+      } else if (launchGate(frame.time, frame.audio.onset || frame.response.impact > 0.55)) { bandEnergies(frame, 3, bands); launch(fireworkKind(bands[0], bands[1], bands[2]), frame.hue); idle = 0; }
       else if (idle > 0.9) { launch(0, frame.hue); idle = 0; }
+      if (!frame.reducedMotion) tableau = false;
       clock.value = time;
       brightness.value = frame.reducedFlash ? 0.7 : 1 + frame.response.bounce * 0.4;
       camera.position.x = Math.sin(frame.time * 0.05) * 12;

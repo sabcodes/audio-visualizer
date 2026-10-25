@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mix, normalView, uv, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 
 export const KRAKEN_ARMS = 8, KRAKEN_SEGMENTS = 14;
@@ -53,7 +53,7 @@ export function createKrakenMode(): VisualMode {
     update(frame) {
       resizeCamera(camera, frame.aspect);
       if (whipGate(frame.time, frame.audio.onset)) whip = 1;
-      whip = Math.max(0, whip - frame.delta * 2.2);
+      whip = Math.max(0, whip - settleStep(frame) * 2.2);
       bandEnergies(frame, KRAKEN_ARMS, bands);
       const pulse = frame.response.bounce;
       mantle.scale.set(1 + pulse * 0.12, 1.35 - pulse * 0.1, 1 + pulse * 0.12);

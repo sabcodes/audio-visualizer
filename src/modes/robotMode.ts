@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { SpringRig } from '../simulations/springRig';
 import { seededRandom } from '../rendering/diagnostics';
 
@@ -117,8 +117,8 @@ export function createRobotMode(): VisualMode {
       hips.position.y = Math.max(legHeight(lHip, lKnee), legHeight(rHip, rKnee)) + FOOT + 1 + Math.sin(groove * 2) * 0.15;
 
       bandEnergies(frame, VISOR_BARS * 2, bands);
-      visorBars.forEach((bar, i) => { bar.scale.y = approach(bar.scale.y, 0.15 + bands[VISOR_BARS + i] * 2.2, frame.delta, 0.05); });
-      meter = approach(meter, frame.response.bass, frame.delta, 0.06);
+      visorBars.forEach((bar, i) => { bar.scale.y = approach(bar.scale.y, 0.15 + bands[VISOR_BARS + i] * 2.2, settleStep(frame), 0.05); });
+      meter = approach(meter, frame.response.bass, settleStep(frame), 0.06);
       const flash = frame.reducedFlash ? 0 : frame.response.impact;
       glow.color.setHSL(wrap(frame.hue + 0.5, 0, 1), 1, 0.55).multiplyScalar(2.4);
       tipMaterial.color.setHSL(wrap(frame.hue, 0, 1), 1, 0.5).multiplyScalar(1.5 + meter * 3);
@@ -126,7 +126,7 @@ export function createRobotMode(): VisualMode {
         const lit = meter * LED_ROWS > LED_ROWS - 1 - row - 0.3;
         material.color.setHSL(wrap(frame.hue + row * 0.12, 0, 1), 1, lit ? 0.55 : 0.08).multiplyScalar(lit ? 2.6 + flash : 1);
       });
-      ringAge += frame.delta;
+      ringAge += settleStep(frame);
       ring.scale.setScalar(1 + ringAge * 1.8);
       ringMaterial.color.setHSL(wrap(frame.hue + 0.5, 0, 1), 1, 0.55).multiplyScalar(Math.max(0, 1 - ringAge / 1.2) * (frame.reducedFlash ? 0.8 : 2.5));
       rimLeft.color.setHSL(wrap(frame.hue, 0, 1), 1, 0.5); rimRight.color.setHSL(wrap(frame.hue + 0.5, 0, 1), 1, 0.5);

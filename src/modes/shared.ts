@@ -66,6 +66,11 @@ export function bandEnergies(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleR
 }
 /** Exponential approach toward target with the same response at any frame rate. */
 export const approach = (current: number, target: number, delta: number, tau: number) => current + (target - current) * (1 - Math.exp(-Math.max(0, delta) / tau));
+/**
+ * Seconds for transients and audio-following levels to advance by. Reduced motion freezes the clock (delta 0),
+ * but a flash or morph caught mid-flight must still finish, and levels should keep following the calmed audio.
+ */
+export const settleStep = (frame: Pick<ModeFrame, 'delta' | 'reducedMotion'>) => frame.reducedMotion ? 1 / 60 : frame.delta;
 /** Fires at most once per `interval` seconds of mode time, on onsets or when the caller forces it. */
 export function beatGate(interval: number) {
   let last = -Infinity;

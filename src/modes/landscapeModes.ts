@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { abs, cos, float, fract, instancedBufferAttribute, mix, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { ModeFrame, VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode, spectrumBin } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode, spectrumBin, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -75,10 +75,10 @@ export function createAuroraMode(): VisualMode {
       resizeCamera(camera, frame.aspect);
       time.value = frame.time * (1 + frame.response.bass * 0.4); hue.value = frame.hue;
       if (flare(frame.time, frame.audio.onset)) surge = 1;
-      surge = Math.max(0, surge - frame.delta * 1.6);
+      surge = Math.max(0, surge - settleStep(frame) * 1.6);
       bandEnergies(frame, CURTAINS, bands);
       const lift = frame.reducedFlash ? 0 : surge * 0.5;
-      strengths.forEach((strength, i) => { strength.value = approach(strength.value, bands[i] * 1.3 + frame.response.bounce * 0.4 + lift, frame.delta, 0.15); });
+      strengths.forEach((strength, i) => { strength.value = approach(strength.value, bands[i] * 1.3 + frame.response.bounce * 0.4 + lift, settleStep(frame), 0.15); });
       camera.position.x = Math.sin(frame.time * 0.05) * 8;
       camera.lookAt(0, 22, -40);
     },
@@ -207,8 +207,9 @@ export function createSynthwaveMode(): VisualMode {
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
       travelled += frame.delta * (22 + frame.response.bass * 50);
-      scroll.value = travelled; time.value = frame.time; hue.value = frame.hue; bass.value = frame.response.bounce;
-      sun.scale.setScalar(1 + frame.response.bounce * 0.12);
+      scroll.value = travelled; time.value = frame.time; hue.value = frame.hue;
+      bass.value = frame.reducedMotion ? approach(bass.value, frame.response.bounce, settleStep(frame), 0.4) : frame.response.bounce;
+      sun.scale.setScalar(1 + bass.value * 0.12);
       camera.position.y = 7 + Math.sin(frame.time * 0.4) * 0.8;
       camera.rotation.z = Math.sin(frame.time * 0.23) * 0.02;
     },
@@ -255,7 +256,7 @@ export function createGalaxyMode(budget: QualityBudget = presetBudget('balanced'
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
       if (pulse(frame.time, frame.audio.onset)) waveAge = 0;
-      if (waveAge >= 0) { waveAge += frame.delta; if (waveAge > 1.6) waveAge = -1; }
+      if (waveAge >= 0) { waveAge += settleStep(frame); if (waveAge > 1.6) waveAge = -1; }
       wave.value = waveAge < 0 || frame.reducedFlash ? -1 : waveAge / 1.4;
       time.value = frame.time; hue.value = frame.hue; bass.value = frame.response.bounce;
       orbit += frame.delta * 0.05;

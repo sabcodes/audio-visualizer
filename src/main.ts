@@ -7,6 +7,7 @@ import { FrameLoop } from './rendering/FrameLoop';
 import { modeDefinitions } from './modes/registry';
 import type { SpectrumMapping } from './modes/types';
 import { ResponseEnvelope } from './audio/VisualResponse';
+import { CalmAudio } from './audio/calmAudio';
 import { AdaptiveResolution } from './rendering/AdaptiveResolution';
 import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
 import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
@@ -38,6 +39,7 @@ const sensitivity = element<HTMLInputElement>('sensitivity');
 const colorSpeed = element<HTMLInputElement>('color-speed-slider');
 const reducedFlash = element<HTMLInputElement>('reduced-flash');
 const envelope = new ResponseEnvelope();
+const calm = new CalmAudio();
 let hueClock = 0;
 const freeze = element<HTMLButtonElement>('freeze');
 const restart = element<HTMLButtonElement>('restart');
@@ -184,7 +186,9 @@ function draw(delta: number) {
     fixture.time = frozen ? fixedTime : clock;
     fixture.bass = 0.25 + 0.2 * Math.sin(fixture.time * 3);
   }
-  const source = synthetic.checked ? fixture : snapshot;
+  const raw = synthetic.checked ? fixture : snapshot;
+  if (!motion.checked) calm.reset();
+  const source = motion.checked ? calm.update(raw, delta) : raw;
   const response = envelope.update(source, delta, Number(sensitivity.value), motion.checked);
   if (!frozen && !paused && !motion.checked) hueClock += delta / Number(colorSpeed.value);
   engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked, spectrumMapping: spectrum.value as SpectrumMapping, sampleRate: audio.sampleRate }, Number(exposure.value), Number(bloom.value));
