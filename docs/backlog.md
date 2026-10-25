@@ -29,3 +29,30 @@ These are faults in the delivered files. Each mode works around them, and a re-e
 - Re-export the Giant, Dragon and Skeleton with corrected sockets, and the Dragon and Phoenix with mirrored flap clips.
 - Use the flame flipbook texture (`fx_textures/flame_strip.png`, not copied in) for a richer Dragon fire.
 - Drop the `<EXPERIMENTAL>` labels once the modes have had a listening pass.
+
+## Wave 4 modes (built, experimental)
+
+All 29 modes from [the wave 4 spec](superpowers/specs/2026-10-24-wave-four-modes-design.md) are built and show in the scene menu as `<experimental-wave4> …`. The delivered files are copied into `src/assets/wave4/`.
+
+- **4a, procedural (19):** Prism Bowtie, Block Bowtie, Pong Orbs, Candy Orb, Moon Pond, Liquid Chrome, Mirror Plasma, Grain Smoke (a preset of the Mirror Plasma engine), Anamorphic Flare, Hair Vortex, Windfield, Black Maze, Starfall Canopy, Silk Threads, Chrome Streaks, Signal Night, Beacon Rings, Light Leak Film (with `coupe.glb`), Ember Smoke.
+- **4b, kit modes (10):** Warehouse Hall, Red Stairwell and Underground (Kit A), Temple Descent (Kit B), Light Painting Forest (Kit C sculptures), Lava Golem (Kit G), Endless Stairs (Kit H), Red Crystal Hall (Kit A pieces), Pole Sparks, Bloom Touch (`hand.png`).
+
+Shared pieces: `hitPulse.ts` (the beat-gated hit envelope, non-repeating variants and reduced-flash limits from the pacing rules) and `cinematic.ts` (a camera finish: grain, halation, soft focus, lens fringe, vignette). The finish keeps scenes close to the footage-like references instead of reading as clean low-poly CG. Kit modes turn on shadow maps only while they are active.
+
+### Deviations from the spec
+
+- **2D layers not used for Pole Sparks and Red Crystal Hall.** The delivered layers are simple programmatic drawings (plain pole bars, flat stripes for the hall walls) and read far from the reference clips. Both modes are built as lit 3D scenes instead: Pole Sparks is a toon-shaded cable tangle with outlines and travelling pulses, and Red Crystal Hall is a hall built from scaled Kit A pieces with a procedural cracked crystal. The layers stay in `src/assets/wave4/` but nothing imports them.
+- **Moon Pond** runs a real wave-equation height field (ping-pong passes) instead of analytic ripples, so rings interfere like water.
+- **Fullscreen shaders** stand in for the large instanced counts in Hair Vortex, Windfield, Anamorphic Flare and Mirror Plasma/Grain Smoke.
+
+### Asset limits worked around in code
+
+- **Bloom Touch hand:** still a programmatic flat illustration (the delivery notes say so too). The mode adds a red rim glow, but a hand-drawn cel hand would match the reference far better.
+- **Lava Golem:** the mesh is faceted, so the mode averages normals across split vertices to shade it smooth. The crack geometry is straight bars rather than vein shapes.
+- **Kit G delivery notes call the mode `golemGroove`;** the spec and the code use `lavaGolem`.
+
+### Possible follow-ups
+
+- Replace the Bloom Touch hand with a hand-drawn asset.
+- Vein-shaped emissive cracks for the golem.
+- A listening pass per mode, then drop the `<experimental-wave4>` labels.
