@@ -4,6 +4,7 @@ import { atan, cos, dot, float, fract, max, mix, normalize, pow, sin, texture, u
 import type { VisualMode } from './types';
 import { disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approach, settleStep, bandEnergies, wrap } from './shared';
 import { createPingPong } from './pingPong';
+import { createBeatPulse } from './beatPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -42,7 +43,7 @@ export function createReactionDiffusionMode(budget: QualityBudget = presetBudget
   const spectrum = createSpectrumTexture();
   const feed = uniform(RD_PRESETS[0][0]), kill = uniform(RD_PRESETS[0][1]), first = uniform(1), ring = uniform(-1), seed = uniform(0);
   const hue = uniform(0), logMapping = uniform(0), nyquist = uniform(24000), glow = uniform(1);
-  const texel = vec2(1 / w, 1 / h), aspect = w / h;
+  const texel = vec2(1 / w, 1 / h), aspect = w / h, pulse = createBeatPulse();
   const step = sim.pass((read) => {
     const p = uv(), c = read(p).xy;
     const at = (x: number, y: number) => read(p.add(texel.mul(vec2(x, y)))).xy;
@@ -61,7 +62,8 @@ export function createReactionDiffusionMode(budget: QualityBudget = presetBudget
     return vec4(state, 0, 1);
   });
   const view = sim.view((read) => {
-    const p = uv(), b = read(p).y;
+    // The organism breathes with the bounce and ripples on each beat; the ripple lights the ridges it crosses.
+    const { uv: p, ring: wave } = pulse.warp(uv(), aspect), b = read(p).y;
     // Emboss from the catalyst gradient so the pattern reads as wet ridges.
     const dx = read(p.add(vec2(texel.x, 0))).y.sub(read(p.sub(vec2(texel.x, 0))).y);
     const dy = read(p.add(vec2(0, texel.y))).y.sub(read(p.sub(vec2(0, texel.y))).y);
@@ -70,20 +72,24 @@ export function createReactionDiffusionMode(budget: QualityBudget = presetBudget
     const highlight = pow(max(float(0), dot(normal, normalize(vec3(-0.25, 0.3, 1)))), float(40)).mul(b.smoothstep(0.15, 0.3));
     const body = palette(hue.add(b.mul(0.35))).mul(b.smoothstep(0.08, 0.45)).mul(diffuse.mul(0.7).add(0.3));
     const ground = mix(vec3(0.004, 0.004, 0.01), palette(hue.add(0.5)).mul(0.02), p.y);
-    return vec4(ground.add(body.mul(glow).mul(1.3)).add(vec3(highlight.mul(0.6))), 1);
+    const lift = glow.mul(pulse.surge.mul(0.35).add(0.85)).add(wave.mul(0.7));
+    return vec4(ground.add(body.mul(lift)).add(vec3(highlight.mul(pulse.surge.mul(0.5).add(0.5)))), 1);
   });
   mesh.material = view();
   const paintGate = beatGate(0.6), bands = new Float32Array(3);
-  let preset = 0, beats = 0, warmed = false, steps = 0, presetBlend = 1, from = 0;
+  let preset = 0, beats = 0, warmed = false, steps = 0, presetBlend = 1, from = 0, hueKick = 0;
   return {
     scene, camera,
     update(frame) {
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
-      hue.value = frame.hue;
+      hue.value = frame.hue + hueKick;
       glow.value = approach(glow.value, 0.85 + frame.response.loudness * 0.4, settleStep(frame), 0.3);
       ring.value = -1;
-      if (paintGate(frame.time, frame.audio.onset)) {
+      const beat = paintGate(frame.time, frame.audio.onset);
+      pulse.update(frame, beat);
+      if (beat) {
+        hueKick = (hueKick + 0.03) % 1;
         bandEnergies(frame, 3, bands);
         ring.value = 0.12 + bands[0] * 0.25;
         // Every twelfth beat drifts to the next pattern family.
@@ -92,8 +98,8 @@ export function createReactionDiffusionMode(budget: QualityBudget = presetBudget
       presetBlend = Math.min(1, presetBlend + settleStep(frame) / 4);
       const [f0, k0] = RD_PRESETS[from], [f1, k1] = RD_PRESETS[preset], loud = frame.response.loudness * 0.004;
       feed.value = f0 + (f1 - f0) * presetBlend + loud; kill.value = k0 + (k1 - k0) * presetBlend;
-      // About 8 steps per 60 Hz frame; a frozen clock (pause, reduced motion) holds the pattern still.
-      steps = Math.min(16, Math.round(frame.delta * 480));
+      // About 8 steps per 60 Hz frame, faster when the music pushes; a frozen clock (pause, reduced motion) holds the pattern still.
+      steps = Math.min(20, Math.round(frame.delta * 480 * (0.7 + frame.response.bounce * 1.2)));
     },
     simulate(renderer) {
       if (!warmed) {
@@ -212,11 +218,12 @@ export function createCurlFlowMode(budget: QualityBudget = presetBudget('balance
   const step = sim.pass((read) => vec4(read(uv()).xyz.mul(decay), 1));
   const view = sim.view((read) => {
     const colour = read(uv()).xyz;
-    return vec4(colour.div(colour.add(1).mul(0.35)).mul(0.9), 1);
+    // Soft-clip and darken the mids so dense streams stay coloured instead of piling up to white.
+    return vec4(pow(colour.div(colour.add(1)), vec3(1.4)).mul(1.1), 1);
   });
   mesh.material = view();
   const vortexGate = beatGate(0.5), velocity = new Float32Array(2), bands = new Float32Array(FLOW_BANDS), tint = new THREE.Color();
-  let clock = 0, vortex = 0, vx = 0, vy = 0, drawn = false, moved = false;
+  let clock = 0, vortex = 0, vx = 0, vy = 0, kick = 0, drawn = false, moved = false;
   const advance = (dt: number, speed: number, scale: number) => {
     for (let i = 0; i < count; i++) {
       let x = segments[i * 6 + 3], y = segments[i * 6 + 4];
@@ -239,17 +246,20 @@ export function createCurlFlowMode(budget: QualityBudget = presetBudget('balance
     scene, camera,
     update(frame) {
       bandEnergies(frame, FLOW_BANDS, bands);
-      if (vortexGate(frame.time, frame.audio.onset)) { vortex = 1; vx = (random() * 2 - 1) * 1.2; vy = (random() * 2 - 1) * 0.7; }
-      vortex = Math.max(0, vortex - settleStep(frame) * 1.2);
+      if (vortexGate(frame.time, frame.audio.onset)) { vortex = 1; kick = 1; vx = (random() * 2 - 1) * 1.2; vy = (random() * 2 - 1) * 0.7; }
+      vortex = Math.max(0, vortex - settleStep(frame) * 1.2); kick = Math.max(0, kick - settleStep(frame) * 2.5);
+      // Streams are dim at rest and swell with the bounce, flaring briefly on each beat.
+      // The reduced-motion still is traced once with few passes, so it needs a stronger, steady tint to show.
+      const swell = frame.reducedMotion ? 9 : 0.6 + frame.response.bounce * 1.1 + kick * 0.6;
       for (let i = 0; i < count; i++) {
         const band = i % FLOW_BANDS;
-        tint.setHSL(wrap(frame.hue + band / FLOW_BANDS * 0.35, 0, 1), 0.9, 0.55).multiplyScalar(0.03 + bands[band] * 0.22);
+        tint.setHSL(wrap(frame.hue + band / FLOW_BANDS * 0.35, 0, 1), 0.9, 0.55).multiplyScalar((0.01 + bands[band] * 0.08) * swell);
         colours.set([tint.r, tint.g, tint.b, tint.r, tint.g, tint.b], i * 6);
       }
       colourAttribute.needsUpdate = true;
       const dt = Math.min(frame.delta, 1 / 20);
       moved = dt > 0;
-      if (moved) { clock += dt; advance(dt, 0.3 + frame.response.bass * 0.7, 1 + frame.response.loudness * 0.5); }
+      if (moved) { clock += dt; advance(dt, 0.3 + frame.response.bass * 0.7 + kick * 0.9, 1 + frame.response.loudness * 0.5); }
       decay.value = 0.93 + frame.response.loudness * 0.02;
     },
     simulate(renderer) {
