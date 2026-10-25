@@ -13,6 +13,8 @@ These figure and creature modes are on hold until the user supplies models. Proc
 | Skeleton Band (bench) | skeleton musicians playing along to the bands | humanoid rig plus instrument props; playing clips |
 | Jelly Blob Soft Body (bench) | wobbly soft-body character squashing on bass | could stay procedural; revisit alongside the mascot |
 
+The full build sheets (sizes, joints, clips, materials and acceptance checks) are in [3d-asset-spec.md](3d-asset-spec.md).
+
 Model requirements, as agreed:
 - Format: `.glb`, rigged, with animation clips included.
 - License: CC0 (for example Quaternius, Kenney, Poly Pizza). Mixamo animations can't be redistributed in the repo.
