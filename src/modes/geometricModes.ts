@@ -1,6 +1,9 @@
 import * as THREE from 'three/webgpu';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate } from './shared';
+import { instancedBufferAttribute, normalLocal, normalView, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode } from './shared';
+import { seededRandom } from '../rendering/diagnostics';
+import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 // ---------------------------------------------------------------- Fourier epicycles
 
@@ -236,6 +239,121 @@ export function createPendulumMode(): VisualMode {
       stringGeometry.attributes.position.needsUpdate = true;
       stringMaterial.color.setHSL(wrap(frame.hue + 0.5, 0, 1), 0.4, 0.7);
       scene.rotation.y = Math.sin(frame.time * 0.07) * 0.25;
+    },
+    dispose: () => disposeScene(scene),
+  };
+}
+
+// ---------------------------------------------------------------- Torus knot morph
+
+export const KNOTS: readonly (readonly [number, number])[] = [[2, 3], [3, 5], [2, 5], [3, 7], [5, 8], [3, 4], [4, 7]];
+
+export function createTorusKnotMode(): VisualMode {
+  const { scene, camera } = sceneDefaults(70);
+  const spectrum = createSpectrumTexture();
+  const time = uniform(0), hue = uniform(0), bass = uniform(0), logMapping = uniform(0), nyquist = uniform(24000);
+  const material = new THREE.MeshBasicNodeMaterial({ transparent: true, side: THREE.DoubleSide });
+  const fade = uniform(1);
+  // Ribbon: stripes flow along the knot; the spectrum pushes the tube out along its normal by position u.
+  const energy = spectrumAxisNode(spectrum.texture, uv().x.mul(2).sub(1).abs(), logMapping, nyquist);
+  material.positionNode = positionLocal.add(normalLocal.mul(energy.mul(1.3).add(bass.mul(0.5))));
+  const stripes = sin(uv().x.mul(Math.PI * 2 * 36).sub(time.mul(5))).smoothstep(0.3, 1);
+  const seam = sin(uv().y.mul(Math.PI * 2 * 3)).smoothstep(0.7, 1).mul(0.5);
+  const rimLight = normalView.z.abs().oneMinus().pow(1.6);
+  const tone = vec3(hue, hue.add(2 / 3), hue.add(1 / 3)).add(uv().x.mul(0.5)).fract().mul(6).sub(3).abs().sub(1).clamp(0, 1);
+  material.colorNode = tone.mul(stripes.add(seam).mul(energy.mul(1.5).add(0.7)).add(rimLight.mul(0.6))).mul(1.6);
+  material.opacityNode = fade;
+  const build = ([p, q]: readonly [number, number]) => new THREE.TorusKnotGeometry(14, 2.2, 480, 24, p, q);
+  const knot = new THREE.Mesh(build(KNOTS[0]), material); knot.frustumCulled = false;
+  scene.add(knot);
+  const next = beatGate(3);
+  let index = 0, swap = 0, idle = 0;
+  return {
+    scene, camera,
+    update(frame) {
+      resizeCamera(camera, frame.aspect);
+      spectrum.update(frame.audio.spectrum);
+      logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
+      time.value = frame.time; hue.value = frame.hue; bass.value = frame.response.bounce;
+      idle += frame.delta;
+      // Shrink out, rebuild the next (p, q) knot, then grow back in; silence still cycles slowly.
+      if (swap === 0 && (next(frame.time, frame.audio.onset) || idle > 9)) { swap = 1; idle = 0; }
+      if (swap > 0) {
+        swap += frame.delta / 0.35;
+        if (swap >= 2 && swap - frame.delta / 0.35 < 2) { knot.geometry.dispose(); index = (index + 1) % KNOTS.length; knot.geometry = build(KNOTS[index]); }
+        if (swap >= 3) swap = 0;
+      }
+      const shrink = swap === 0 ? 1 : swap < 2 ? 1 - (swap - 1) : swap - 2;
+      knot.scale.setScalar(0.2 + 0.8 * shrink * shrink * (3 - 2 * shrink) + frame.response.bounce * 0.12);
+      fade.value = 0.35 + 0.65 * shrink;
+      knot.rotation.x += frame.delta * (0.15 + frame.audio.mid * 0.4);
+      knot.rotation.y += frame.delta * 0.23;
+    },
+    dispose() { disposeScene(scene); spectrum.dispose(); },
+  };
+}
+
+// ---------------------------------------------------------------- Chladni plate
+
+export const CHLADNI_MODES: readonly (readonly [number, number])[] = [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [1, 5], [4, 5], [3, 7]];
+/** Square-plate standing wave and its gradient on [-1, 1]²; sand settles where it is zero. */
+export function chladni(n: number, m: number, x: number, y: number) {
+  const a = Math.PI * n, b = Math.PI * m;
+  const value = Math.cos(a * x) * Math.cos(b * y) - Math.cos(b * x) * Math.cos(a * y);
+  const dx = -a * Math.sin(a * x) * Math.cos(b * y) + b * Math.sin(b * x) * Math.cos(a * y);
+  const dy = -b * Math.cos(a * x) * Math.sin(b * y) + a * Math.cos(b * x) * Math.sin(a * y);
+  return { value, dx, dy };
+}
+
+export function createChladniMode(budget: QualityBudget = presetBudget('balanced')): VisualMode {
+  const { scene, camera } = sceneDefaults(0);
+  camera.position.set(0, 62, 34); camera.lookAt(0, 0, 0);
+  const count = Math.round(16000 * budget.particleScale), half = 26;
+  const random = seededRandom(31), grains = new Float32Array(count * 2), positions = new Float32Array(count * 3);
+  for (let i = 0; i < count * 2; i++) grains[i] = random() * 2 - 1;
+  const attribute = new THREE.InstancedBufferAttribute(positions, 3);
+  const material = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  material.positionNode = instancedBufferAttribute<'vec3'>(attribute, 'vec3');
+  material.opacityNode = uv().sub(0.5).length().smoothstep(0.5, 0.1).mul(0.8);
+  const size = uniform(0.26); material.scaleNode = vec2(size);
+  const sprite = new THREE.Sprite(material); sprite.geometry = sprite.geometry.clone(); sprite.count = count; sprite.frustumCulled = false;
+  const plateMaterial = new THREE.MeshBasicNodeMaterial();
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(half * 2 + 2, 0.6, half * 2 + 2), plateMaterial); plate.position.y = -0.5;
+  const rimMaterial = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const rimLines = new THREE.LineSegments(new THREE.EdgesGeometry(plate.geometry), rimMaterial); rimLines.position.copy(plate.position);
+  scene.add(plate, rimLines, sprite);
+  const bands = new Float32Array(CHLADNI_MODES.length), change = beatGate(2.2);
+  let mode = 0, scatter = 0, idle = 0, vibration = 0;
+  return {
+    scene, camera,
+    update(frame) {
+      resizeCamera(camera, frame.aspect);
+      idle += frame.delta;
+      // The loudest band picks the standing-wave pattern; a beat also kicks the sand loose.
+      if (change(frame.time, frame.audio.onset) || idle > 8) {
+        idle = 0; scatter = frame.audio.onset ? 1 : 0.4;
+        bandEnergies(frame, CHLADNI_MODES.length, bands);
+        let loudest = 0; for (let i = 1; i < bands.length; i++) if (bands[i] > bands[loudest]) loudest = i;
+        mode = bands[loudest] > 0.05 && loudest !== mode ? loudest : (mode + 1) % CHLADNI_MODES.length;
+      }
+      scatter = Math.max(0, scatter - frame.delta * 1.5);
+      vibration = approach(vibration, 0.25 + frame.response.bounce * 0.9 + frame.audio.rms, frame.delta, 0.1);
+      const [n, m] = CHLADNI_MODES[mode], dt = Math.min(frame.delta, 1 / 20);
+      for (let i = 0; i < count; i++) {
+        let x = grains[i * 2], y = grains[i * 2 + 1];
+        const wave = chladni(n, m, x, y), sign = Math.sign(wave.value) || 1;
+        // Descend |f| toward the nodal lines; shaking scales with how far from a node the grain sits.
+        const shake = (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * (random() * 2 - 1);
+        x += -sign * wave.dx * 0.004 * dt * 60 + shake; y += -sign * wave.dy * 0.004 * dt * 60 + (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * (random() * 2 - 1);
+        grains[i * 2] = x < -1 ? -1 : x > 1 ? 1 : x; grains[i * 2 + 1] = y < -1 ? -1 : y > 1 ? 1 : y;
+        positions[i * 3] = grains[i * 2] * half; positions[i * 3 + 1] = Math.abs(wave.value) * scatter * 2; positions[i * 3 + 2] = grains[i * 2 + 1] * half;
+      }
+      attribute.needsUpdate = true;
+      size.value = 0.24 + frame.response.bounce * 0.1;
+      material.color.setHSL(wrap(frame.hue + 0.1, 0, 1), 0.6, 0.6).multiplyScalar(0.55);
+      plateMaterial.color.setHSL(wrap(frame.hue + 0.6, 0, 1), 0.3, 0.008);
+      rimMaterial.color.setHSL(wrap(frame.hue + 0.5, 0, 1), 1, 0.55).multiplyScalar(1.5 + vibration);
+      scene.rotation.y = Math.sin(frame.time * 0.1) * 0.3;
     },
     dispose: () => disposeScene(scene),
   };
