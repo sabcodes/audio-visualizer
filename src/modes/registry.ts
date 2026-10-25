@@ -31,7 +31,8 @@ import { createBlockBowtieMode, createPrismBowtieMode } from './bilateralModes';
 import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, createHairVortexMode, createMirrorPlasmaMode } from './plasmaModes';
 import { createBlackMazeMode, createStarfallCanopyMode } from './natureModes';
 import { createWindfieldMode } from './windfieldMode';
-import { createBeaconRingsMode, createChromeStreaksMode, createSignalNightMode, createSilkThreadsMode } from './nightSceneModes';
+import { createBeaconRingsMode, createChromeStreaksMode, createSilkThreadsMode } from './nightSceneModes';
+import { createSignalNightMode } from './signalNightMode';
 import { createLightLeakFilmMode } from './filmMode';
 import { withCinematic, type CinematicOptions } from './cinematic';
 import { createWarehouseHallMode } from './kitModes';
@@ -117,7 +118,7 @@ export const figureModeDefinitions: readonly ModeDefinition[] = [
 const waveFour = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions) =>
   definition(id, `<experimental-wave4> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output);
 /** Camera finishes for the procedural modes whose references are footage or photographic renders. */
-const FILM = { grain: 0.05, halation: 0.3, vignette: 0.45, soften: 0.15 }, SOFT = { grain: 0.04, halation: 0.25, vignette: 0.4, soften: 0.4, aberration: 0.002 }, CLEAN = { grain: 0.03, halation: 0.2, vignette: 0.35, soften: 0.05 };
+const FILM = { grain: 0.05, halation: 0.3, vignette: 0.45, soften: 0.15 }, CLEAN = { grain: 0.03, halation: 0.2, vignette: 0.35, soften: 0.05 };
 /** Wave 4 (docs/superpowers/specs/2026-10-24-wave-four-modes-design.md): beat-gated modes from reference clips; 4b ones use the supplied kits. */
 export const waveFourModeDefinitions: readonly ModeDefinition[] = [
   waveFour('prismBowtie', 'Prism Bowtie (FS)', createPrismBowtieMode, 'fullscreen', CLEAN),
@@ -135,7 +136,7 @@ export const waveFourModeDefinitions: readonly ModeDefinition[] = [
   waveFour('starfallCanopy', 'Starfall Canopy', (budget) => createStarfallCanopyMode(budget), 'scene', FILM),
   waveFour('silkThreads', 'Silk Threads', (budget) => createSilkThreadsMode(budget), 'scene', CLEAN),
   waveFour('chromeStreaks', 'Chrome Streaks', (budget) => createChromeStreaksMode(budget), 'scene', FILM),
-  waveFour('signalNight', 'Signal Night', createSignalNightMode, 'scene', SOFT),
+  waveFour('signalNight', 'Signal Night', createSignalNightMode),
   waveFour('beaconRings', 'Beacon Rings', (budget) => createBeaconRingsMode(budget), 'scene', FILM),
   waveFour('lightLeakFilm', 'Light Leak Film', createLightLeakFilmMode),
   waveFour('warehouseHall', 'Warehouse Hall', createWarehouseHallMode),
