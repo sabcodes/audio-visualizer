@@ -8,7 +8,7 @@ import { generateMaze, mazeCorridors, MAZE_WINDOWS } from '../../src/modes/natur
 import { HAND_TIMING, handVisit } from '../../src/modes/moonPondMode';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
 import { BOWTIE_SHAPES, bowtieBlend } from '../../src/modes/bilateralModes';
-import { GROWTH_FORMS, growForm } from '../../src/modes/bloomTouchMode';
+import { BLOOM_CYCLE, BLOOM_TIMING, GROWTH_FORMS, bloomPhase, growForm } from '../../src/modes/bloomTouchMode';
 import { WAREHOUSE_GRADES } from '../../src/modes/kitModes';
 import { STAIR_COLOURS, UNDERGROUND_ANGLES } from '../../src/modes/interiorModes';
 import { SCULPTURES } from '../../src/modes/creatureKitModes';
@@ -92,6 +92,11 @@ describe('wave four helpers', () => {
     const open = generateMaze(9), runs = mazeCorridors(open);
     expect(runs.length).toBeGreaterThan(0);
     for (const run of runs) for (let i = 0; i <= run.length; i++) expect(open[(run.y + run.dy * i) * 19 + run.x + run.dx * i]).toBe(1);
+  });
+  it('runs the Bloom Touch cycle through every phase in order', () => {
+    const seen: string[] = [];
+    for (let t = 0; t < BLOOM_CYCLE; t += 0.05) { const { phase, progress } = bloomPhase(t); expect(progress).toBeGreaterThanOrEqual(0); expect(progress).toBeLessThanOrEqual(1); if (seen.at(-1) !== phase) seen.push(phase); }
+    expect(seen).toEqual(Object.keys(BLOOM_TIMING));
   });
   it('walks the Moon Pond hand through reach, touch, lift and away', () => {
     const { descend, touch, lift } = HAND_TIMING;
