@@ -10,7 +10,7 @@ import { chladni, CHLADNI_MODES, KNOTS } from '../../src/modes/geometricModes';
 import { tentacleBend, KRAKEN_SEGMENTS } from '../../src/modes/creatureModes';
 import { fireworkKind } from '../../src/modes/nightModes';
 import { chromeMatcap } from '../../src/modes/physicsModes';
-import { LOOKS, PANEL_HOMES, PANELS, lookTargets } from '../../src/modes/arenaMode';
+import { BEAM_PROGRAMS, LOOKS, MAX_TILT, PANEL_HOMES, PANELS, beamAim, lookTargets } from '../../src/modes/arenaMode';
 import { Sprite } from 'three/webgpu';
 import { epicycleShape, epicycleTerms, polyhedronSegments, POLY_SEGMENTS, pendulumPhase, PENDULUMS, PENDULUM_CYCLE, EPICYCLE_SHAPES } from '../../src/modes/geometricModes';
 import { ridgeProfile } from '../../src/modes/landscapeModes';
@@ -213,6 +213,19 @@ describe('arena light panels', () => {
     expect(sizes).toContain(6);
     // Consecutive trios hand over to the other three panels rather than relighting the same ones.
     expect(LOOKS[0].some((p) => LOOKS[1].includes(p))).toBe(false);
+  });
+  it('moving heads sweep smoothly, stay below the horizon and swing up and down', () => {
+    for (let program = 0; program < BEAM_PROGRAMS; program++) {
+      let low = Infinity, high = -Infinity;
+      for (let m = 0; m < 20; m += 0.01) {
+        const [tilt, pan] = beamAim(program, m, 2, 3), [nextTilt, nextPan] = beamAim(program, m + 0.01, 2, 3);
+        expect(tilt).toBeGreaterThanOrEqual(0); expect(tilt).toBeLessThanOrEqual(MAX_TILT); expect(Math.abs(pan)).toBeLessThan(0.6);
+        // No snaps: a hundredth of the motion clock moves a head by well under a degree.
+        expect(Math.abs(nextTilt - tilt) + Math.abs(nextPan - pan)).toBeLessThan(0.015);
+        low = Math.min(low, tilt); high = Math.max(high, tilt);
+      }
+      expect(high - low, `program ${program}`).toBeGreaterThan(0.3);
+    }
   });
   it('no new mode shares the default sprite geometry, which disposing would destroy', () => {
     for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions]) {
