@@ -32,7 +32,14 @@ import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, 
 import { createBlackMazeMode, createStarfallCanopyMode, createWindfieldMode } from './natureModes';
 import { createBeaconRingsMode, createChromeStreaksMode, createSignalNightMode, createSilkThreadsMode } from './nightSceneModes';
 import { createLightLeakFilmMode } from './filmMode';
-import { createCandyOrbMode, createLiquidChromeMode, createMoonPondMode, createPongOrbsMode } from './lensModes';
+import { withCinematic, type CinematicOptions } from './cinematic';
+import { createWarehouseHallMode } from './kitModes';
+import { createEndlessStairsMode, createRedStairwellMode, createTempleDescentMode, createUndergroundMode } from './interiorModes';
+import { createCandyOrbMode, createLiquidChromeMode, createPongOrbsMode } from './lensModes';
+import { createMoonPondMode } from './moonPondMode';
+import { createRedCrystalHallMode } from './crystalHallMode';
+import { createBloomTouchMode, createPoleSparksMode } from './illustratedModes';
+import { createLavaGolemMode, createLightForestMode } from './creatureKitModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -105,28 +112,41 @@ export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
 ];
 /** Wave 4 entries are labelled `<experimental-wave4> …` in the menu, at the user's request. */
-const waveFour = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene') => definition(id, `<experimental-wave4> ${label}`, create, output);
+const waveFour = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions) =>
+  definition(id, `<experimental-wave4> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output);
+/** Camera finishes for the procedural modes whose references are footage or photographic renders. */
+const FILM = { grain: 0.05, halation: 0.3, vignette: 0.45, soften: 0.15 }, SOFT = { grain: 0.04, halation: 0.25, vignette: 0.4, soften: 0.4, aberration: 0.002 }, CLEAN = { grain: 0.03, halation: 0.2, vignette: 0.35, soften: 0.05 };
 /** Wave 4 (docs/superpowers/specs/2026-10-24-wave-four-modes-design.md): beat-gated modes from reference clips; 4b ones use the supplied kits. */
 export const waveFourModeDefinitions: readonly ModeDefinition[] = [
-  waveFour('prismBowtie', 'Prism Bowtie (FS)', createPrismBowtieMode, 'fullscreen'),
-  waveFour('blockBowtie', 'Block Bowtie (FS)', createBlockBowtieMode, 'fullscreen'),
-  waveFour('pongOrbs', 'Pong Orbs (FS)', createPongOrbsMode, 'fullscreen'),
-  waveFour('candyOrb', 'Candy Orb (FS)', createCandyOrbMode, 'fullscreen'),
-  waveFour('moonPond', 'Moon Pond (FS)', createMoonPondMode, 'fullscreen'),
-  waveFour('liquidChrome', 'Liquid Chrome (FS)', createLiquidChromeMode, 'fullscreen'),
+  waveFour('prismBowtie', 'Prism Bowtie (FS)', createPrismBowtieMode, 'fullscreen', CLEAN),
+  waveFour('blockBowtie', 'Block Bowtie (FS)', createBlockBowtieMode, 'fullscreen', CLEAN),
+  waveFour('pongOrbs', 'Pong Orbs (FS)', createPongOrbsMode, 'fullscreen', CLEAN),
+  waveFour('candyOrb', 'Candy Orb (FS)', createCandyOrbMode, 'fullscreen', FILM),
+  waveFour('moonPond', 'Moon Pond (FS)', (budget) => createMoonPondMode(budget), 'fullscreen'),
+  waveFour('liquidChrome', 'Liquid Chrome (FS)', createLiquidChromeMode, 'fullscreen', CLEAN),
   waveFour('mirrorPlasma', 'Mirror Plasma (FS)', createMirrorPlasmaMode, 'fullscreen'),
   waveFour('grainSmoke', 'Grain Smoke (FS)', createGrainSmokeMode, 'fullscreen'),
-  waveFour('anamorphicFlare', 'Anamorphic Flare (FS)', createAnamorphicFlareMode, 'fullscreen'),
-  waveFour('hairVortex', 'Hair Vortex (FS)', createHairVortexMode, 'fullscreen'),
-  waveFour('windfield', 'Windfield (FS)', createWindfieldMode, 'fullscreen'),
-  waveFour('blackMaze', 'Black Maze (FS)', createBlackMazeMode, 'fullscreen'),
-  waveFour('starfallCanopy', 'Starfall Canopy', (budget) => createStarfallCanopyMode(budget)),
-  waveFour('silkThreads', 'Silk Threads', (budget) => createSilkThreadsMode(budget)),
-  waveFour('chromeStreaks', 'Chrome Streaks', (budget) => createChromeStreaksMode(budget)),
-  waveFour('signalNight', 'Signal Night', createSignalNightMode),
-  waveFour('beaconRings', 'Beacon Rings', (budget) => createBeaconRingsMode(budget)),
+  waveFour('anamorphicFlare', 'Anamorphic Flare (FS)', createAnamorphicFlareMode, 'fullscreen', CLEAN),
+  waveFour('hairVortex', 'Hair Vortex (FS)', createHairVortexMode, 'fullscreen', CLEAN),
+  waveFour('windfield', 'Windfield (FS)', createWindfieldMode, 'fullscreen', FILM),
+  waveFour('blackMaze', 'Black Maze (FS)', createBlackMazeMode, 'fullscreen', FILM),
+  waveFour('starfallCanopy', 'Starfall Canopy', (budget) => createStarfallCanopyMode(budget), 'scene', FILM),
+  waveFour('silkThreads', 'Silk Threads', (budget) => createSilkThreadsMode(budget), 'scene', CLEAN),
+  waveFour('chromeStreaks', 'Chrome Streaks', (budget) => createChromeStreaksMode(budget), 'scene', FILM),
+  waveFour('signalNight', 'Signal Night', createSignalNightMode, 'scene', SOFT),
+  waveFour('beaconRings', 'Beacon Rings', (budget) => createBeaconRingsMode(budget), 'scene', FILM),
   waveFour('lightLeakFilm', 'Light Leak Film', createLightLeakFilmMode),
-  waveFour('emberSmoke', 'Ember Smoke (FS)', (budget) => createEmberSmokeMode(budget), 'fullscreen'),
+  waveFour('warehouseHall', 'Warehouse Hall', createWarehouseHallMode),
+  waveFour('redStairwell', 'Red Stairwell', createRedStairwellMode),
+  waveFour('underground', 'Underground', (budget) => createUndergroundMode(budget)),
+  waveFour('endlessStairs', 'Endless Stairs', (budget) => createEndlessStairsMode(budget)),
+  waveFour('templeDescent', 'Temple Descent', (budget) => createTempleDescentMode(budget)),
+  waveFour('lavaGolem', 'Lava Golem', (budget) => createLavaGolemMode(budget)),
+  waveFour('lightForest', 'Light Painting Forest', (budget) => createLightForestMode(budget)),
+  waveFour('redCrystalHall', 'Red Crystal Hall', (budget) => createRedCrystalHallMode(budget)),
+  waveFour('poleSparks', 'Pole Sparks', createPoleSparksMode),
+  waveFour('bloomTouch', 'Bloom Touch', (budget) => createBloomTouchMode(budget)),
+  waveFour('emberSmoke', 'Ember Smoke (FS)', (budget) => createEmberSmokeMode(budget), 'fullscreen', CLEAN),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {

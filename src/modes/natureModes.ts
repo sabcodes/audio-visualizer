@@ -25,7 +25,9 @@ export function createWindfieldMode(): VisualMode {
   const billow = mx_fractal_noise_float(vec3(cx.mul(5), above.mul(5), cloudTime.mul(0.05)), 5, 2, 0.55);
   const puff = tops.sub(above).add(billow.mul(0.16));
   const cloud = puff.smoothstep(0, 0.035).mul(above.smoothstep(-0.005, 0.02));
-  const shade = mx_fractal_noise_float(vec3(cx.mul(9).add(0.3), above.mul(9).sub(0.25), cloudTime.mul(0.05)), 3, 2, 0.5).mul(0.5).add(0.5);
+  // Self-shadowing: compare the billow with a sample toward the sun (up and left); denser toward the light means shade.
+  const towardSun = mx_fractal_noise_float(vec3(cx.mul(5).sub(0.12), above.mul(5).add(0.1), cloudTime.mul(0.05)), 5, 2, 0.55);
+  const shade = billow.sub(towardSun).mul(-3).add(0.6).clamp(0, 1).mul(0.7).add(mx_fractal_noise_float(vec3(cx.mul(14), above.mul(14), cloudTime.mul(0.05)), 3, 2, 0.5).mul(0.15));
   const cloudColour = mix(vec3(0.58, 0.63, 0.69), vec3(0.9, 0.92, 0.94), above.div(tops.max(0.05)).smoothstep(0.05, 0.6).mul(0.6).add(shade.mul(0.5)).clamp(0, 1));
   const sky = mix(vec3(0.16, 0.42, 0.68), vec3(0.027, 0.24, 0.53), above.mul(2.2).clamp(0, 1));
   const skyColour = mix(sky, cloudColour, cloud);

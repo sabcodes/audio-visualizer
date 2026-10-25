@@ -17,7 +17,7 @@ const vec3Uniform = (hex: number) => uniform(new THREE.Vector3(...linearRgb(hex)
 // ---------------------------------------------------------------- Pong Orbs
 
 /** Orb radii as a fraction of frame height: two small emitters and the big glass bubble. */
-export const ORB_RADII = [0.045, 0.09, 0.32] as const;
+export const ORB_RADII = [0.022, 0.035, 0.3] as const;
 
 /** Moves circles around the frame, bouncing off the edges and off each other (equal-density discs). */
 export function stepOrbs(orbs: { x: number; y: number; vx: number; vy: number; r: number }[], aspect: number, delta: number) {
@@ -179,62 +179,6 @@ export function createCandyOrbMode(): VisualMode {
       pulse.value = hits.flash;
       bloom.value = 0.25 + frame.response.loudness * 0.6;
       gain.value = 0.5 + hits.flash * 0.15;
-    },
-    dispose: () => disposeScene(scene),
-  };
-}
-
-// ---------------------------------------------------------------- Moon Pond
-
-const RIPPLES = 6;
-const MAGENTA = linearRgb(0xe02bd6), CYAN = linearRgb(0x4d6bff);
-
-export function createMoonPondMode(): VisualMode {
-  const { scene, camera, material } = fullscreen();
-  const aspect = uniform(1), time = uniform(0), amplitude = uniform(1), glitter = uniform(0.5), shade = uniform(1);
-  const ripples = Array.from({ length: RIPPLES }, () => uniform(new THREE.Vector4(0, 0, 99, 0)));
-  const magenta = vec3(...MAGENTA), cyan = vec3(...CYAN);
-  // Perspective onto the water: the bottom of the frame is close, the top recedes.
-  const s = centred(aspect), depth = float(1).div(s.y.add(0.95)), plane = vec2(s.x.mul(depth), depth.mul(1.6));
-  let height: F = float(0), crest: F = float(0), colour: V3 = vec3(0);
-  for (const ripple of ripples) {
-    // x, z on the water, age in seconds, w = 0 magenta / 1 blue.
-    const d = plane.sub(ripple.xy).length(), front = ripple.z.mul(0.55);
-    const behind = front.sub(d), envelope = behind.greaterThan(0).select(exp(behind.mul(-0.8)), exp(behind.mul(30)))
-      .mul(exp(ripple.z.mul(-0.4))).mul(ripple.z.lessThan(12).select(float(1), float(0)));
-    const wave = sin(behind.mul(46)).mul(envelope);
-    height = height.add(wave);
-    const top = wave.smoothstep(0.15, 0.85);
-    crest = crest.add(top);
-    colour = colour.add(mix(magenta, cyan, ripple.w).mul(top));
-  }
-  // Slow ambient swell so the water is never perfectly still.
-  const swell = mx_noise_float(vec3(plane.mul(1.3), time.mul(0.15))).mul(0.5).add(0.5);
-  const water = mix(vec3(0.012, 0.01, 0.018), vec3(0.06, 0.055, 0.075), swell.mul(0.6).add(s.y.add(0.5).mul(0.5))).mul(shade);
-  // Glitter: dotted crests on a 4 px grid, each dot twinkling on its own phase.
-  const cell = screenCoordinate.xy.div(4).floor(), dot = fract(screenCoordinate.xy.div(4)).sub(0.5).length().smoothstep(0.42, 0.15);
-  const sparkle = hash2(cell).add(time.mul(0.8)).fract().smoothstep(0.3, 1).mul(dot);
-  const lit = colour.mul(sparkle.mul(glitter.mul(3).add(2.5)).mul(amplitude)).add(colour.mul(0.22));
-  material.fragmentNode = vec4(water.add(lit).add(vec3(height.mul(0.02).max(0))), 1);
-
-  const hits = createHits({ decay: 0.6, interval: 0.55 });
-  const random = seededRandom(7);
-  let next = 0, colourIndex = 0;
-  return {
-    scene, camera,
-    update(frame) {
-      aspect.value = frame.aspect; time.value = frame.time;
-      const step = settleStep(frame);
-      hits.update(frame, 0.5);
-      if (hits.fired || (frame.time > 1 && ripples.every((r) => r.value.z > 4))) {
-        // New ripple near the lower middle, alternating magenta and blue.
-        ripples[next].value.set((random() - 0.5) * 1.2, 0.95 + random() * 0.5, 0, colourIndex);
-        next = (next + 1) % RIPPLES; colourIndex = 1 - colourIndex;
-      }
-      for (const ripple of ripples) ripple.value.z += step;
-      amplitude.value = approach(amplitude.value, 0.7 + frame.response.bass * 0.8, step, 0.15);
-      glitter.value = frame.audio.highs;
-      shade.value = 1 + hits.flash * 0.3;
     },
     dispose: () => disposeScene(scene),
   };
