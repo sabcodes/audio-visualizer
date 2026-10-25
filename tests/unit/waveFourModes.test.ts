@@ -5,7 +5,7 @@ import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { modeDefinitions, waveFourModeDefinitions } from '../../src/modes/registry';
 import { createHits, variantSequence } from '../../src/modes/hitPulse';
 import { generateMaze, mazeCorridors, MAZE_WINDOWS } from '../../src/modes/natureModes';
-import { HAND_TIMING, handVisit } from '../../src/modes/moonPondMode';
+import { FINGER_GESTURES, HAND_TIMING, gestureShape, handVisit } from '../../src/modes/moonPondMode';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
 import { BOWTIE_SHAPES, bowtieBlend } from '../../src/modes/bilateralModes';
 import { BLOOM_CYCLE, BLOOM_TIMING, GROWTH_FORMS, bloomPhase, growForm } from '../../src/modes/bloomTouchMode';
@@ -97,6 +97,15 @@ describe('wave four helpers', () => {
     const seen: string[] = [];
     for (let t = 0; t < BLOOM_CYCLE; t += 0.05) { const { phase, progress } = bloomPhase(t); expect(progress).toBeGreaterThanOrEqual(0); expect(progress).toBeLessThanOrEqual(1); if (seen.at(-1) !== phase) seen.push(phase); }
     expect(seen).toEqual(Object.keys(BLOOM_TIMING));
+  });
+  it('moves the Moon Pond fingers within each gesture, and stabs the index down on a beat', () => {
+    for (const gesture of FINGER_GESTURES) {
+      const a = gestureShape(gesture, 0.3, 0.2, 1), b = gestureShape(gesture, 0.6, 0.2, 1);
+      if (gesture !== 'claw') expect(a.curl.some((curl, i) => Math.abs(curl - b.curl[i]) > 0.02), gesture).toBe(true);
+      for (const curl of [...a.curl, ...b.curl]) { expect(curl).toBeGreaterThanOrEqual(-0.2); expect(curl).toBeLessThanOrEqual(1.1); }
+    }
+    expect(gestureShape('tap', 0.3, 1, 1).curl[0]).toBeLessThan(gestureShape('tap', 0.3, 0, 1).curl[0]);
+    expect(gestureShape('claw', 0, 1, 1).curl[1]).toBeLessThan(gestureShape('claw', 0, 0, 1).curl[1]);
   });
   it('walks the Moon Pond hand through reach, touch, lift and away', () => {
     const { descend, touch, lift } = HAND_TIMING;
