@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { float, mx_fractal_noise_float, positionWorld, uniform, uv, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep, bandEnergies } from './shared';
 import { createGlowPoints, loadTexture, shaftMaterial } from './figures';
 import { createCinematic } from './cinematic';
 import { createHits, linearRgb } from './hitPulse';
@@ -44,33 +44,36 @@ export function createSignalNightMode(): VisualMode {
   const metal = new THREE.MeshStandardNodeMaterial({ roughness: 0.75, metalness: 0.25 });
   metal.colorNode = vec3(0.022, 0.024, 0.018).mul(mx_fractal_noise_float(positionWorld.mul(2.5), 3, 2, 0.5).mul(0.4).add(0.8));
   const lamp = (hex: number) => new THREE.MeshBasicNodeMaterial({ color: new THREE.Color(hex) });
-  const lenses = { red: lamp(0x5a1812), amber: lamp(0x4a3010), green: lamp(0x0f3a1a) };
-  const unlit = lamp(0x0a0c0c);
+  const LAMPS = [0x5a1812, 0x4a3010, 0x0f3a1a].map((hex) => new THREE.Color(hex)), unlit = new THREE.Color(0x0a0c0c);
   const headGeometry = new THREE.BoxGeometry(0.42, 1.2, 0.34), plateGeometry = new THREE.BoxGeometry(0.72, 1.5, 0.03);
   const lensGeometry = new THREE.CircleGeometry(0.12, 24), visorGeometry = new THREE.CylinderGeometry(0.155, 0.155, 0.24, 20, 1, true, -Math.PI / 2, Math.PI);
   visorGeometry.rotateX(Math.PI / 2);
-  const signals: THREE.Group[] = [];
+  // Every lens has its own material so each signal can flash on its own beat.
+  const signals: { head: THREE.Group; lenses: THREE.MeshBasicNodeMaterial[]; spots: THREE.Vector3[]; lit: number; group: number; flash: number }[] = [];
   for (let s = 0; s < SIGNALS; s++) {
     const head = new THREE.Group();
     head.add(new THREE.Mesh(headGeometry, metal));
     if (random() < 0.6) { const plate = new THREE.Mesh(plateGeometry, metal); plate.position.z = -0.19; head.add(plate); }
     // Mostly the red or amber lamp is on; the others sit dark.
     const lit = random() < 0.55 ? 0 : random() < 0.6 ? 1 : 2;
-    [lenses.red, lenses.amber, lenses.green].forEach((material, l) => {
-      const lens = new THREE.Mesh(lensGeometry, l === lit ? material : unlit); lens.position.set(0, 0.38 - l * 0.38, 0.175); head.add(lens);
+    const lenses = LAMPS.map((_, l) => {
+      const material = lamp(0x0a0c0c), lens = new THREE.Mesh(lensGeometry, material); lens.position.set(0, 0.38 - l * 0.38, 0.175); head.add(lens);
       const visor = new THREE.Mesh(visorGeometry, metal); visor.position.set(0, 0.38 - l * 0.38 + 0.02, 0.29); head.add(visor);
+      return material;
     });
     const x = (random() - 0.5) * 17, y = 2.5 + random() * 6.5, z = -2 - random() * 13;
     head.position.set(x, y, z); head.rotation.y = (random() - 0.5) * 1.2; head.rotation.z = (random() - 0.5) * 0.08;
     // Mast arm from the side of the street, or a short hanger from a span wire.
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 12, 8), metal);
     arm.rotation.z = Math.PI / 2; arm.position.set(x + (x > 0 ? 6 : -6), y + 0.75, z); scene.add(arm);
-    scene.add(head); signals.push(head);
+    scene.add(head); head.updateMatrixWorld(true);
+    const spots = lenses.map((_, l) => head.localToWorld(new THREE.Vector3(0, 0.38 - l * 0.38, 0.2)));
+    signals.push({ head, lenses, spots, lit, group: s % 4, flash: 0 });
   }
   // Span wires and cables sagging between the signals and off the frame.
   const wire = new THREE.MeshStandardNodeMaterial({ color: 0x0a0d0e, roughness: 0.6, metalness: 0.4 });
   for (let c = 0; c < 22; c++) {
-    const a = signals[Math.floor(random() * SIGNALS)].position, start = new THREE.Vector3(a.x, a.y + 0.7, a.z);
+    const a = signals[Math.floor(random() * SIGNALS)].head.position, start = new THREE.Vector3(a.x, a.y + 0.7, a.z);
     const end = new THREE.Vector3(start.x + (random() < 0.5 ? -1 : 1) * (8 + random() * 14), start.y + (random() - 0.3) * 4, start.z + (random() - 0.5) * 6);
     const mid = start.clone().lerp(end, 0.5); mid.y -= 0.6 + random() * 1.6;
     scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(start, mid, end), 40, 0.018, 5), wire));
@@ -82,7 +85,7 @@ export function createSignalNightMode(): VisualMode {
     const stripes = uv().y.mul(3).fract().smoothstep(0.35, 0.4).sub(uv().y.mul(3).fract().smoothstep(0.6, 0.65)).mul(uv().x.smoothstep(0.15, 0.2)).mul(uv().x.smoothstep(0.8, 0.75)).mul(0.6);
     sign.colorNode = vec3(...linearRgb(k % 2 ? 0x1a4a8a : 0x15603a)).mul(0.5).add(vec3(0.12).mul(edge.add(stripes)));
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.8 + random(), 0.45 + random() * 0.2), sign);
-    const near = signals[Math.floor(random() * SIGNALS)].position;
+    const near = signals[Math.floor(random() * SIGNALS)].head.position;
     plate.position.set(near.x + (random() - 0.5) * 2, near.y - 1.2 - random(), near.z + 0.4); plate.rotation.y = (random() - 0.5) * 0.6;
     scene.add(plate);
   }
@@ -102,6 +105,8 @@ export function createSignalNightMode(): VisualMode {
     return { rig, material, glow, spill, aim: new THREE.Vector3(aim[0], aim[1], aim[2]), phase: i * 1.7 + random() };
   });
   scene.add(lensGlow.object);
+  const lampGlow = createGlowPoints(loadTexture(emberUrl), SIGNALS);
+  scene.add(lampGlow.object);
   // Horizontal light streaks smearing across on hits.
   const streakMaterial = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   streakMaterial.colorNode = vec3(1).mul(uv().x.mul(Math.PI).sin().pow(2)).mul(uv().y.sub(0.5).abs().mul(2).oneMinus().pow(3));
@@ -112,6 +117,7 @@ export function createSignalNightMode(): VisualMode {
 
   const hits = createHits({ decay: 0.22, interval: 0.3, variants: SIGNAL_VARIANTS.length, seed: 41 });
   const colour = new THREE.Color(), target = new THREE.Vector3(), teal = new THREE.Color(0x3a7080), red = new THREE.Color(0xa02018);
+  const bands = new Float32Array(4);
   let shake = 0, sweep = 0, redness = 0, nextStreak = 0;
   return {
     scene, camera,
@@ -133,8 +139,25 @@ export function createSignalNightMode(): VisualMode {
       }
       redness = approach(redness, look.red * hits.gain, step, 0.05);
       ambient.color.copy(teal).lerp(red, redness); ambient.intensity = 0.7 + redness * 0.8;
-      lenses.red.color.setRGB(...linearRgb(0x5a1812)).multiplyScalar(1 + redness * 4 + bass * 0.8);
-      lenses.amber.color.setRGB(...linearRgb(0x4a3010)).multiplyScalar(1 + bass * 0.5);
+      // Signals flash in four groups that take turns on the beat; a hit also flips some of them to another lamp.
+      bandEnergies(frame, 4, bands);
+      if (hits.fired) {
+        const turn = hits.count % 4;
+        for (const signal of signals) {
+          if (signal.group === turn || random() < 0.2) { signal.flash = 1; if (random() < 0.45) signal.lit = random() < 0.6 ? 0 : random() < 0.6 ? 1 : 2; }
+        }
+      }
+      for (const signal of signals) {
+        signal.flash *= Math.exp(-step / 0.2);
+        const level = 0.6 + bands[signal.group] * (1 + frame.response.loudness * 2) * 2.5 + signal.flash * (frame.reducedFlash ? 3 : 7);
+        signal.lenses.forEach((material, l) => {
+          const on = l === signal.lit || (l === 0 && redness > 0.3);
+          if (on) material.color.copy(LAMPS[l]).multiplyScalar(level + (l === 0 ? redness * 4 : 0)); else material.color.copy(unlit);
+        });
+        // A soft glow around the lit lamp, swelling as it flashes.
+        const spot = signal.spots[signal.lit], tone = LAMPS[signal.lit], boost = Math.min(1, 0.15 + signal.flash * 0.85 + bands[signal.group] * 0.4);
+        lampGlow.set(signals.indexOf(signal), spot.x, spot.y, spot.z, 0.5 + boost * 1.2, tone.r * 9, tone.g * 9, tone.b * 9, boost);
+      }
       // The heads sweep across the street; each draws its beam only while the music hits, falling dark between.
       if (!still) sweep += frame.delta * (0.7 + bass * 1.4 + hits.flash * 2.5);
       const beamLevel = hits.flash * (look.red ? 0.35 : 1) + bass * 0.08;
@@ -150,6 +173,7 @@ export function createSignalNightMode(): VisualMode {
         lensGlow.set(i, p.x, p.y, p.z, 0.25 + beamLevel * 0.6, 0.6 + colour.r, 0.6 + colour.g, 0.6 + colour.b, Math.min(1, beamLevel));
       });
       lensGlow.commit();
+      lampGlow.commit();
       for (const s of streaks) {
         if (!s.mesh.visible) continue;
         s.life -= step; s.mesh.position.x += s.speed * step;

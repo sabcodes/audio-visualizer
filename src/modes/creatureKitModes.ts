@@ -124,9 +124,43 @@ export function createLavaGolemMode(budget: QualityBudget): VisualMode {
 
 /** The wireframe sculptures, shown one at a time: Kit C node, where it floats, and its scale. */
 export const SCULPTURES = [
-  ['hummingbird_a', [0.2, 1.4, 0], 2.2], ['chair', [0, 0, 0.3], 1.4], ['moon_crescent', [-0.3, 1.2, 0], 2.4],
-  ['bird_flight', [0.4, 1.6, 0], 2], ['hoop', [0, 0.25, 0], 1.3], ['hummingbird_b', [-0.2, 1.3, 0.2], 2.2], ['door_frame', [0, 0, -0.4], 1],
+  ['chair', [0, 0, 0.3], 1.4], ['moon_crescent', [-0.3, 1.2, 0], 2.4], ['hoop', [0, 0.25, 0], 1.3], ['door_frame', [0, 0, -0.4], 1],
 ] as const;
+
+/** Birds are drawn in code instead of the kit's low-poly nodes: smooth, densely segmented light strokes. */
+export const LIGHT_BIRDS = [
+  { at: [0.2, 1.2, 0], scale: 1.5, span: 0.5, beak: 0.3, tail: 0.22, fork: 0.05 },
+  { at: [0.3, 1.0, 0], scale: 1.15, span: 1.05, beak: 0.06, tail: 0.42, fork: 0.16 },
+  { at: [-0.2, 1.05, 0.2], scale: 1.3, span: 0.8, beak: 0.09, tail: 0.3, fork: 0.08 },
+] as const;
+
+/** One light-painted bird seen side on: body outline, eye, tail fan and two wings that pivot at the shoulder. */
+export function lightBird(spec: (typeof LIGHT_BIRDS)[number], material: THREE.Material) {
+  const group = new THREE.Group();
+  const stroke = (points: readonly (readonly [number, number, number])[], radius = 0.011, closed = false) =>
+    new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)), closed), 120, radius, 8, closed), material);
+  const tip = 0.32 + spec.beak;
+  group.add(stroke([[tip, 0.05, 0], [0.3, 0.09, 0], [0.18, 0.14, 0], [0, 0.12, 0], [-0.22, 0.06, 0], [-0.4, 0.01, 0], [-0.22, -0.07, 0], [0.02, -0.11, 0], [0.2, -0.06, 0], [0.29, 0.01, 0]], 0.012, true));
+  group.add(stroke([[0.29, 0.01, 0], [tip * 0.7 + 0.1, 0.03, 0], [tip, 0.05, 0]], 0.008));
+  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.005, 8, 32), material); eye.position.set(0.22, 0.07, 0.01); group.add(eye);
+  for (const [dy, length] of [[spec.fork, 1], [0, 0.85], [-spec.fork, 1]] as const) {
+    group.add(stroke([[-0.38, 0.01, 0], [-0.38 - spec.tail * 0.5 * length, 0.01 + dy * 0.4, 0], [-0.38 - spec.tail * length, 0.02 + dy, 0]], 0.009));
+  }
+  const wings = [1, -1].map((side) => {
+    const wing = new THREE.Group(); wing.position.set(0.05, 0.11, side * 0.03);
+    const span = spec.span;
+    // Leading edge, then primaries fanning back from the wrist.
+    wing.add(stroke([[0, 0, 0], [0.05, span * 0.35, side * 0.02], [-0.05, span * 0.75, side * 0.04], [-0.2, span, side * 0.05]], 0.012));
+    for (let f = 0; f < 5; f++) {
+      const t = f / 4, wrist = [0.0, span * 0.6, side * 0.03] as const;
+      wing.add(stroke([wrist, [-0.12 - t * 0.12, span * (0.85 - t * 0.25), side * 0.04], [-0.24 - t * 0.2, span * (0.95 - t * 0.45), side * 0.05]], 0.008));
+    }
+    wing.add(stroke([[0, 0, 0], [-0.12, span * 0.25, side * 0.02], [-0.3, span * 0.4, side * 0.04], [-0.44, span * 0.48, side * 0.05]], 0.009));
+    group.add(wing);
+    return wing;
+  });
+  return { object: group, wings };
+}
 
 export function createLightForestMode(budget: QualityBudget): VisualMode {
   const { scene, camera } = sceneDefaults(0);
@@ -178,7 +212,8 @@ export function createLightForestMode(budget: QualityBudget): VisualMode {
   const bokeh = createGlowPoints(loadTexture(emberUrl), 30);
   const lights = Array.from({ length: 30 }, () => [(random() - 0.5) * 20, random() * 3, -8 - random() * 8] as const);
   scene.add(bokeh.object);
-  const sculptures: { object: THREE.Object3D; morphs: { mesh: THREE.Mesh; index: number }[] }[] = [];
+  const sculptures: { object: THREE.Object3D; morphs: { mesh: THREE.Mesh; index: number }[]; wings?: THREE.Group[] }[] = [];
+  const birdLine = new THREE.MeshBasicNodeMaterial({ color: 0xffffff });
   let line: THREE.MeshStandardMaterial | undefined;
   const model = whenLoaded([kitCUrl], ([gltf]) => {
     const kit: Figure = instantiate(gltf);
@@ -189,9 +224,15 @@ export function createLightForestMode(budget: QualityBudget): VisualMode {
       object.traverse((child) => { const mesh = child as THREE.Mesh; const index = mesh.morphTargetDictionary?.wings_down; if (mesh.isMesh && index !== undefined) morphs.push({ mesh, index }); });
       scene.add(object); sculptures.push({ object, morphs });
     }
+    // Interleave the code-built birds between the kit sculptures.
+    LIGHT_BIRDS.forEach((spec, i) => {
+      const bird = lightBird(spec, birdLine); bird.object.position.set(spec.at[0], spec.at[1], spec.at[2]); bird.object.scale.setScalar(spec.scale); bird.object.visible = false;
+      bird.object.rotation.y = i % 2 ? 0.35 : -0.35;
+      scene.add(bird.object); sculptures.splice(i * 2, 0, { object: bird.object, morphs: [], wings: bird.wings });
+    });
   });
   // One sculpture at a time: a ghost draws in, flashes to full white for a few frames, then fades over 400 ms.
-  const hits = createHits({ decay: 0.4, interval: 0.6, variants: SCULPTURES.length, seed: 21 });
+  const hits = createHits({ decay: 0.4, interval: 0.6, variants: SCULPTURES.length + LIGHT_BIRDS.length, seed: 21 });
   let flap = 0;
   return {
     scene, camera,
@@ -205,12 +246,14 @@ export function createLightForestMode(budget: QualityBudget): VisualMode {
       const life = hits.age, ghost = Math.min(1, life / 0.05) * 0.4, full = life < 0.1 ? 1 : Math.exp(-(life - 0.1) / 0.4);
       const level = Math.max(ghost * Math.exp(-life / 1.5), full) * (frame.reducedFlash ? 0.5 : 1);
       if (line) { line.emissive.setRGB(1, 1, 1); line.emissiveIntensity = level * 6; }
+      birdLine.color.setRGB(1, 1, 1).multiplyScalar(0.02 + level * 6);
       const current = sculptures[hits.variant];
       if (current) sculptLight.position.copy(current.object.position).add(new THREE.Vector3(0, 0.3, 0.3));
       sculptLight.intensity = level * 14 * (1 + frame.response.bass * 0.5);
       // Birds flap their wings with the music.
       flap += frame.reducedMotion ? 0 : frame.delta * (6 + frame.response.bass * 10);
       if (current) setMorph(current.morphs, 0.5 + Math.sin(flap) * 0.5);
+      current?.wings?.forEach((wing, side) => { wing.rotation.x = (side ? -1 : 1) * (0.15 + Math.sin(flap) * 0.75); });
       sway.value = approach(sway.value, 0.5 + frame.response.bass * 2, step, 0.3);
       for (const ray of rays) (ray.material as THREE.MeshBasicNodeMaterial).color.setRGB(0.56, 0.72, 0.63).multiplyScalar(0.012 + frame.response.loudness * 0.025);
       (scene.fog as THREE.FogExp2).color.setRGB(0.02, 0.03, 0.025).multiplyScalar(0.5 + frame.response.loudness);

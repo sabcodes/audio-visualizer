@@ -112,7 +112,7 @@ export function createWindfieldMode(budget: QualityBudget): VisualMode {
   const ground = new THREE.Mesh(new THREE.CircleGeometry(950, 64), groundMaterial); ground.rotation.x = -Math.PI / 2;
   scene.add(ground, blades);
 
-  const hits = createHits({ decay: 0.8, interval: 2 });
+  const hits = createHits({ decay: 0.5, interval: 0.6 });
   let frontAt = -40, clock = 0, yaw = 0, height = 1, push = 0;
   return {
     scene, camera,
@@ -122,18 +122,19 @@ export function createWindfieldMode(budget: QualityBudget): VisualMode {
       const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 1);
       // A hit sends a gust front rolling across the field.
-      if (hits.fired && !still) frontAt = -30;
-      frontAt += step * 9; gustFront.value = frontAt;
-      gust.value = approach(gust.value, frontAt < 60 ? 0.7 + frame.response.bass : frame.response.bass * 0.5, step, 0.4);
-      lean.value = approach(lean.value, still ? 0.15 : 0.15 + frame.response.loudness * 0.6, step, 0.5);
-      shimmer.value = frame.audio.highs;
+      // Everything that moves the grass follows the sensitivity-scaled response, so the bounce slider reads.
+      if (hits.fired && !still) frontAt = -25;
+      frontAt += step * (12 + frame.response.bounce * 10); gustFront.value = frontAt;
+      gust.value = approach(gust.value, frontAt < 60 ? 0.6 + frame.response.bass * 1.6 + hits.level * 0.6 : frame.response.bass * 0.9, step, 0.15);
+      lean.value = approach(lean.value, still ? 0.15 : 0.12 + frame.response.loudness * 0.5 + frame.response.bounce * 0.9, step, 0.18);
+      shimmer.value = frame.audio.highs + hits.flash * 0.8;
       clock += still ? 0 : frame.delta;
       cloudTime.value = clock * 6;
       growth.value = 0.7 + 0.3 * Math.abs(Math.sin(clock * 0.02));
       // The camera pivots slowly to show the field from different angles, dips toward the grass and pushes in on the bass.
       yaw = Math.sin(clock * 0.045) * 0.9 + Math.sin(clock * 0.017) * 0.5;
       height = 0.75 + Math.sin(clock * 0.06) * 0.35;
-      push = approach(push, still ? 0 : frame.response.bass * 1.5, step, 0.8);
+      push = approach(push, still ? 0 : frame.response.bass * 2.5 + hits.level * 1.2, step, 0.35);
       const forward = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
       camera.position.set(forward.x * push, height, forward.z * push);
       camera.lookAt(camera.position.x + forward.x * 10, height + 0.6 + Math.sin(clock * 0.03) * 0.5, camera.position.z + forward.z * 10);

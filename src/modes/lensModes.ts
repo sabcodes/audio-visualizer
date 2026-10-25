@@ -4,7 +4,7 @@ import { atan, cos, exp, float, fract, mix, mx_fractal_noise_float, mx_noise_flo
 import type { VisualMode } from './types';
 import { disposeScene, approach, settleStep } from './shared';
 import { fullscreen, hash2, palette } from './shaderModes';
-import { createHits, linearRgb } from './hitPulse';
+import { createHits, linearRgb, variantSequence } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 
 type F = Node<'float'>;
@@ -122,63 +122,96 @@ export function createPongOrbsMode(): VisualMode {
 
 // ---------------------------------------------------------------- Candy Orb
 
+/** Warm colours for the lit side of the orb: deep, mid, hot. */
 export const CANDY_PALETTES = [
-  { colours: [0xff8a1e, 0xffd36a, 0xe0301e], iridescent: 0 },
-  { colours: [0x4d9bff, 0x9af0d0, 0xffd56a], iridescent: 0.35 },
-  { colours: [0xffb0d8, 0xb0e0ff, 0xfff0b0], iridescent: 1 },
+  { colours: [0xb8200a, 0xff7a1e, 0xffe2a8] },
+  { colours: [0xa0102a, 0xff5a4a, 0xffd6c8] },
+  { colours: [0x9a3a08, 0xffa030, 0xfff2c8] },
+] as const;
+
+/**
+ * The looks a hit moves between, from the clip: a steady glowing ring, a small iridescent eye, a fast rainbow
+ * spin with a ragged hole, and a wide ring. Every parameter glides, so the orb morphs rather than cuts.
+ */
+export const CANDY_STATES = [
+  { hole: 0.17, offset: 0.0, spin: 0.25, smear: 0.3, rainbow: 0.15, wobble: 0.02 },
+  { hole: 0.06, offset: 0.06, spin: 0.15, smear: 0.2, rainbow: 0.85, wobble: 0.05 },
+  { hole: 0.14, offset: 0.07, spin: 1.6, smear: 1, rainbow: 1, wobble: 0.12 },
+  { hole: 0.24, offset: 0.02, spin: 0.45, smear: 0.5, rainbow: 0.4, wobble: 0.06 },
 ] as const;
 
 export function createCandyOrbMode(): VisualMode {
   const { scene, camera, material } = fullscreen();
-  const aspect = uniform(1), time = uniform(0), swirl = uniform(0), holeAt = uniform(new THREE.Vector2(0.03, -0.02)), holeRadius = uniform(0.11), rimWidth = uniform(0.06), gain = uniform(1);
-  const caustic = uniform(0), iridescent = uniform(0), bloom = uniform(0.4), pulse = uniform(0);
+  const aspect = uniform(1), time = uniform(0), gain = uniform(1), holeAt = uniform(new THREE.Vector2()), holeRadius = uniform(0.17), wobble = uniform(0.02);
+  const spin = uniform(0), smear = uniform(0.3), rainbow = uniform(0.15), lightAngle = uniform(0.8), lip = uniform(0.6), inner = uniform(0.2);
   const colours = CANDY_PALETTES[0].colours.map(vec3Uniform);
-  const p = centred(aspect), radius = float(0.4), r = p.length().div(radius), theta = atan(p.y, p.x);
-  const disc = r.smoothstep(1.0, 0.985);
-  const fromHole = p.sub(holeAt).length();
-  const hole = fromHole.smoothstep(holeRadius, holeRadius.add(0.035));
-  // Silky flow: noise sampled in polar coordinates that spin faster near the hole.
-  const spin = theta.add(swirl.mul(r.oneMinus().mul(1.5).add(0.4)));
-  const flow = mx_fractal_noise_float(vec3(cos(spin).mul(r.mul(2.2)), sin(spin).mul(r.mul(2.2)), time.mul(0.12)), 3, 2, 0.5).mul(0.5).add(0.5);
-  const grooves = sin(fromHole.mul(Math.PI * 2 * 180).add(flow.mul(6))).mul(0.5).add(0.5).mul(0.18).add(0.82);
-  // The caustic slides around the rim; the light comes from that side.
-  const lit = cos(theta.sub(caustic)).mul(0.5).add(0.5);
-  const band = lit.pow(5).mul(r.smoothstep(0.35, 0.95));
-  const base = mix(colours[2], colours[0], flow.add(lit.mul(0.6)).clamp(0, 1));
-  const film = palette(r.mul(1.4).add(flow.mul(0.8)).add(theta.div(Math.PI * 2)));
-  const tint = mix(base, film, iridescent.mul(flow.mul(0.6).add(0.4)));
-  const rim = exp(r.sub(0.985).abs().div(rimWidth.mul(0.25)).negate()).mul(lit.mul(0.6).add(0.4));
-  const body = tint.mul(r.smoothstep(0.15, 0.9).mul(0.75).add(0.25)).mul(grooves).mul(lit.mul(0.8).add(0.35))
-    .add(colours[1].mul(band.mul(0.7))).add(colours[1].mul(rim.mul(0.4)));
-  // Dark core with a soft edge; outside the disc a faint glow and drifting dust.
-  const halo = exp(r.sub(1).max(0).mul(-7)).mul(bloom).mul(r.greaterThan(0.99).select(float(1), float(0)));
+  const [deep, mid, hot] = colours;
+  const p = centred(aspect), radius = 0.4, r = p.length().div(radius);
+  // A soft glowing orb rather than a cut-out disc.
+  const disc = r.smoothstep(1.0, 0.93);
+  // Everything turns around the hole, not the disc centre: polar coordinates about the hole.
+  const hp = p.sub(holeAt), rh = hp.length(), ah = atan(hp.y, hp.x);
+  const ragged = mx_noise_float(vec3(cos(ah).mul(1.5), sin(ah).mul(1.5), time.mul(0.5))).mul(wobble);
+  const hd = rh.mul(ragged.add(1));
+  const hole = hd.smoothstep(holeRadius, holeRadius.add(0.018));
+  // Streaks circle the hole; the inside turns faster, and smear stretches them along the turn like motion blur.
+  const sa = ah.sub(spin.mul(rh.div(radius).mul(-0.6).add(1.4)));
+  const stretch = mix(float(2.2), float(0.5), smear);
+  const ring = vec2(cos(sa), sin(sa)).mul(stretch);
+  const streaks = mx_fractal_noise_float(vec3(ring, rh.mul(55).add(time.mul(0.05))), 3, 2, 0.5).mul(0.5).add(0.5);
+  const grooves = sin(rh.mul(900).add(streaks.mul(8))).mul(0.5).add(0.5);
+  const folds = float(1).sub(mx_noise_float(vec3(ring.mul(0.5), rh.mul(6).add(time.mul(0.1)))).abs()).pow(5);
+  // One side is lit: warm and hot there, falling to an iridescent rainbow (or deep red) on the shadow side.
+  const lit = cos(ah.sub(lightAngle)).mul(0.5).add(0.5);
+  const warm = mix(mix(deep, mid, streaks.smoothstep(0.25, 0.75)), hot, folds.mul(0.5).add(lit.pow(4).mul(0.25)).clamp(0, 1));
+  const film = palette(rh.mul(9).add(streaks.mul(0.5)).add(ah.div(Math.PI * 2)).add(time.mul(0.04))).mul(streaks.smoothstep(0.3, 0.7).mul(0.6).add(0.4));
+  const cool = mix(deep.mul(0.3), film.mul(0.65), rainbow);
+  const shade = lit.smoothstep(0.1, 0.9);
+  const body = mix(cool, warm, shade).mul(shade.mul(0.65).add(0.35)).mul(grooves.mul(0.15).add(0.85))
+    .add(hot.mul(folds.mul(lit).mul(0.2))).mul(r.smoothstep(0.75, 1).mul(0.3).add(0.85));
+  // A thin bright lip round the hole, strongest on the lit side, and a faint reflection inside the hole.
+  const lipLight = exp(hd.sub(holeRadius).sub(0.006).abs().mul(-110)).mul(lip).mul(lit.mul(0.7).add(0.3));
+  const reflection = exp(hd.sub(holeRadius.mul(0.6)).abs().mul(-70)).mul(hd.lessThan(holeRadius).select(float(1), float(0))).mul(inner).mul(cos(ah.sub(lightAngle).add(Math.PI)).mul(0.5).add(0.5));
+  // Soft halo outside, warm on the lit side and blue on the other, like the lens fringe in the clip.
+  const fringe = mix(vec3(0.15, 0.3, 1), mid, cos(atan(p.y, p.x).sub(lightAngle)).mul(0.5).add(0.5));
+  const halo = exp(r.sub(1).max(0).mul(-9)).mul(r.greaterThan(0.97).select(float(1), float(0))).mul(0.35);
   const dust = hash2(screenCoordinate.xy.div(3).floor()).greaterThan(0.9985).select(float(0.5), float(0));
-  const colour = body.mul(disc).mul(hole).mul(pulse.mul(0.3).add(0.85)).add(colours[0].mul(halo.mul(0.35))).add(vec3(1, 0.6, 0.4).mul(dust.mul(disc.oneMinus())));
-  material.fragmentNode = vec4(colour.mul(gain), 1);
+  const colour = body.mul(disc).mul(hole).add(mix(hot, vec3(1), 0.5).mul(lipLight.mul(disc))).add(film.mul(reflection.mul(0.6)))
+    .add(fringe.mul(halo)).mul(gain).add(vec3(1, 0.6, 0.4).mul(dust.mul(disc.oneMinus()).mul(0.4)));
+  material.fragmentNode = vec4(colour, 1);
 
-  const hits = createHits({ decay: 0.4, interval: 0.6, variants: CANDY_PALETTES.length, seed: 17 });
-  const random = seededRandom(41);
-  let swirlPhase = 0, causticPhase = 0, holeTargetX = 0.03, holeTargetY = -0.02;
+  const hits = createHits({ decay: 0.45, interval: 0.35, variants: CANDY_PALETTES.length, seed: 17 });
+  const random = seededRandom(41), states = variantSequence(CANDY_STATES.length, 23), targets = CANDY_PALETTES[0].colours.map((hex) => new THREE.Vector3(...linearRgb(hex)));
+  let state = 0, stateAge = 0, spinPhase = 0, light = 0.8, lightTarget = 0.8, drift = 0, level = 0.2, paletteAge = 0;
   return {
     scene, camera,
     update(frame) {
       aspect.value = frame.aspect; time.value = frame.time;
-      const step = settleStep(frame), still = frame.reducedMotion ? 0 : 1;
+      const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.9);
+      stateAge += step; paletteAge += step;
       if (hits.fired) {
-        CANDY_PALETTES[hits.variant].colours.forEach((hex, i) => colours[i].value.set(...linearRgb(hex)));
-        iridescent.value = CANDY_PALETTES[hits.variant].iridescent;
-        if (still) { holeTargetX = (random() - 0.5) * 0.16; holeTargetY = (random() - 0.5) * 0.12; }
+        // The light swings round on every hit; the look changes once it has held for 2.5 s.
+        lightTarget += (0.6 + random() * 1.2) * (random() < 0.5 ? -1 : 1);
+        if (stateAge > 2.5) { state = states.next(); stateAge = 0; }
+        if (paletteAge > 4) { CANDY_PALETTES[hits.variant].colours.forEach((hex, i) => targets[i].set(...linearRgb(hex))); paletteAge = 0; }
       }
-      swirlPhase += frame.delta * (0.2 + frame.audio.mid * 1.2) * still + hits.flash * 0.02 * still;
-      causticPhase += frame.delta * Math.PI * 2 * 0.15 * still;
-      swirl.value = swirlPhase; caustic.value = causticPhase;
-      holeAt.value.set(approach(holeAt.value.x, holeTargetX, step, 0.3), approach(holeAt.value.y, holeTargetY, step, 0.3));
-      holeRadius.value = approach(holeRadius.value, 0.12 + frame.response.bass * 0.05, step, 0.1);
-      rimWidth.value = 0.04 + frame.response.bass * 0.05;
-      pulse.value = hits.flash;
-      bloom.value = 0.25 + frame.response.loudness * 0.6;
-      gain.value = 0.5 + hits.flash * 0.15;
+      const look = CANDY_STATES[state], bass = frame.response.bass;
+      colours.forEach((c, i) => c.value.lerp(targets[i], 1 - Math.exp(-step / 0.8)));
+      holeRadius.value = approach(holeRadius.value, look.hole * (1 + bass * 0.35 - hits.level * 0.15), step, 0.35);
+      wobble.value = approach(wobble.value, look.wobble + frame.response.impact * 0.08, step, 0.3);
+      smear.value = approach(smear.value, Math.min(1, look.smear + frame.response.bounce * 0.4), step, 0.4);
+      rainbow.value = approach(rainbow.value, look.rainbow, step, 0.6);
+      if (!still) { spinPhase += frame.delta * (look.spin + frame.response.bounce * 0.8); drift += frame.delta * 0.15; }
+      spin.value = spinPhase;
+      holeAt.value.set(approach(holeAt.value.x, Math.cos(drift) * look.offset, step, 0.5), approach(holeAt.value.y, Math.sin(drift * 1.3) * look.offset, step, 0.5));
+      light = approach(light, lightTarget, step, 0.35);
+      lightAngle.value = light + (still ? 0 : spinPhase * 0.15);
+      lip.value = 0.35 + bass * 0.6 + hits.flash * 0.6;
+      inner.value = 0.15 + look.rainbow * 0.4;
+      // Between beats the orb sinks to a dim crescent; a hit lights it back up from the side the light swings to.
+      level = approach(level, hits.age > 2.5 ? 0.18 : 0.75 + frame.response.loudness * 0.3, step, hits.age > 2.5 ? 1.2 : 0.15);
+      gain.value = level * 0.6 * (1 + hits.flash * 0.25);
     },
     dispose: () => disposeScene(scene),
   };

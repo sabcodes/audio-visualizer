@@ -14,7 +14,7 @@ const tier = (budget: QualityBudget, high: number, balanced: number, low: number
 
 // ---------------------------------------------------------------- Pole Sparks
 
-const CABLES = 180, PULSES = 24;
+const CABLES = 180, PULSES = 64;
 
 /** One sagging cable between two points: a quadratic curve dipped by `sag` metres in the middle. */
 export function cableCurve(start: THREE.Vector3, end: THREE.Vector3, sag: number) {
@@ -29,7 +29,7 @@ export function cableCurve(start: THREE.Vector3, end: THREE.Vector3, sag: number
 export function createPoleSparksMode(): VisualMode {
   const { scene, camera } = sceneDefaults(0);
   (camera as THREE.PerspectiveCamera).fov = 55;
-  const time = uniform(0), hearts = uniform(0.3);
+  const time = uniform(0), hearts = uniform(0.3), hum = uniform(0);
   const finish = createCinematic({ grain: 0.035, halation: 0.25, vignette: 0.35, soften: 0.1, aberration: 0.0015, shadows: [0.01, 0.014, 0.018] });
   // Dusk sky: grey-teal, a little lighter toward the horizon.
   const skyMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
@@ -90,7 +90,9 @@ export function createPoleSparksMode(): VisualMode {
   const stripe = fract(along.mul(160)).lessThan(0.5).select(float(1), float(0));
   cableMaterial.colorNode = kind.lessThan(0.55).select(vec3(...linearRgb(0xb02a3a)), kind.lessThan(0.8).select(vec3(...linearRgb(0x6b7280)), mix(vec3(...linearRgb(0xb02a3a)), vec3(0.85, 0.8, 0.8), stripe)));
   // Toon materials honour emissiveNode at runtime (NodeMaterial reads it); the typings just don't declare it.
-  (cableMaterial as unknown as { emissiveNode: THREE.Node }).emissiveNode = mix(vec3(...linearRgb(0xff4fa0)), vec3(...linearRgb(0xffb0e0)), head).mul(glow.mul(3));
+  (cableMaterial as unknown as { emissiveNode: THREE.Node }).emissiveNode = mix(vec3(...linearRgb(0xff4fa0)), vec3(...linearRgb(0xffb0e0)), head).mul(glow.mul(3))
+    // The whole tangle hums with the bass: a faint pink charge rippling along every cable.
+    .add(vec3(...linearRgb(0xff4fa0)).mul(hum.mul(fract(along.mul(3).sub(time.mul(1.5)).add(kind.mul(5))).pow(4).mul(0.6).add(0.05))));
   scene.add(new THREE.Mesh(cables, cableMaterial), outline(cables, 0.018));
   scene.add(new THREE.HemisphereLight(0x9ab0bc, 0x3a2a30, 1.4));
   const sun = new THREE.DirectionalLight(0xffd8c8, 1.2); sun.position.set(-10, 20, 15); scene.add(sun);
@@ -99,7 +101,7 @@ export function createPoleSparksMode(): VisualMode {
   scene.add(sparks.object);
   const live = Array.from({ length: PULSES }, () => ({ cable: -1, at: 0, speed: 1 }));
   const hits = createHits({ decay: 0.3, interval: 0.25 });
-  let next = 0, randomSpark = 0;
+  let next = 0, randomSpark = 0, feed = 0, kick = 0;
   return {
     scene, camera,
     update(frame) {
@@ -107,18 +109,23 @@ export function createPoleSparksMode(): VisualMode {
       time.value = frame.time; finish.update(frame);
       const step = settleStep(frame);
       hits.update(frame, 0.3);
-      // A hit shoots one to three pulses along random cables, from the far end toward the pole.
-      if (hits.fired) for (let k = 0, n = 1 + Math.floor(random() * 3); k < n; k++) {
-        live[next] = { cable: Math.floor(random() * CABLES), at: 1, speed: 0.5 + random() * 0.5 }; next = (next + 1) % PULSES;
+      // A hit shoots pulses along random cables, from the far end toward the pole: more and faster the harder
+      // it hits. Sustained bass keeps feeding extra pulses between hits.
+      const launch = (speed: number) => { live[next] = { cable: Math.floor(random() * CABLES), at: 1, speed }; next = (next + 1) % PULSES; };
+      if (hits.fired) {
+        for (let k = 0, n = 2 + Math.floor(random() * 2 + frame.response.impact * 5); k < n; k++) launch(0.8 + random() * 0.8);
+        kick = 1;
       }
+      feed += step * frame.response.bass * 8;
+      while (feed > 1) { feed--; launch(0.6 + random() * 0.6); }
       pulseData.fill(0);
       for (const p of live) {
         if (p.cable < 0) continue;
-        p.at -= step * p.speed * (1 + frame.response.bass);
+        p.at -= step * p.speed * (1 + frame.response.bounce * 1.5);
         if (p.at <= 0) {
           // Arrival: a spark cluster at the junction.
           const anchor = anchors[p.cable];
-          for (let s = 0; s < 12; s++) sparks.emit(anchor.x, anchor.y, anchor.z + 0.3, (random() - 0.5) * 6, random() * 5, (random() - 0.5) * 6, 0.12 + random() * 0.15, 0.25, 2, 0.7, 1.4);
+          for (let s = 0, n = 10 + Math.round(frame.response.loudness * 14); s < n; s++) sparks.emit(anchor.x, anchor.y, anchor.z + 0.3, (random() - 0.5) * 7, random() * 6, (random() - 0.5) * 7, 0.12 + random() * 0.18, 0.3, 2, 0.7, 1.4);
           p.cable = -1; continue;
         }
         pulseData[p.cable * 4] = p.at; pulseData[p.cable * 4 + 1] = 1;
@@ -129,8 +136,11 @@ export function createPoleSparksMode(): VisualMode {
       while (randomSpark > 1) { randomSpark--; const a = anchors[Math.floor(random() * CABLES)]; sparks.emit(a.x, a.y, a.z, (random() - 0.5) * 3, random() * 3, (random() - 0.5) * 3, 0.15, 0.18, 2, 0.8, 1.4); }
       sparks.update(step);
       hearts.value = approach(hearts.value, frame.response.bass > 0.5 ? 1 : 0.15 + frame.response.bass * 0.5, step, 0.05);
-      const drift = frame.reducedMotion ? 0 : frame.time;
-      camera.position.set(5 + Math.sin(drift * 0.05) * 0.8, 1, 22);
+      hum.value = approach(hum.value, frame.response.bass * 0.8 + frame.response.loudness * 0.2, step, 0.08);
+      // The camera nudges in on each hit and settles back.
+      kick *= Math.exp(-step / 0.25);
+      const drift = frame.reducedMotion ? 0 : frame.time, push = frame.reducedMotion ? 0 : kick * 1.6 + frame.response.bass * 0.6;
+      camera.position.set(5 + Math.sin(drift * 0.05) * 0.8, 1, 22 - push);
       camera.lookAt(2, 13, 0);
     },
     filter: (input) => finish.filter(input),

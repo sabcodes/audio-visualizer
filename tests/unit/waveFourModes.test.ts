@@ -4,9 +4,10 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { modeDefinitions, waveFourModeDefinitions } from '../../src/modes/registry';
 import { createHits, variantSequence } from '../../src/modes/hitPulse';
-import { generateMaze, MAZE_WINDOWS } from '../../src/modes/natureModes';
+import { generateMaze, mazeCorridors, MAZE_WINDOWS } from '../../src/modes/natureModes';
+import { HAND_TIMING, handVisit } from '../../src/modes/moonPondMode';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
-import { blockOutline } from '../../src/modes/bilateralModes';
+import { BOWTIE_SHAPES, bowtieBlend } from '../../src/modes/bilateralModes';
 import { GROWTH_FORMS, growForm } from '../../src/modes/bloomTouchMode';
 import { WAREHOUSE_GRADES } from '../../src/modes/kitModes';
 import { STAIR_COLOURS, UNDERGROUND_ANGLES } from '../../src/modes/interiorModes';
@@ -87,6 +88,19 @@ describe('wave four helpers', () => {
     expect(open.reduce((sum, v) => sum + v, 0)).toBe(81 + 80);
     for (const [x, y] of MAZE_WINDOWS) { expect(x).toBeGreaterThan(0); expect(y).toBeLessThan(9); }
   });
+  it('finds open corridors in the maze for the inside-the-maze camera', () => {
+    const open = generateMaze(9), runs = mazeCorridors(open);
+    expect(runs.length).toBeGreaterThan(0);
+    for (const run of runs) for (let i = 0; i <= run.length; i++) expect(open[(run.y + run.dy * i) * 19 + run.x + run.dx * i]).toBe(1);
+  });
+  it('walks the Moon Pond hand through reach, touch, lift and away', () => {
+    const { descend, touch, lift } = HAND_TIMING;
+    expect(handVisit(0)).toEqual({ phase: 'descend', reach: 0 });
+    expect(handVisit(descend + 1)).toEqual({ phase: 'touch', reach: 1 });
+    expect(handVisit(descend + touch + lift / 2).phase).toBe('lift');
+    expect(handVisit(descend + touch + lift + 5)).toEqual({ phase: 'away', reach: 0 });
+    for (let t = 0; t < descend; t += 0.1) expect(handVisit(t + 0.1).reach).toBeGreaterThanOrEqual(handVisit(t).reach);
+  });
   it('keeps the orbs in frame and apart', () => {
     const orbs = ORB_RADII.map((r, i) => ({ x: i * 0.1, y: 0, vx: 3, vy: -2, r }));
     for (let i = 0; i < 600; i++) stepOrbs(orbs, 16 / 9, 1 / 60);
@@ -97,11 +111,14 @@ describe('wave four helpers', () => {
     for (let i = 0; i < 600; i++) stepBlobs(blobs, 16 / 9, 1 / 60, 0.5);
     for (const blob of blobs) expect(Number.isFinite(blob.x) && Math.abs(blob.x) <= 8 / 9).toBe(true);
   });
-  it('re-cuts the block outline from the spectrum', () => {
-    const f = frame(), quiet = blockOutline(f, seededRandom(1));
-    f.audio.spectrum.fill(255);
-    const loud = blockOutline(f, seededRandom(1));
-    expect(loud.reduce((a, b) => a + b)).toBeGreaterThan(quiet.reduce((a, b) => a + b));
+  it('blends two bowtie silhouettes per hit with weights that sum to one', () => {
+    const random = seededRandom(1);
+    for (let primary = 0; primary < BOWTIE_SHAPES; primary++) {
+      const weights = bowtieBlend(primary, frame(), random);
+      expect(weights.reduce((a, b) => a + b)).toBeCloseTo(1);
+      expect(weights[primary]).toBeGreaterThan(0.5);
+      expect(weights.filter((w) => w > 0).length).toBe(2);
+    }
   });
   it('grows each bloom form from the fingertip, with stems, leaves and several flower shapes', () => {
     for (const form of GROWTH_FORMS) {
