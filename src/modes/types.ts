@@ -28,6 +28,8 @@ export interface VisualMode {
   camera: Camera;
   update(frame: ModeFrame): void;
   dispose(): void;
+  /** Resolves once assets the mode loads asynchronously (models, textures) are in its scene; it never rejects. */
+  ready?: Promise<void>;
   /** Off-screen passes (simulation steps, feedback buffers) run after update and before the scene renders. */
   simulate?(renderer: WebGPURenderer): void;
   // Samples the scene's real intermediate pass before linear bloom/output.

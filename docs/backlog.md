@@ -1,22 +1,31 @@
 # Backlog
 
-## Waiting on 3D models
+## Figure modes (built, experimental)
 
-These figure and creature modes are on hold until the user supplies models. Procedural primitives would look toy-like for them; the Robot and Kraken modes already cover what primitives can do.
+The six figure modes are built from the supplied models (`Model assets/wave3_assets`, spec in [3d-asset-spec.md](3d-asset-spec.md)). They show in the scene menu as `<EXPERIMENTAL> …`:
 
-| Mode | Idea (from `research/2026-10-24-new-visualization-modes.md`) | What the model needs |
-|------|------|------|
-| Low-Poly Dragon | head bobs and neck S-waves on bass, wing flaps on beats, fire breath on loudness peaks, tail wave from the spectrum | neck/tail bone chain, wing bones; flap and idle clips |
-| Phoenix | wing downstroke on beats, body bob and tail fan on bass, flame colour from loudness, ember trail | wing and tail bones; flap and glide clips |
-| Swamp Giant | knee bend and squash on bass, alternating arm swings on mids, beat stomp with a ground ring, eye glow on loudness | humanoid rig; idle, stomp and swing clips |
-| Crowd + Mascot Blob | squishy mascot ringed by hundreds of tiny dancers; beat jumps ripple outward | one mascot (rigged or blend shapes) and one low-poly dancer for instancing |
-| Skeleton Band (bench) | skeleton musicians playing along to the bands | humanoid rig plus instrument props; playing clips |
-| Jelly Blob Soft Body (bench) | wobbly soft-body character squashing on bass | could stay procedural; revisit alongside the mascot |
+| Mode id | Menu label | Models |
+|---------|------------|--------|
+| `swampGiant` | Swamp Giant | `swamp_giant.glb` (v3), `swamp_props.glb` |
+| `dragon` | Low-Poly Dragon | `dragon.glb` (v2), `sky_spires.glb` |
+| `phoenix` | Phoenix | `phoenix.glb`, `sky_spires.glb` |
+| `crowdMascot` | Crowd + Mascot | `mascot_blob.glb`, `dancer.glb`, `dancer_b.glb`, `dancer_c.glb`, `crowd_props.glb` |
+| `skeletonBand` | Skeleton Band | `skeleton.glb`, `band_instruments.glb` |
+| `jellyBlob` | Jelly Blob | `jelly_blob.glb` (v2) |
 
-The full build sheets (sizes, joints, clips, materials and acceptance checks) are in [3d-asset-spec.md](3d-asset-spec.md).
+The used files are copied into `src/assets/` (models plus the ember, spark and smoke textures), so Vite bundles them.
 
-Model requirements, as agreed:
-- Format: `.glb`, rigged, with animation clips included.
-- License: CC0 (for example Quaternius, Kenney, Poly Pizza). Mixamo animations can't be redistributed in the repo.
-- Size: a few MB each, under about 20k triangles.
-- Delivery: drop the files in a folder and share its path.
+## Asset issues worked around in code
+
+These are faults in the delivered files. Each mode works around them, and a re-export that fixes them would let the code be simplified:
+
+- **Socket offsets (Giant, Dragon, Skeleton):** Blender exported bone-parented sockets at twice their true offset (for example, the Dragon's `socket_wingtip_L` sits at 14 m, not 7 m). The modes use the nearest bone instead: foot bones for stomp rings, the jaw for fire, hand bones for instruments. The Phoenix's sockets were already fixed in its file.
+- **One-wing flap clips (Dragon, Phoenix):** `flap`, `flap_loop`, `spread` and `spread_hold` swing one wing up and the other down. The modes don't play them; wing beats and the spread are driven by code instead (both wings rise with +X on the upper-wing bone).
+- **Giant `clap_overhead`:** the hands meet at the waist rather than overhead. It is still used as one of the three dance loops.
+- **Mascot eye vertex colours:** the eye meshes carry both `COLOR_0` and `COLOR_1`, the same exporter quirk the first dancer had. Three.js reads only `COLOR_0`, so if the pupils are in `COLOR_1` they won't show. The fix is to re-export with the colour wired to `COLOR_0`.
+
+## Possible follow-ups
+
+- Re-export the Giant, Dragon and Skeleton with corrected sockets, and the Dragon and Phoenix with mirrored flap clips.
+- Use the flame flipbook texture (`fx_textures/flame_strip.png`, not copied in) for a richer Dragon fire.
+- Drop the `<EXPERIMENTAL>` labels once the modes have had a listening pass.

@@ -61,6 +61,8 @@ export class VisualEngine {
   }
 
   get activeMode() { return this.activeId; }
+  /** The active mode's scene, for the DEV debug hook. */
+  get activeScene() { return this.active?.scene; }
   get output() { return { ...this.outputSettings }; }
   /** AA the active pipeline was actually built with (can lag `output` while a select is pending). */
   get pipelineAa() { return this.pipelineSettings?.aa; }
@@ -89,6 +91,8 @@ export class VisualEngine {
     const candidateSettings = { ...this.outputSettings };
     try {
       candidate = this.modes.create(mode, this.backend, this.budget);
+      // Models load before compiling, so a figure never pops in after the swap.
+      await candidate.ready;
       output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa });
       await this.renderer.compileAsync(candidate.scene, candidate.camera);
       if (this.compileDelayMs > 0) await new Promise((done) => setTimeout(done, this.compileDelayMs));
