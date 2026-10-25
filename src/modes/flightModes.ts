@@ -6,7 +6,7 @@ import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleSt
 import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, whenLoaded, type Figure } from './figures';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
-import phoenixUrl from '../assets/models/phoenix.glb?url';
+import phoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
 import spiresUrl from '../assets/models/sky_spires.glb?url';
 import emberUrl from '../assets/fx/ember.png?url';
 import smokeUrl from '../assets/fx/smoke.png?url';
@@ -189,17 +189,24 @@ export function createDragonMode(): VisualMode {
 
 // ---------------------------------------------------------------- Phoenix
 
-const FEATHERS = 9, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
+const FEATHERS = 6, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
+/** Where each wingtip sits relative to its hand bone's world position at rest (the Fenghuang build has no sockets). */
+const WINGTIP_REACH = 1.55;
 
 export function createPhoenixMode(): VisualMode {
   const sky = flightScene({ zenith: new THREE.Color(0.005, 0.008, 0.03), horizon: new THREE.Color(0.08, 0.03, 0.12), sun: new THREE.Vector3(0.4, 0.25, -1),
     sunColour: new THREE.Color(0.6, 0.65, 1), clouds: new THREE.Color(0.06, 0.05, 0.12), fog: 0x08060f });
   const { scene, camera } = sky;
   const moonLight = new THREE.DirectionalLight(0x8090ff, 0.8); moonLight.position.set(20, 20, -30);
-  const fill = new THREE.HemisphereLight(0x302040, 0x050208, 0.5);
+  // Light from below too (the glowing cloud sea), so the undersides of the sheet-like wings are never black.
+  const fill = new THREE.HemisphereLight(0x403060, 0x5a3048, 1.1);
   // The bird is its own light source: a warm point light at its heart that swells with the music.
   const heart = new THREE.PointLight(0xff6a1a, 3, 20, 1.8);
-  scene.add(moonLight, fill, heart);
+  // The Fenghuang's colours are mostly lit, not glowing (emerald scallops, indigo-to-gold primaries, orange
+  // tail), so it gets a warm key from the front and a cool rim from behind to read against the night sky.
+  const key = new THREE.DirectionalLight(0xffd0a0, 1.8); key.position.set(4, 12, 14);
+  const rim = new THREE.DirectionalLight(0x7a90ff, 1.4); rim.position.set(-3, 6, -16);
+  scene.add(moonLight, fill, heart, key, rim);
   const embers = createParticles(loadTexture(emberUrl), 1400, { drag: 0.6, gravity: 1.2 });
   const sparks = createParticles(loadTexture(sparkUrl), 300, { drag: 1.5 });
   scene.add(embers.object, sparks.object);
@@ -207,7 +214,7 @@ export function createPhoenixMode(): VisualMode {
   let phoenix: Figure | undefined, player: ClipPlayer | undefined;
   const overlay = new BoneOverlay(), tempo = new TempoTracker();
   let wings: { upper: THREE.Object3D; fore: THREE.Object3D; feathers: THREE.Object3D[] }[] = [], tails: THREE.Object3D[][] = [], crest: THREE.Object3D[] = [];
-  let tips: THREE.Object3D[] = [], chest: THREE.Object3D | undefined, plumage: THREE.MeshStandardMaterial[] = [];
+  let tips: THREE.Object3D[] = [], chest: THREE.Object3D | undefined, glowing: { material: THREE.MeshStandardMaterial; base: number }[] = [];
   const models = whenLoaded([phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
     phoenix = instantiate(phoenixModel);
     scene.add(phoenix.root);
@@ -220,13 +227,20 @@ export function createPhoenixMode(): VisualMode {
       feathers: Array.from({ length: FEATHERS }, (_, k) => overlay.track(phoenix!.node(`wing_${side}_feather_0${k + 1}`))),
     }));
     tails = STREAMERS.map((s) => [1, 2, 3, 4].map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
-    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}`)));
-    tips = [phoenix.node('socket_wingtip_L'), phoenix.node('socket_wingtip_R')];
-    chest = phoenix.node('socket_chest');
-    plumage = [...phoenix.materials].filter(([n]) => n.startsWith('emissive_')).map(([, m]) => m);
-    // Deepen the gold-to-red feather gradient and give the glow a fiery orange instead of the file's pale mid tone.
-    const feathers = phoenix.materials.get('emissive_plumage');
-    if (feathers) { feathers.color.setRGB(1, 0.55, 0.4); feathers.emissive.setRGB(1, 0.32, 0.06); }
+    // Each crest plume has two bones; the base one swings the whole plume (`crest_0k` alone names the mesh).
+    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}_01`)));
+    chest = phoenix.node('chest');
+    // No sockets in this build: hang a marker off each hand bone out at the wingtip, so it follows the flap.
+    phoenix.root.updateMatrixWorld(true);
+    tips = (['L', 'R'] as const).map((side, i) => {
+      const hand = phoenix!.node(`wing_${side}_hand`), marker = new THREE.Object3D();
+      hand.add(marker);
+      marker.position.copy(hand.worldToLocal(hand.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(i ? -WINGTIP_REACH : WINGTIP_REACH, 0.05, -0.3))));
+      return marker;
+    });
+    // Every glowing slot (plumage rims, cyan ocelli and tufts, crest beads, eyes) keeps its own strength from
+    // the file; the music scales them together rather than flattening them to one value.
+    glowing = [...phoenix.materials].filter(([n]) => n.startsWith('emissive_')).map(([, material]) => ({ material, base: material.emissiveIntensity }));
     sky.placeIslands(spires);
   });
 
@@ -279,21 +293,21 @@ export function createPhoenixMode(): VisualMode {
         phoenix.root.rotation.set(-spread * 0.25, 0, Math.sin(frame.time * 0.27) * 0.1 * motion);
         // Flame colour follows loudness: the bird burns brighter and the light at its heart swells.
         const burn = 0.25 + loudness * 0.7 + flare * 1.2 + bounce * 0.3;
-        for (const material of plumage) material.emissiveIntensity = burn;
+        for (const { material, base } of glowing) material.emissiveIntensity = base * (0.35 + burn * 0.65);
         chest.getWorldPosition(at); heart.position.copy(at); heart.intensity = 1.5 + burn * 5;
         // Ember trails stream from the wingtips and drift up behind; more of them when it is loud.
-        const count = Math.round((1 + loudness * 2 + flare * 8) * (frame.delta > 0 ? 1 : 0));
+        const count = Math.round((1 + loudness * 1.5 + flare * 6) * (frame.delta > 0 ? 1 : 0));
         for (const tip of tips) {
           tip.getWorldPosition(at);
           for (let k = 0; k < count; k++) {
             const hot = random();
             embers.emit(at.x + (random() - 0.5) * 0.4, at.y + (random() - 0.5) * 0.4, at.z, (random() - 0.5) * 1.5, random() * 1.5, -6 - random() * 6,
-              0.8 + random() * 1.2, 0.18 + random() * 0.3, 1.6, 0.6 + hot * 0.6, 0.12 + hot * 0.2);
+              0.6 + random() * 0.9, 0.08 + random() * 0.14, 1.6, 0.6 + hot * 0.6, 0.12 + hot * 0.2);
           }
         }
       }
       embers.update(step); sparks.update(step);
-      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, phoenix?.root.position.y ?? 0, -0.5), 11, 4.5);
+      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, phoenix?.root.position.y ?? 0, -0.5), 9.5, 6);
     },
     dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
   };

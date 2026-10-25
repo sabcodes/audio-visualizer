@@ -8,7 +8,7 @@ The six figure modes are built from the supplied models (`Model assets/wave3_ass
 |---------|------------|--------|
 | `swampGiant` | Swamp Giant | `swamp_giant.glb` (v3), `swamp_props.glb` |
 | `dragon` | Low-Poly Dragon | `dragon.glb` (v2), `sky_spires.glb` |
-| `phoenix` | Phoenix | `phoenix.glb`, `sky_spires.glb` |
+| `phoenix` | Phoenix | `phoenix_fenghuang.glb` (Fenghuang final build, 2026-10-25), `sky_spires.glb` |
 | `crowdMascot` | Crowd + Mascot | `mascot_blob.glb`, `dancer.glb`, `dancer_b.glb`, `dancer_c.glb`, `crowd_props.glb` |
 | `skeletonBand` | Skeleton Band | `skeleton.glb`, `band_instruments.glb` |
 | `jellyBlob` | Jelly Blob | `jelly_blob.glb` (v2) |
