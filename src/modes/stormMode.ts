@@ -43,17 +43,20 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const { scene, camera } = sceneDefaults(0);
   camera.position.set(0, 8, 70); camera.lookAt(0, 40, -100);
   const random = seededRandom(17);
-  const time = uniform(0), churn = uniform(0), flash = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
+  const time = uniform(0), churn = uniform(0), drift = uniform(new THREE.Vector2()), flash = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
   // Sky: near-black with a faint glow at the horizon, lifted by lightning.
   const skyMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false });
   const dir = normalize(positionLocal);
   skyMaterial.colorNode = mix(vec3(0.02, 0.025, 0.04), vec3(0.003, 0.004, 0.008), dir.y.smoothstep(0, 0.4)).mul(ambient).add(vec3(0.3, 0.35, 0.5).mul(flash.mul(0.08)));
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMaterial));
-  // Cloud deck seen from below: churning fractal noise, lit locally around the strike.
+  // Cloud deck seen from below: fractal noise that rolls past on the wind and churns, lit locally around the strike.
   const cloudMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false });
   // Rotated to face down, the plane's local y runs along world z.
   const p = positionLocal.xy;
-  const density = mx_fractal_noise_float(vec3(p.mul(0.006), time.mul(0.03).add(churn)), 5, 2, 0.55).mul(0.5).add(0.5).smoothstep(0.25, 0.85);
+  // Two decks at different heights move at different speeds, so the sky has depth as it passes overhead.
+  const high = mx_fractal_noise_float(vec3(p.add(drift.mul(0.55)).mul(0.004), churn.mul(0.6)), 4, 2, 0.5);
+  const low = mx_fractal_noise_float(vec3(p.add(drift).mul(0.006), time.mul(0.03).add(churn)), 5, 2, 0.55);
+  const density = low.mul(0.7).add(high.mul(0.4)).mul(0.5).add(0.5).smoothstep(0.25, 0.85);
   const lit = exp(p.sub(flashAt).length().div(140).pow(2).negate()).mul(flash);
   const cloudColour = vec3(0.025, 0.028, 0.04).mul(ambient).add(vec3(0.55, 0.6, 0.85).mul(lit.mul(density).mul(2.2)));
   cloudMaterial.colorNode = cloudColour.mul(density.mul(0.8).add(0.2));
@@ -107,7 +110,7 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const windowGeometry = new THREE.BufferGeometry(); windowGeometry.setAttribute('position', new THREE.BufferAttribute(windows, 3));
   scene.add(new THREE.Points(windowGeometry, new THREE.PointsNodeMaterial({ color: new THREE.Color(1.2, 0.8, 0.35) })));
   const strikeGate = beatGate(0.45), top = new THREE.Vector3(), bottom = new THREE.Vector3();
-  let next = 0, idle = 0, flashLevel = 0, shake = 0, rainPhase = 0;
+  let next = 0, idle = 0, flashLevel = 0, shake = 0, rainPhase = 0, gust = 0, pace = 0;
   const strike = (strength: number) => {
     const bolt = bolts[next]; next = (next + 1) % BOLTS;
     const x = (random() - 0.5) * 260, z = -70 - random() * 140;
@@ -123,7 +126,13 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
     update(frame) {
       resizeCamera(camera, frame.aspect);
       time.value = frame.time; idle += frame.delta;
-      churn.value += frame.delta * (0.01 + frame.audio.mid * 0.08);
+      // Bounce drives the storm's pace: louder, punchier music blows the clouds faster and drives the rain harder.
+      pace = approach(pace, frame.response.bounce, settleStep(frame), 0.6);
+      gust = approach(gust, frame.response.bass, settleStep(frame), 0.35);
+      churn.value += frame.delta * (0.02 + frame.audio.mid * 0.08 + pace * 0.12);
+      // The deck rolls left to right and toward the viewer (local y is world z after the plane's rotation).
+      const windSpeed = 6 + pace * 30 + gust * 14;
+      drift.value.x -= frame.delta * windSpeed; drift.value.y -= frame.delta * windSpeed * 0.35;
       if (strikeGate(frame.time, frame.audio.onset && frame.response.impact > 0.35)) { strike(0.7 + frame.response.impact * 0.6); idle = 0; }
       else if (idle > 3.5) { strike(0.35); idle = 0; }
       const step = settleStep(frame), gentle = frame.reducedFlash ? 0.15 : 1;
@@ -139,12 +148,12 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
       flashLevel = Math.max(0, flashLevel - step * 3);
       flash.value = flashLevel * gentle;
       ambient.value = approach(ambient.value, 1 + frame.response.loudness * 0.6, step, 0.4);
-      rainAmount.value = approach(rainAmount.value, 0.3 + frame.audio.highs * 0.7, step, 0.5);
-      rainPhase += frame.delta * 70; fall.value = rainPhase;
-      wind.value = 0.25 + frame.response.bass * 0.25;
-      // Thunder: the bass rumbles the camera a little (never with reduced motion, where delta is zero).
-      shake = approach(shake, frame.response.bass, frame.delta, 0.1);
-      const jitter = frame.reducedMotion ? 0 : shake * 0.25;
+      rainAmount.value = approach(rainAmount.value, 0.3 + frame.audio.highs * 0.4 + pace * 0.4, step, 0.5);
+      rainPhase += frame.delta * (50 + pace * 60 + frame.response.loudness * 20); fall.value = rainPhase;
+      wind.value = 0.2 + gust * 0.45;
+      // Thunder: kicks and bass rumble the camera (never with reduced motion, where delta is zero).
+      shake = approach(shake, Math.max(frame.response.bass * 0.6, frame.response.impact), frame.delta, 0.1);
+      const jitter = frame.reducedMotion ? 0 : shake * 0.45;
       camera.position.set(Math.sin(frame.time * 31) * jitter, 8 + Math.sin(frame.time * 27) * jitter, 70);
       camera.lookAt(0, 40, -100);
     },
