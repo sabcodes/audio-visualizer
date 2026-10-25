@@ -3,7 +3,8 @@ import { dot, mix, mx_fractal_noise_float, normalize, positionLocal, positionWor
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import type { ModeFrame, VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleStep, bandEnergies } from './shared';
-import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, whenLoaded, type Figure } from './figures';
+import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, setMorph, whenLoaded, type Figure } from './figures';
+import { createHits } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
 import phoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
@@ -215,6 +216,7 @@ export function createPhoenixMode(): VisualMode {
   const overlay = new BoneOverlay(), tempo = new TempoTracker();
   let wings: { upper: THREE.Object3D; fore: THREE.Object3D; feathers: THREE.Object3D[] }[] = [], tails: THREE.Object3D[][] = [], crest: THREE.Object3D[] = [];
   let tips: THREE.Object3D[] = [], chest: THREE.Object3D | undefined, glowing: { material: THREE.MeshStandardMaterial; base: number }[] = [];
+  let neck: THREE.Object3D[] = [], squash: { mesh: THREE.Mesh; index: number }[] = [], stretch: { mesh: THREE.Mesh; index: number }[] = [];
   const models = whenLoaded([phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
     phoenix = instantiate(phoenixModel);
     scene.add(phoenix.root);
@@ -230,6 +232,9 @@ export function createPhoenixMode(): VisualMode {
     // Each crest plume has two bones; the base one swings the whole plume (`crest_0k` alone names the mesh).
     crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}_01`)));
     chest = phoenix.node('chest');
+    neck = [overlay.track(phoenix.node('neck_01')), overlay.track(phoenix.node('neck_02'))];
+    // The torso's own pulse shapes: squash on a kick, stretch on the rebound.
+    squash = phoenix.morphs('pulse_squash'); stretch = phoenix.morphs('pulse_stretch');
     // No sockets in this build: hang a marker off each hand bone out at the wingtip, so it follows the flap.
     phoenix.root.updateMatrixWorld(true);
     tips = (['L', 'R'] as const).map((side, i) => {
@@ -245,7 +250,8 @@ export function createPhoenixMode(): VisualMode {
   });
 
   const dropGate = beatGate(6), random = seededRandom(9), at = new THREE.Vector3(), centre = new THREE.Vector3();
-  let stroke = 1, spread = 0, spreadFor = 0, fan = 0, flare = 0, wave = 0;
+  const hits = createHits({ decay: 0.35, interval: 0.22 });
+  let stroke = 1, strokePower = 0, spread = 0, spreadFor = 0, fan = 0, flare = 0, wave = 0, kick = 0, rebound = 0, bank = 0, bankTarget = 0, push = 0;
   return {
     scene, camera,
     ready: models.ready,
@@ -254,60 +260,80 @@ export function createPhoenixMode(): VisualMode {
       sky.time.value = frame.time;
       const step = settleStep(frame), { bounce, bass, loudness, impact } = frame.response, motion = frame.reducedMotion ? 0 : 1;
       const scale = tempo.update(frame.time, frame.audio.onset, frame.delta);
-      sky.fly(frame.delta * (10 + bounce * 22));
+      hits.update(frame, 0.2);
+      // Everything below scales with the sensitivity-scaled response (the bounce slider): silence glides,
+      // quiet music beats gently, and loud music with the slider up beats hard and fast.
+      sky.fly(frame.delta * (8 + bounce * 34));
       sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
-      if (frame.audio.onset && (stroke >= 1 || stroke > 0.6)) stroke = 0;
-      stroke = Math.min(1, stroke + frame.delta * 1.5 * Math.max(1, scale));
+      // A hit starts a wing beat whose depth comes from how hard it hit; while the music keeps going the bird
+      // keeps beating at the tempo on its own, so it never stalls between detected beats.
+      if (hits.fired) { stroke = 0; strokePower = Math.min(1, 0.35 + impact * 0.5 + bounce * 0.4); kick = 1; bankTarget = (random() - 0.5) * 0.5 * bounce; }
+      else if (stroke >= 1 && bounce > 0.12) { stroke = 0; strokePower = Math.min(1, bounce * 0.8); }
+      stroke = Math.min(1, stroke + frame.delta * (1.3 + bounce * 1.6) * Math.max(1, scale));
       // A drop (a hard hit while loud) throws the wings wide and holds them there for a moment, bursting sparks.
-      if (frame.audio.onset && impact > 0.8 && loudness > 0.6 && dropGate(frame.time, true)) {
-        spreadFor = 1.6; flare = 1;
+      if (hits.fired && impact > 0.7 && loudness > 0.5 && dropGate(frame.time, true)) {
+        spreadFor = 1.4; flare = 1;
         if (chest) {
           chest.getWorldPosition(at);
-          for (let k = 0; k < 120; k++) {
-            const a = random() * Math.PI * 2, b = random() * Math.PI - Math.PI / 2, speed = 8 + random() * 14;
-            sparks.emit(at.x, at.y, at.z, Math.cos(a) * Math.cos(b) * speed, Math.sin(b) * speed, Math.sin(a) * Math.cos(b) * speed, 0.8 + random() * 0.8, 0.6 + random() * 0.8, 2.5, 1.6, 0.6);
+          // Small and fast, so the burst rings the bird instead of hiding it.
+          for (let k = 0; k < 80; k++) {
+            const a = random() * Math.PI * 2, b = random() * Math.PI - Math.PI / 2, speed = 14 + random() * 14;
+            sparks.emit(at.x, at.y, at.z, Math.cos(a) * Math.cos(b) * speed, Math.sin(b) * speed, Math.sin(a) * Math.cos(b) * speed, 0.5 + random() * 0.5, 0.15 + random() * 0.25, 2.5, 1.6, 0.6);
           }
         }
       }
       spreadFor = Math.max(0, spreadFor - frame.delta);
       spread = approach(spread, spreadFor > 0 ? 1 : 0, step, 0.15) * motion;
       flare = Math.max(0, flare - step * 1.5);
-      fan = approach(fan, bass, step, 0.1);
+      fan = approach(fan, bass, step, 0.08);
+      // Kick then rebound: the body squashes on the hit and stretches as it recovers.
+      kick *= Math.exp(-step / 0.12); rebound = approach(rebound, kick > 0.3 ? 0 : (1 - kick) * kick * 4, step, 0.08);
+      bankTarget *= Math.exp(-step / 1.2); bank = approach(bank, bankTarget, step, 0.25);
+      push = approach(push, hits.level * 1.6 + bass * 0.8, step, 0.12);
       if (phoenix && player && chest) {
         overlay.reset();
         player.update(frame.delta, scale);
-        // Wing beat per beat (shallower while spread), with each primary feather a little behind the one before,
-        // so the stroke ripples out to the tips.
-        const power = (0.55 + bounce * 0.6) * motion * (1 - spread * 0.7);
-        for (const wing of wings) {
+        // Wing beat depth: a little from the beat itself, mostly from the response, so the slider shows.
+        const power = Math.min(1.35, 0.12 + bounce * 0.75 + strokePower * 0.55) * motion * (1 - spread * 0.7);
+        // Primaries fan open in the wing plane as the music gets louder.
+        const open = (loudness * 0.08 + spread * 0.06) * motion;
+        wings.forEach((wing, side) => {
           overlay.turn(wing.upper, wingStroke(stroke) * power + spread * 0.35);
-          overlay.turn(wing.fore, wingStroke(Math.max(0, stroke - 0.06)) * power * 0.5);
-          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.35, 0, 0));
-        }
-        // Tail streamers fan out on the bass and ripple; the crest flicks with the beat.
-        wave += frame.delta * (2 + bounce * 2) * motion;
-        tails.forEach((chain, s) => chain.forEach((bone, j) => overlay.turn(bone, Math.sin(wave * 1.3 - j * 0.8 - s * 0.4) * 0.05 * motion, 0,
-          j === 0 ? (s - 2) * (fan * 0.12 + spread * 0.15) * motion : Math.sin(wave - j * 0.7 + s) * 0.03 * motion)));
-        crest.forEach((bone, k) => overlay.turn(bone, -wingStroke(Math.max(0, stroke - 0.05 * k)) * 0.15 * motion));
-        phoenix.root.position.set(Math.sin(frame.time * 0.27) * 1.5 * motion, Math.sin(frame.time * 0.6) * 0.8 * motion - wingStroke(stroke) * power * 0.5 + spread * 0.8, 0);
-        phoenix.root.rotation.set(-spread * 0.25, 0, Math.sin(frame.time * 0.27) * 0.1 * motion);
-        // Flame colour follows loudness: the bird burns brighter and the light at its heart swells.
-        const burn = 0.25 + loudness * 0.7 + flare * 1.2 + bounce * 0.3;
-        for (const { material, base } of glowing) material.emissiveIntensity = base * (0.35 + burn * 0.65);
-        chest.getWorldPosition(at); heart.position.copy(at); heart.intensity = 1.5 + burn * 5;
-        // Ember trails stream from the wingtips and drift up behind; more of them when it is loud.
-        const count = Math.round((1 + loudness * 1.5 + flare * 6) * (frame.delta > 0 ? 1 : 0));
+          overlay.turn(wing.fore, wingStroke(Math.max(0, stroke - 0.06)) * power * 0.6);
+          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - 2.5) * open * (side ? -1 : 1), 0));
+        });
+        // The long neck nods into each hit and the head comes back up; the crest flicks after it.
+        const nod = (kick * 0.22 - rebound * 0.08) * motion;
+        neck.forEach((bone, k) => overlay.turn(bone, nod * (k ? 0.6 : 1)));
+        crest.forEach((bone, k) => overlay.turn(bone, (-wingStroke(Math.max(0, stroke - 0.05 * k)) * 0.25 - kick * 0.3) * motion));
+        // Tail streamers fan out on the bass and lash on hits, the lash running down each streamer.
+        wave += frame.delta * (1.5 + bounce * 4) * motion;
+        const lash = 0.04 + loudness * 0.05 + hits.level * 0.12;
+        tails.forEach((chain, s) => chain.forEach((bone, j) => overlay.turn(bone, Math.sin(wave * 1.3 - j * 0.8 - s * 0.4) * lash * motion, 0,
+          j === 0 ? (s - 2) * (fan * 0.28 + spread * 0.15) * motion : Math.sin(wave - j * 0.7 + s) * lash * 0.6 * motion)));
+        setMorph(squash, Math.min(1, kick * (0.4 + bass * 0.8)) * motion);
+        setMorph(stretch, Math.min(1, rebound * (0.5 + bounce * 0.6)) * motion);
+        const sway = Math.sin(frame.time * 0.27) * motion;
+        phoenix.root.position.set(sway * 1.5, (Math.sin(frame.time * 0.6) * 0.8 - wingStroke(stroke) * power * 0.7 - kick * 0.25 * bounce + spread * 0.8) * motion, 0);
+        phoenix.root.rotation.set((-spread * 0.25 + kick * 0.08) * motion, 0, (sway * 0.1 + bank + Math.sin(wave * 0.5) * bass * 0.12) * motion);
+        // Glow follows the music: every slot brightens with loudness and flashes on hits; the heart light swells.
+        const burn = 0.2 + loudness * 0.6 + bounce * 0.5 + hits.flash * 0.9 + flare * 1.2;
+        for (const { material, base } of glowing) material.emissiveIntensity = base * (0.3 + burn * 0.7);
+        chest.getWorldPosition(at); heart.position.copy(at); heart.intensity = 1 + burn * 6;
+        // Ember trails from the wingtips: denser when loud, and a puff thrown off on every hit.
+        const count = Math.round((0.5 + loudness * 2 + bounce * 2 + flare * 6 + (hits.fired ? 10 : 0)) * (frame.delta > 0 ? 1 : 0));
         for (const tip of tips) {
           tip.getWorldPosition(at);
           for (let k = 0; k < count; k++) {
-            const hot = random();
-            embers.emit(at.x + (random() - 0.5) * 0.4, at.y + (random() - 0.5) * 0.4, at.z, (random() - 0.5) * 1.5, random() * 1.5, -6 - random() * 6,
+            const hot = random(), burst = hits.fired ? 3 : 1;
+            embers.emit(at.x + (random() - 0.5) * 0.4, at.y + (random() - 0.5) * 0.4, at.z, (random() - 0.5) * 1.5 * burst, random() * 1.5 * burst, -6 - random() * 6,
               0.6 + random() * 0.9, 0.08 + random() * 0.14, 1.6, 0.6 + hot * 0.6, 0.12 + hot * 0.2);
           }
         }
       }
       embers.update(step); sparks.update(step);
-      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, phoenix?.root.position.y ?? 0, -0.5), 9.5, 6);
+      // The camera pushes in on hits and the bass, and settles back out.
+      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, phoenix?.root.position.y ?? 0, -0.5), 9.5 - push * motion, 6 - push * 0.4 * motion);
     },
     dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
   };
