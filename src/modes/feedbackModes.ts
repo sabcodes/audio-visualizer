@@ -218,8 +218,10 @@ export function createCurlFlowMode(budget: QualityBudget = presetBudget('balance
   const step = sim.pass((read) => vec4(read(uv()).xyz.mul(decay), 1));
   const view = sim.view((read) => {
     const colour = read(uv()).xyz;
-    // Soft-clip and darken the mids so dense streams stay coloured instead of piling up to white.
-    return vec4(pow(colour.div(colour.add(1)), vec3(1.4)).mul(1.1), 1);
+    // Soft-clip so dense streams stay coloured instead of piling up to white, but let the hottest cores run past
+    // the bloom threshold (0.8) so the Bloom slider has light to work with.
+    const body = pow(colour.div(colour.add(1)), vec3(1.15)), hot = colour.sub(0.25).max(0).mul(2.6);
+    return vec4(body.add(hot), 1);
   });
   mesh.material = view();
   const vortexGate = beatGate(0.5), velocity = new Float32Array(2), bands = new Float32Array(FLOW_BANDS), tint = new THREE.Color();
@@ -250,10 +252,10 @@ export function createCurlFlowMode(budget: QualityBudget = presetBudget('balance
       vortex = Math.max(0, vortex - settleStep(frame) * 1.2); kick = Math.max(0, kick - settleStep(frame) * 2.5);
       // Streams are dim at rest and swell with the bounce, flaring briefly on each beat.
       // The reduced-motion still is traced once with few passes, so it needs a stronger, steady tint to show.
-      const swell = frame.reducedMotion ? 9 : 0.6 + frame.response.bounce * 1.1 + kick * 0.6;
+      const swell = frame.reducedMotion ? 6 : 0.6 + frame.response.bounce * 1.1 + kick * 0.6;
       for (let i = 0; i < count; i++) {
         const band = i % FLOW_BANDS;
-        tint.setHSL(wrap(frame.hue + band / FLOW_BANDS * 0.35, 0, 1), 0.9, 0.55).multiplyScalar((0.01 + bands[band] * 0.08) * swell);
+        tint.setHSL(wrap(frame.hue + band / FLOW_BANDS * 0.35, 0, 1), 0.9, 0.55).multiplyScalar((0.014 + bands[band] * 0.1) * swell);
         colours.set([tint.r, tint.g, tint.b, tint.r, tint.g, tint.b], i * 6);
       }
       colourAttribute.needsUpdate = true;
