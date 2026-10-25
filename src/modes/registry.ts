@@ -8,11 +8,16 @@ import { createSpatialMode } from './spatialModes';
 import { createErrorMode } from './errorMode';
 import { createFullscreenMode } from './fullscreenModes';
 import { createGlitchMode, createKaleidoscopeMode } from './filterModes';
-import { createEpicycleMode, createPendulumMode, createPolyhedraMode } from './geometricModes';
-import { createInkMarbleMode, createVoronoiMode } from './shaderModes';
+import { createChladniMode, createEpicycleMode, createPendulumMode, createPolyhedraMode, createTorusKnotMode } from './geometricModes';
+import { createEventHorizonMode, createInkMarbleMode, createVoronoiMode } from './shaderModes';
 import { createAuroraMode, createGalaxyMode, createRidgelineMode, createSynthwaveMode } from './landscapeModes';
 import { createRobotMode } from './robotMode';
 import { createNeonCityMode } from './neonCityMode';
+import { createKrakenMode } from './creatureModes';
+import { createFerrofluidMode, createMetaballMode } from './physicsModes';
+import { createAbyssMode, createOceanMode } from './seaModes';
+import { createDiscoMode, createFireworksMode } from './nightModes';
+import { createArenaMode } from './arenaMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -50,12 +55,25 @@ export const waveOneModeDefinitions: readonly ModeDefinition[] = [
   definition('robot', 'Robot Dancer', createRobotMode),
   definition('neonCity', 'Neon Megacity', (budget) => createNeonCityMode(budget)),
 ];
+export const waveTwoModeDefinitions: readonly ModeDefinition[] = [
+  definition('kraken', 'Kraken', createKrakenMode),
+  definition('torusKnot', 'Torus Knot Morph', createTorusKnotMode),
+  definition('chladni', 'Chladni Plate', (budget) => createChladniMode(budget)),
+  definition('metaballs', 'Liquid Metaballs', (budget) => createMetaballMode(budget)),
+  definition('ocean', 'Audio Ocean', createOceanMode),
+  definition('eventHorizon', 'Event Horizon (FS)', createEventHorizonMode, 'fullscreen'),
+  definition('fireworks', 'Beat Fireworks Night', (budget) => createFireworksMode(budget)),
+  definition('abyss', 'Abyss (Jellyfish)', (budget) => createAbyssMode(budget)),
+  definition('disco', 'Mirror-Ball Disco', createDiscoMode),
+  definition('ferrofluid', 'Ferrofluid Spike Pool', createFerrofluidMode),
+  definition('arena', 'Arena Light Panels', (budget) => createArenaMode(budget)),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();
