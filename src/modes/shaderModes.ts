@@ -6,11 +6,11 @@ import { disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approa
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
-const hash2 = (p: V2) => fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453));
+export const hash2 = (p: V2) => fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453));
 /** Cosine palette: hue in turns, matching the existing fullscreen modes' RGB phase offsets. */
-const palette = (hue: F) => vec3(cos(hue.mul(Math.PI * 2)), cos(hue.mul(Math.PI * 2).sub(2.094)), cos(hue.mul(Math.PI * 2).add(2.094))).mul(0.5).add(0.5);
+export const palette = (hue: F) => vec3(cos(hue.mul(Math.PI * 2)), cos(hue.mul(Math.PI * 2).sub(2.094)), cos(hue.mul(Math.PI * 2).add(2.094))).mul(0.5).add(0.5);
 
-function fullscreen() {
+export function fullscreen() {
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2);
   camera.position.z = 1;

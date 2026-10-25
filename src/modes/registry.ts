@@ -27,6 +27,12 @@ import { createDragonMode, createPhoenixMode } from './flightModes';
 import { createCrowdMode } from './crowdMode';
 import { createBandMode } from './bandMode';
 import { createJellyMode } from './jellyMode';
+import { createBlockBowtieMode, createPrismBowtieMode } from './bilateralModes';
+import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, createHairVortexMode, createMirrorPlasmaMode } from './plasmaModes';
+import { createBlackMazeMode, createStarfallCanopyMode, createWindfieldMode } from './natureModes';
+import { createBeaconRingsMode, createChromeStreaksMode, createSignalNightMode, createSilkThreadsMode } from './nightSceneModes';
+import { createLightLeakFilmMode } from './filmMode';
+import { createCandyOrbMode, createLiquidChromeMode, createMoonPondMode, createPongOrbsMode } from './lensModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -98,12 +104,36 @@ export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('skeletonBand', '<EXPERIMENTAL> Skeleton Band', createBandMode),
   definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
 ];
+/** Wave 4 entries are labelled `<experimental-wave4> …` in the menu, at the user's request. */
+const waveFour = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene') => definition(id, `<experimental-wave4> ${label}`, create, output);
+/** Wave 4 (docs/superpowers/specs/2026-10-24-wave-four-modes-design.md): beat-gated modes from reference clips; 4b ones use the supplied kits. */
+export const waveFourModeDefinitions: readonly ModeDefinition[] = [
+  waveFour('prismBowtie', 'Prism Bowtie (FS)', createPrismBowtieMode, 'fullscreen'),
+  waveFour('blockBowtie', 'Block Bowtie (FS)', createBlockBowtieMode, 'fullscreen'),
+  waveFour('pongOrbs', 'Pong Orbs (FS)', createPongOrbsMode, 'fullscreen'),
+  waveFour('candyOrb', 'Candy Orb (FS)', createCandyOrbMode, 'fullscreen'),
+  waveFour('moonPond', 'Moon Pond (FS)', createMoonPondMode, 'fullscreen'),
+  waveFour('liquidChrome', 'Liquid Chrome (FS)', createLiquidChromeMode, 'fullscreen'),
+  waveFour('mirrorPlasma', 'Mirror Plasma (FS)', createMirrorPlasmaMode, 'fullscreen'),
+  waveFour('grainSmoke', 'Grain Smoke (FS)', createGrainSmokeMode, 'fullscreen'),
+  waveFour('anamorphicFlare', 'Anamorphic Flare (FS)', createAnamorphicFlareMode, 'fullscreen'),
+  waveFour('hairVortex', 'Hair Vortex (FS)', createHairVortexMode, 'fullscreen'),
+  waveFour('windfield', 'Windfield (FS)', createWindfieldMode, 'fullscreen'),
+  waveFour('blackMaze', 'Black Maze (FS)', createBlackMazeMode, 'fullscreen'),
+  waveFour('starfallCanopy', 'Starfall Canopy', (budget) => createStarfallCanopyMode(budget)),
+  waveFour('silkThreads', 'Silk Threads', (budget) => createSilkThreadsMode(budget)),
+  waveFour('chromeStreaks', 'Chrome Streaks', (budget) => createChromeStreaksMode(budget)),
+  waveFour('signalNight', 'Signal Night', createSignalNightMode),
+  waveFour('beaconRings', 'Beacon Rings', (budget) => createBeaconRingsMode(budget)),
+  waveFour('lightLeakFilm', 'Light Leak Film', createLightLeakFilmMode),
+  waveFour('emberSmoke', 'Ember Smoke (FS)', (budget) => createEmberSmokeMode(budget), 'fullscreen'),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...waveFourModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();
