@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { float, mx_fractal_noise_float, mx_noise_float, positionWorld, uniform, vec3 } from 'three/tsl';
+import { float, mx_fractal_noise_float, mx_noise_float, positionLocal, positionWorld, uniform, uniformArray, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
 import type { QualityBudget } from '../rendering/quality';
 import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep } from './shared';
@@ -96,13 +96,26 @@ export function createRedStairwellMode(): VisualMode {
 
 // ---------------------------------------------------------------- Underground
 
-/** Camera set-ups the hits cut between: position, look target, roll. */
+/** Camera set-ups the hits cut between: position, look target, roll, and a slow drift (m/s) while the shot holds. */
 export const UNDERGROUND_ANGLES = [
-  { at: [3, 3, 4.5], look: [-10, 3, 0], roll: 0 },
-  { at: [-2, 3.2, 5], look: [12, 3, 0], roll: Math.PI / 2 },
-  { at: [8, 3, 3], look: [-8, 2.5, -1], roll: Math.PI },
-  { at: [16, 6, 6], look: [16, 3, -2], roll: -Math.PI / 2 },
+  { at: [3, 3, 4.5], look: [-10, 3, 0], roll: 0, drift: [-0.4, 0, 0] },
+  { at: [-2, 3.2, 5], look: [12, 3, 0], roll: Math.PI / 2, drift: [0.3, 0, 0] },
+  { at: [8, 3, 3], look: [-8, 2.5, -1], roll: Math.PI, drift: [0, 0.2, 0] },
+  { at: [16, 6, 6], look: [16, 3, -2], roll: -Math.PI / 2, drift: [0, 0, -0.5] },
+  // Straight through a hatch at the passing carriage.
+  { at: [0, 3, 3.2], look: [0, 2.6, -4], roll: 0, drift: [0, 0, -0.6] },
+  // Low along the wall foot, looking up the hatches.
+  { at: [-12, -0.3, 1.2], look: [6, 4.5, 0], roll: 0.25, drift: [0.6, 0, 0] },
+  // Behind the wall, beside the rails, as the tram comes at the camera.
+  { at: [10, 1.2, -6.4], look: [-20, 1.6, -4], roll: 0, drift: [0, 0, 0] },
+  // Top-down on the hatch rings.
+  { at: [8, 12, 1.5], look: [8, 3, 0], roll: Math.PI / 4, drift: [0.5, 0, 0] },
+  // Tight on a ring's bolts, tilted.
+  { at: [-6.5, 5.2, 1.6], look: [-8, 3, 0], roll: -0.5, drift: [0, -0.2, 0] },
 ] as const;
+/** Neon colours the tram windows flash in. */
+export const WINDOW_NEON = [0x3ee0ff, 0xff2ab0, 0x7cff3a, 0xffa830, 0x9a5cff, 0xff3a2a] as const;
+const WINDOWS = 14;
 const HATCH = 8;
 
 export function createUndergroundMode(budget: QualityBudget): VisualMode {
@@ -133,7 +146,16 @@ export function createUndergroundMode(budget: QualityBudget): VisualMode {
   // Sparks spray from the hatch rim on hits.
   const sparks = createParticles(loadTexture(sparkUrl), sparkCount, { gravity: 9, drag: 0.6 });
   scene.add(sparks.object);
-  const windows: THREE.MeshStandardMaterial[] = [];
+  // Tram windows: each of the 14 (six a side, front and rear) flashes on its own, in its own neon colour.
+  const panes = Array.from({ length: WINDOWS }, () => new THREE.Vector4(0, 0, 0, 0));
+  const paneData = uniformArray(panes, 'vec4');
+  const windowMaterial = new THREE.MeshBasicNodeMaterial();
+  const wx = positionLocal.x, side = positionLocal.z.greaterThan(0).select(float(0), float(6));
+  const paneIndex = wx.abs().greaterThan(5.95).select(wx.greaterThan(0).select(float(12), float(13)), wx.add(6).div(2).floor().clamp(0, 5).add(side));
+  const pane = paneData.element(paneIndex.toInt()) as unknown as THREE.Node<'vec4'>;
+  windowMaterial.colorNode = vec3(0.35, 0.22, 0.1).add(pane.xyz.mul(pane.w.mul(6)));
+  const spill = [-3, 3].map((x) => { const light = new THREE.PointLight(0xffffff, 0, 12, 1.6); light.position.set(x, 1.8, 1.6); return light; });
+  const fade = new Float32Array(WINDOWS), pendingFlash = new Float32Array(WINDOWS).fill(-1);
   let tram: THREE.Object3D | undefined;
   const model = whenLoaded([kitAUrl], ([gltf]) => {
     const kit = kitPieces(gltf);
@@ -142,8 +164,8 @@ export function createUndergroundMode(budget: QualityBudget): VisualMode {
       for (let r = -2; r < 2; r++) scene.add(place(kit.piece('rail_track'), k * HATCH + r * 4 + 2, -0.5, -4));
     }
     tram = kit.piece('tram_carriage'); tram.position.set(0, -0.3, -4); scene.add(tram);
-    const glass = kit.materials.get('emissive_window');
-    if (glass) { glass.emissive.setRGB(...linearRgb(0xffb060)); windows.push(glass); }
+    tram.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.isMesh && (mesh.material as THREE.Material).name === 'emissive_window') mesh.material = windowMaterial; });
+    tram.add(...spill);
     scene.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.isMesh && mesh !== wall) mesh.castShadow = true; });
   });
   const shadows = shadowSwitch();
@@ -160,6 +182,11 @@ export function createUndergroundMode(budget: QualityBudget): VisualMode {
       const step = settleStep(frame), bass = frame.response.bass;
       hits.update(frame, 0.05);
       if (hits.fired) {
+        // One to three windows flash per hit, each in a new neon colour and a few frames apart, never all at once.
+        for (let k = 0, n = 1 + Math.floor(random() * 3); k < n; k++) {
+          const i = Math.floor(random() * WINDOWS), [r, g, b] = linearRgb(WINDOW_NEON[Math.floor(random() * WINDOW_NEON.length)]);
+          panes[i].set(r, g, b, panes[i].w); pendingFlash[i] = random() * 0.15;
+        }
         // Some cuts land on a few frames of black first.
         blackout = random() < 0.3 && !frame.reducedFlash ? 0.08 : 0;
         for (let i = 0; i < 40; i++) {
@@ -169,8 +196,9 @@ export function createUndergroundMode(budget: QualityBudget): VisualMode {
       }
       blackout = Math.max(0, blackout - step);
       const gain = blackout > 0 ? 0 : hits.gain;
-      const angle = UNDERGROUND_ANGLES[frame.reducedMotion ? 0 : hits.variant];
-      camera.position.set(angle.at[0], angle.at[1], angle.at[2]); camera.lookAt(angle.look[0], angle.look[1], angle.look[2]); camera.rotateZ(angle.roll);
+      const angle = UNDERGROUND_ANGLES[frame.reducedMotion ? 0 : hits.variant], held = frame.reducedMotion ? 0 : Math.min(hits.age, 3);
+      camera.position.set(angle.at[0] + angle.drift[0] * held, angle.at[1] + angle.drift[1] * held, angle.at[2] + angle.drift[2] * held);
+      camera.lookAt(angle.look[0], angle.look[1], angle.look[2]); camera.rotateZ(angle.roll);
       if (!frame.reducedMotion) camera.position.y += Math.sin(frame.time * 31) * bass * 0.05;
       neon.color.setRGB(1, 0.25 + (hits.count % 2) * 0.75, 0.63 + (hits.count % 2) * 0.37).multiplyScalar(hits.flash * 3);
       ringLight.intensity = hits.flash * 80;
@@ -178,8 +206,15 @@ export function createUndergroundMode(budget: QualityBudget): VisualMode {
       tunnel.intensity = 10 + gain * 50;
       (scene.fog as THREE.FogExp2).color.setRGB(0.09, 0.09, 0.1).multiplyScalar(0.25 + frame.response.loudness * 0.8);
       // The carriage crosses behind the hatches, faster on the bass.
-      if (tram && !frame.reducedMotion) { tramX += frame.delta * (4 + bass * 14); if (tramX > 40) tramX = -40; tram.position.x = tramX; }
-      for (const glass of windows) glass.emissiveIntensity = 1.5 + gain * 2;
+      if (tram && !frame.reducedMotion) { tramX += frame.delta * (6 + bass * 14); if (tramX > 26) tramX = -26; tram.position.x = tramX; }
+      const scale = frame.reducedFlash ? 0.4 : 1, spillColour = [new THREE.Vector3(), new THREE.Vector3()];
+      panes.forEach((p, i) => {
+        if (pendingFlash[i] >= 0) { pendingFlash[i] -= step; if (pendingFlash[i] < 0) fade[i] = 1; }
+        fade[i] *= Math.exp(-step / (0.18 + (i % 3) * 0.08));
+        p.w = fade[i] * scale * (0.6 + bass * 0.6);
+        spillColour[i < 12 ? (i % 6 < 3 ? 0 : 1) : i - 12].addScaledVector(new THREE.Vector3(p.x, p.y, p.z), p.w);
+      });
+      spill.forEach((light, k) => { const c = spillColour[k]; const level = Math.max(c.x, c.y, c.z); light.color.setRGB(c.x, c.y, c.z).multiplyScalar(level > 0 ? 1 / level : 0); light.intensity = level * 60; });
       sparks.update(step);
     },
     filter: (input) => finish.filter(input),

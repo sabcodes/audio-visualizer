@@ -47,12 +47,11 @@ Shared pieces: `hitPulse.ts` (the beat-gated hit envelope, non-repeating variant
 
 ### Asset limits worked around in code
 
-- **Bloom Touch hand:** still a programmatic flat illustration (the delivery notes say so too). The mode adds a red rim glow, but a hand-drawn cel hand would match the reference far better.
+- **Hands:** Bloom Touch and Moon Pond now draw a raymarched 3D hand (`handModel.ts`: 22 tapered capsules blended with a smooth minimum, posed in code each frame). The supplied `hand.png` is no longer used.
 - **Lava Golem:** the mesh is faceted, so the mode averages normals across split vertices to shade it smooth. The crack geometry is straight bars rather than vein shapes.
 - **Kit G delivery notes call the mode `golemGroove`;** the spec and the code use `lavaGolem`.
 
 ### Possible follow-ups
 
-- Replace the Bloom Touch hand with a hand-drawn asset.
 - Vein-shaped emissive cracks for the golem.
 - A listening pass per mode, then drop the `<experimental-wave4>` labels.

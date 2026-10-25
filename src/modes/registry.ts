@@ -29,7 +29,8 @@ import { createBandMode } from './bandMode';
 import { createJellyMode } from './jellyMode';
 import { createBlockBowtieMode, createPrismBowtieMode } from './bilateralModes';
 import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, createHairVortexMode, createMirrorPlasmaMode } from './plasmaModes';
-import { createBlackMazeMode, createStarfallCanopyMode, createWindfieldMode } from './natureModes';
+import { createBlackMazeMode, createStarfallCanopyMode } from './natureModes';
+import { createWindfieldMode } from './windfieldMode';
 import { createBeaconRingsMode, createChromeStreaksMode, createSignalNightMode, createSilkThreadsMode } from './nightSceneModes';
 import { createLightLeakFilmMode } from './filmMode';
 import { withCinematic, type CinematicOptions } from './cinematic';
@@ -38,7 +39,8 @@ import { createEndlessStairsMode, createRedStairwellMode, createTempleDescentMod
 import { createCandyOrbMode, createLiquidChromeMode, createPongOrbsMode } from './lensModes';
 import { createMoonPondMode } from './moonPondMode';
 import { createRedCrystalHallMode } from './crystalHallMode';
-import { createBloomTouchMode, createPoleSparksMode } from './illustratedModes';
+import { createPoleSparksMode } from './illustratedModes';
+import { createBloomTouchMode } from './bloomTouchMode';
 import { createLavaGolemMode, createLightForestMode } from './creatureKitModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
@@ -128,7 +130,7 @@ export const waveFourModeDefinitions: readonly ModeDefinition[] = [
   waveFour('grainSmoke', 'Grain Smoke (FS)', createGrainSmokeMode, 'fullscreen'),
   waveFour('anamorphicFlare', 'Anamorphic Flare (FS)', createAnamorphicFlareMode, 'fullscreen', CLEAN),
   waveFour('hairVortex', 'Hair Vortex (FS)', createHairVortexMode, 'fullscreen', CLEAN),
-  waveFour('windfield', 'Windfield (FS)', createWindfieldMode, 'fullscreen', FILM),
+  waveFour('windfield', 'Windfield', (budget) => createWindfieldMode(budget), 'scene', FILM),
   waveFour('blackMaze', 'Black Maze (FS)', createBlackMazeMode, 'fullscreen', FILM),
   waveFour('starfallCanopy', 'Starfall Canopy', (budget) => createStarfallCanopyMode(budget), 'scene', FILM),
   waveFour('silkThreads', 'Silk Threads', (budget) => createSilkThreadsMode(budget), 'scene', CLEAN),
