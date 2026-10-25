@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { float, fract, instancedBufferAttribute, mix, mx_noise_float, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { float, fract, instancedBufferAttribute, mix, mx_noise_float, normalView, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
@@ -22,8 +22,27 @@ export function lookTargets(look: number, out: Float32Array) {
   for (let p = 0; p < PANELS; p++) out[p] = lit.includes(p) ? 1 : 0;
   return out;
 }
-/** Warm stage palettes in scene-linear: orange-red, amber-white, deep red, white. */
-const PALETTES = [[1.6, 0.24, 0.03], [1.7, 0.85, 0.22], [1.5, 0.08, 0.03], [1.6, 1.5, 1.35]] as const;
+/** Moving-head programs: fan, ripple wave, scissor cross and a ballyhoo sweep. */
+export const BEAM_PROGRAMS = 4;
+/** Deepest tilt toward the crowd (radians from straight down); beams never rise past it. */
+export const MAX_TILT = 0.75;
+/**
+ * Where a moving head points under a program at motion clock `m`, as [tilt, pan] in radians:
+ * tilt leans the beam out toward the crowd, pan swings it sideways. Every program is smooth in `m`.
+ */
+export function beamAim(program: number, m: number, panel: number, beam: number, out: [number, number] = [0, 0]) {
+  const u = (beam / (BEAMS_PER_PANEL - 1)) * 2 - 1, wave = (x: number) => 0.5 + 0.5 * Math.sin(x);
+  switch (program % BEAM_PROGRAMS) {
+    case 0: out[0] = 0.1 + 0.4 * wave(m * 0.7 + panel); out[1] = u * (0.18 + 0.22 * wave(m)); break;
+    case 1: out[0] = 0.08 + 0.6 * wave(m * 1.2 - beam * 0.9 + panel * 0.5); out[1] = u * 0.12; break;
+    case 2: out[0] = 0.12 + 0.45 * wave(m * 0.6 + panel); out[1] = (beam % 2 ? 1 : -1) * 0.38 * Math.sin(m * 0.8 + panel * 0.4); break;
+    default: out[0] = 0.15 + 0.5 * wave(m * 1.1 + panel * 1.3 + beam * 0.3); out[1] = 0.32 * Math.sin(m * 0.8 + beam * 0.5 + panel); break;
+  }
+  out[0] = Math.min(MAX_TILT, out[0]);
+  return out;
+}
+/** Deep red stage palettes in scene-linear: blood red, hot red, crimson, scarlet. Green stays low so tone mapping never drifts to orange. */
+const PALETTES = [[1.6, 0.06, 0.012], [1.8, 0.13, 0.03], [1.5, 0.025, 0.045], [1.7, 0.09, 0.02]] as const;
 
 export function createArenaMode(budget: QualityBudget = presetBudget('balanced')): VisualMode {
   const { scene, camera } = sceneDefaults(0);
@@ -40,16 +59,17 @@ export function createArenaMode(budget: QualityBudget = presetBudget('balanced')
   const frames = new THREE.InstancedMesh(new THREE.BoxGeometry(PANEL.w + 0.8, PANEL.h + 0.8, PANEL.d - 0.4), new THREE.MeshBasicNodeMaterial({ color: 0x050505 }), PANELS);
   frames.frustumCulled = false;
 
-  // Beams: soft shafts hanging under each panel, brightest at the lens and fading into the haze.
-  const shaftGeometry = new THREE.CylinderGeometry(1.1, 3.6, 1, 14, 1, true); shaftGeometry.translate(0, -0.5, 0);
+  // Beams: wide soft cones out of each moving head, brightest at the lens, fading into the haze and at their edges.
+  const shaftGeometry = new THREE.CylinderGeometry(1.0, 6.5, 1, 20, 1, true); shaftGeometry.translate(0, -0.5, 0);
   const shaftMaterial = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
   const drift = mx_noise_float(vec3(positionLocal.x.mul(0.6), uv().y.mul(3).add(time.mul(0.4)), time.mul(0.2))).mul(0.3).add(0.7);
-  shaftMaterial.colorNode = vec3(uv().y.pow(1.8).mul(0.22).mul(drift));
+  const core = normalView.z.abs().pow(1.4);
+  shaftMaterial.colorNode = vec3(uv().y.pow(1.6).mul(0.4).mul(drift).mul(core));
   const shaftCount = PANELS * BEAMS_PER_PANEL;
   const shafts = new THREE.InstancedMesh(shaftGeometry, shaftMaterial, shaftCount);
   shafts.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(shaftCount * 3), 3); shafts.frustumCulled = false;
 
-  // Fixtures: a row of six lamp heads under each panel, each the source of one beam.
+  // Fixtures: a row of six moving heads under each panel; the yoke stays put and the head tilts with its beam.
   const lampMaterial = new THREE.MeshBasicNodeMaterial();
   const lens = uv().sub(0.5).length();
   lampMaterial.colorNode = vec3(lens.smoothstep(0.5, 0.15).mul(0.7).add(0.3));
@@ -125,22 +145,30 @@ export function createArenaMode(budget: QualityBudget = presetBudget('balanced')
   const light = new Float32Array(PANELS), lightTargets = lookTargets(0, new Float32Array(PANELS));
   light.set(lightTargets);
   const bands = new Float32Array(PANELS), level = new Float32Array(PANELS), beat = beatGate(0.3), dummy = new THREE.Object3D(), colour = new THREE.Color(), white = new THREE.Color(3, 3, 3);
-  let look = 0, palette = 0, beats = 0, idle = 0, flash = 0, chase = 0, sweep = 0, jumpLevel = 0;
+  // Every head keeps its own phase and pace, so no two panels, and no two beams, sweep in lockstep.
+  const heads = PANELS * BEAMS_PER_PANEL, tilts = new Float32Array(heads), pans = new Float32Array(heads), aim: [number, number] = [0, 0];
+  const phases = Float32Array.from({ length: heads }, () => random() * Math.PI * 2), paces = Float32Array.from({ length: heads }, () => 0.7 + random() * 0.6);
+  const headAim = (index: number) => { const p = Math.floor(index / BEAMS_PER_PANEL); return beamAim(look + p, motion * paces[index] + phases[index], p, index % BEAMS_PER_PANEL, aim); };
+  let look = 0, palette = 0, beats = 0, idle = 0, flash = 0, chase = 0, sweep = 0, motion = 0, kick = 0, jumpLevel = 0;
+  for (let i = 0; i < heads; i++) { headAim(i); [tilts[i], pans[i]] = aim; }
   return {
     scene, camera,
     update(frame) {
       resizeCamera(camera, frame.aspect);
       time.value = frame.time; idle += frame.delta;
       if (beat(frame.time, frame.audio.onset)) {
-        beats++; chase = (chase + 1) % BEAMS_PER_PANEL; jumpLevel = 1;
+        beats++; kick = 1; jumpLevel = 1;
         if (frame.response.impact > 0.7) flash = 1;
       }
       // A new look every 8 beats, or every 10 s in silence; the palette moves on with it.
       if (beats >= 8 || idle > 10) { beats = 0; idle = 0; look = (look + 1) % LOOKS.length; palette = (palette + 1) % PALETTES.length; lookTargets(look, lightTargets); }
-      flash = Math.max(0, flash - settleStep(frame) * 3); jumpLevel = Math.max(0, jumpLevel - settleStep(frame) * 4);
+      flash = Math.max(0, flash - settleStep(frame) * 3); kick = Math.max(0, kick - settleStep(frame) * 2.5); jumpLevel = Math.max(0, jumpLevel - settleStep(frame) * 4);
       const flashLevel = frame.reducedFlash ? flash * 0.15 : flash;
       bandEnergies(frame, PANELS, bands);
       sweep += frame.delta * (0.6 + frame.audio.mid * 1.8);
+      // The heads' motion clock speeds up with the music; the dimmer chase glides along the row instead of stepping.
+      motion += frame.delta * (0.5 + frame.audio.mid * 0.9 + kick * 1.5);
+      chase = (chase + frame.delta * (1.2 + kick * 6)) % BEAMS_PER_PANEL;
       const [pr, pg, pb] = PALETTES[palette];
       haze.value.setRGB(pr, pg, pb).multiplyScalar(0.12 + frame.response.bounce * 0.12);
       for (let p = 0; p < PANELS; p++) {
@@ -150,18 +178,29 @@ export function createArenaMode(budget: QualityBudget = presetBudget('balanced')
         const [x, y, homeZ, tilt] = PANEL_HOMES[p], z = STAGE_Z + homeZ;
         dummy.position.set(x, y, z); dummy.rotation.set(0, 0, tilt); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
         panels.setMatrixAt(p, dummy.matrix); frames.setMatrixAt(p, dummy.matrix);
-        const visible = light[p], glow = (0.45 + level[p] * 1.4 + frame.response.bounce * 0.6) * visible;
+        // Kept below the tone mapper's shoulder so the LEDs stay red instead of washing out to orange.
+        const visible = light[p], glow = (0.22 + level[p] * 0.5 + frame.response.bounce * 0.2) * visible;
         colour.setRGB(pr, pg, pb).multiplyScalar(glow).lerp(white, flashLevel * 0.8 * visible);
         panels.setColorAt(p, colour.addScalar(0.0015));
-        // Beam curtain from the underside, the chase lifting one beam per beat.
+        // Moving heads: each panel runs its own program, and each head eases toward its aim like a real fixture's motors, so beams swing up and down.
         for (let b = 0; b < BEAMS_PER_PANEL; b++) {
           const index = p * BEAMS_PER_PANEL + b, offset = (b - (BEAMS_PER_PANEL - 1) / 2) * (PANEL.w / BEAMS_PER_PANEL);
           const fx = x + Math.cos(tilt) * offset, fy = y - PANEL.h / 2 + Math.sin(tilt) * offset;
+          headAim(index);
+          tilts[index] = approach(tilts[index], aim[0], settleStep(frame), 0.35); pans[index] = approach(pans[index], aim[1], settleStep(frame), 0.35);
           dummy.position.set(fx, fy, z + 1); dummy.rotation.set(0, 0, tilt); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
-          housings.setMatrixAt(index, dummy.matrix); lamps.setMatrixAt(index, dummy.matrix);
-          dummy.position.set(fx, fy - 1.4, z + 1); dummy.scale.set(1, fy - 3.4, 1); dummy.updateMatrix();
+          housings.setMatrixAt(index, dummy.matrix);
+          dummy.rotation.set(-tilts[index], 0, tilt + pans[index]); dummy.updateMatrix();
+          lamps.setMatrixAt(index, dummy.matrix);
+          // The cone reaches the floor wherever it points, capped so a shallow beam fades out in the haze.
+          const reach = Math.min(150, (fy - 1.4) / Math.max(0.2, Math.cos(tilts[index]) * Math.cos(pans[index])));
+          const zoom = 0.85 + level[p] * 0.5;
+          dummy.position.set(fx, fy, z + 1); dummy.translateY(-1.4); dummy.scale.set(zoom, reach, zoom); dummy.updateMatrix();
           shafts.setMatrixAt(index, dummy.matrix);
-          const lit = (0.35 + level[p] * 1.8 + frame.response.bounce * 0.5 + (b === chase ? 0.8 : 0)) * visible;
+          // Dimmer: a soft bump gliding along the row plus a slow breath, never a hard on/off.
+          const gap = Math.abs(b - chase), bump = Math.exp(-Math.pow(Math.min(gap, BEAMS_PER_PANEL - gap), 2) / 1.2);
+          const breath = 0.6 + 0.4 * Math.sin(motion * 0.9 * paces[index] + phases[index] * 2);
+          const lit = (0.25 + level[p] * 1.5 + frame.response.bounce * 0.4 + bump * 0.6) * breath * visible;
           shafts.setColorAt(index, colour.setRGB(pr, pg, pb).multiplyScalar(lit));
           // The lamp lens burns hotter than its beam so it reads as the light source.
           lamps.setColorAt(index, colour.setRGB(pr, pg, pb).multiplyScalar(0.4 * visible + lit * 2.2).lerp(white, Math.min(1, lit * 0.25)));
