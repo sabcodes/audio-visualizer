@@ -1,7 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { abs, cameraPosition, exp, float, max, min, mix, normalize, positionLocal, reflect, uniform, vec2, vec3 } from 'three/tsl';
-import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+import { Break, Discard, Fn, If, Loop, abs, cameraPosition, cameraViewMatrix, exp, float, max, min, mix, normalize, positionLocal, positionWorld, reflect, texture, uniform, uniformArray, vec2, vec3, vec4 } from 'three/tsl';
 import type { VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode, settleStep } from './shared';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
@@ -32,21 +31,54 @@ export function chromeMatcap(size = 128) {
 }
 
 export const METABALLS = 8;
+const MARCH_STEPS = 64;
 
+/**
+ * Metaballs raymarched on the GPU: a smooth union of spheres traced inside a bounding sphere. The old
+ * marching-cubes build ran on the CPU and grew with the blobs, so loud audio stalled the frame.
+ */
 export function createMetaballMode(budget: QualityBudget = presetBudget('balanced')): VisualMode {
   const { scene, camera } = sceneDefaults(64);
   const matcap = chromeMatcap();
-  const material = new THREE.MeshMatcapNodeMaterial({ matcap });
-  const resolution = budget.particleScale < 1 ? 32 : budget.particleScale > 1 ? 52 : 42;
-  const blobs = new MarchingCubes(resolution, material, false, false, 60000);
-  blobs.scale.setScalar(34); blobs.frustumCulled = false;
-  scene.add(blobs);
+  const balls = Array.from({ length: METABALLS }, () => new THREE.Vector4());
+  const ballArray = uniformArray(balls, 'vec4'), tint = uniform(new THREE.Color(1, 1, 1)), blend = uniform(5);
+  const steps = budget.particleScale < 1 ? 40 : MARCH_STEPS;
+  const field = Fn(([p]: [Node<'vec3'>]) => {
+    const d = float(1e3).toVar();
+    Loop(METABALLS, ({ i }) => {
+      const b = ballArray.element(i) as unknown as Node<'vec4'>;
+      const di = p.sub(b.xyz).length().sub(b.w);
+      const h = blend.sub(d.sub(di).abs()).max(0).div(blend);
+      d.assign(min(d, di).sub(h.mul(h).mul(blend).mul(0.25)));
+    });
+    return d;
+  });
+  const material = new THREE.MeshBasicNodeMaterial({ transparent: false });
+  material.colorNode = Fn(() => {
+    const dir = positionWorld.sub(cameraPosition).normalize();
+    const t = positionWorld.sub(cameraPosition).length().toVar(), hit = float(0).toVar();
+    Loop(steps, () => {
+      const d = field(cameraPosition.add(dir.mul(t)));
+      If(d.lessThan(0.02), () => { hit.assign(1); Break(); });
+      t.addAssign(d);
+      If(t.greaterThan(140), () => { Break(); });
+    });
+    If(hit.lessThan(0.5), () => { Discard(); });
+    const pos = cameraPosition.add(dir.mul(t)), e = 0.05;
+    const k1 = vec3(1, -1, -1), k2 = vec3(-1, -1, 1), k3 = vec3(-1, 1, -1), k4 = vec3(1, 1, 1);
+    const n = k1.mul(field(pos.add(k1.mul(e)))).add(k2.mul(field(pos.add(k2.mul(e))))).add(k3.mul(field(pos.add(k3.mul(e))))).add(k4.mul(field(pos.add(k4.mul(e))))).normalize();
+    const nv = cameraViewMatrix.mul(vec4(n, 0)).xyz.normalize();
+    return texture(matcap, nv.xy.mul(0.49).add(0.5)).rgb.mul(tint);
+  })();
+  const bounds = new THREE.Mesh(new THREE.SphereGeometry(34, 32, 16), material);
+  bounds.frustumCulled = false;
+  scene.add(bounds);
   const backdrop = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false });
   const glow = uniform(new THREE.Color(0.05, 0.02, 0.08));
   backdrop.colorNode = glow.mul(normalize(positionLocal).y.mul(-0.5).add(0.6));
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), backdrop));
   const bands = new Float32Array(METABALLS), level = new Float32Array(METABALLS), push = beatGate(0.3);
-  let impulse = 0;
+  let impulse = 0, spin = 0;
   return {
     scene, camera,
     update(frame) {
@@ -54,17 +86,19 @@ export function createMetaballMode(budget: QualityBudget = presetBudget('balance
       if (push(frame.time, frame.audio.onset)) impulse = 1;
       impulse = Math.max(0, impulse - settleStep(frame) * 2.5);
       bandEnergies(frame, METABALLS, bands);
-      blobs.reset();
       const t = frame.time * 0.5, spread = 0.2 + impulse * 0.1 + frame.response.bounce * 0.04;
+      spin += frame.delta * (0.2 + frame.audio.mid * 0.5);
+      const c = Math.cos(spin), s = Math.sin(spin);
       for (let i = 0; i < METABALLS; i++) {
         level[i] = approach(level[i], bands[i], settleStep(frame), 0.1);
         const a = t * (0.6 + i * 0.13) + i * 2.1, b = t * (0.45 + i * 0.09) + i * 1.3;
         const r = spread * (0.6 + level[i] * 0.8);
-        blobs.addBall(0.5 + Math.sin(a) * Math.cos(b) * r, 0.5 + Math.sin(b * 1.3) * r * 0.8, 0.5 + Math.cos(a) * Math.cos(b) * r, 0.28 + level[i] * 0.55 + frame.response.bounce * 0.25, 12);
+        // Same layout as the marching-cubes version: unit-cube coordinates centred on 0.5, scaled to ±34.
+        const x = Math.sin(a) * Math.cos(b) * r * 68, y = Math.sin(b * 1.3) * r * 0.8 * 68, z = Math.cos(a) * Math.cos(b) * r * 68;
+        const strength = 0.28 + level[i] * 0.55 + frame.response.bounce * 0.25;
+        balls[i].set(x * c + z * s, y, -x * s + z * c, Math.min(9, Math.sqrt(strength / 92) * 68));
       }
-      blobs.update();
-      blobs.rotation.y += frame.delta * (0.2 + frame.audio.mid * 0.5);
-      material.color.setHSL(wrap(frame.hue, 0, 1), 0.35, 0.75).multiplyScalar(1.2 + (frame.reducedFlash ? 0 : impulse * 0.6));
+      tint.value.setHSL(wrap(frame.hue, 0, 1), 0.35, 0.75).multiplyScalar(1.2 + (frame.reducedFlash ? 0 : impulse * 0.6));
       glow.value.setHSL(wrap(frame.hue + 0.5, 0, 1), 0.6, 0.004 + frame.response.bounce * 0.006);
     },
     dispose() { disposeScene(scene); matcap.dispose(); },

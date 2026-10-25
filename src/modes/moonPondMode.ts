@@ -24,6 +24,19 @@ export function pondPlane(sx: number, sy: number) {
 /** Water-plane coordinates back to the screen. */
 export function pondScreen(x: number, z: number) { return [x / z, HORIZON - 1 / z] as const; }
 
+/** Seconds for each part of a hand visit; between visits the hand is away for 20–30 s. */
+export const HAND_TIMING = { descend: 2.6, touch: 8, lift: 2 } as const;
+const smooth = (t: number) => t * t * (3 - 2 * t);
+
+/** Where a visit is at `age` seconds: the phase, and how far the hand has reached down (0 gone – 1 fingertips in the water). */
+export function handVisit(age: number) {
+  const { descend, touch, lift } = HAND_TIMING;
+  if (age < descend) return { phase: 'descend', reach: smooth(age / descend) } as const;
+  if (age < descend + touch) return { phase: 'touch', reach: 1 } as const;
+  if (age < descend + touch + lift) return { phase: 'lift', reach: 1 - smooth((age - descend - touch) / lift) } as const;
+  return { phase: 'away', reach: 0 } as const;
+}
+
 /**
  * Moon Pond: a dark glossy pond close up. A wave-equation height field carries real interfering ripples
  * from a touch point; the whole surface reflects a soft grey sky, and a coloured light catches the crests
@@ -89,7 +102,7 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
   // The hand reaching down into the water: dark skin, rim-lit and under-lit by the coloured light on the pond.
   const hand = createHand();
   hand.blend.value = 0.01;
-  const waterline = uniform(-1), handLight = uniform(1);
+  const waterline = uniform(-1), handLight = uniform(1), handAlpha = uniform(1);
   const handMaterial = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, depthTest: false });
   const hp = uv().sub(0.5).mul(vec2(aspect, 1)), traced = hand.trace(hp), n = traced.normal;
   const under = n.dot(vec3(0, -0.55, 0.83)).max(0), rim = n.z.oneMinus().pow(5);
@@ -98,56 +111,81 @@ export function createMoonPondMode(budget: QualityBudget): VisualMode {
   // Below the waterline the fingers are seen through the water: dimmer, tinted, partly transparent.
   const submerged = hp.y.lessThan(waterline);
   handMaterial.colorNode = submerged.select(lit.mul(0.35).add(colour.mul(0.04)), lit);
-  handMaterial.opacityNode = traced.closest.smoothstep(0.0015, 0).max(traced.hit).mul(submerged.select(float(0.45), float(1)));
+  handMaterial.opacityNode = traced.closest.smoothstep(0.0015, 0).max(traced.hit).mul(submerged.select(float(0.45), float(1))).mul(handAlpha);
   const handQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), handMaterial); handQuad.renderOrder = 1; handQuad.frustumCulled = false;
   scene.add(handQuad);
-  const pose: HandPose = { curl: [0.25, 0.35, 0.45, 0.55], thumb: 0.35, spread: 0.02 };
+  const pose: HandPose & { curl: [number, number, number, number] } = { curl: [0.25, 0.35, 0.45, 0.55], thumb: 0.35, spread: 0.02 };
+  const REST_CURL = [0.25, 0.35, 0.45, 0.55] as const;
   const finish = createCinematic({ grain: 0.06, halation: 0.25, vignette: 0.45, soften: 0.25, aberration: 0.002, shadows: [0.006, 0.004, 0.009] });
 
   const hits = createHits({ decay: 0.6, interval: 0.5 });
   const random = seededRandom(7), target = new THREE.Vector3(...MAGENTA);
-  const touch = new THREE.Vector2(0.15, 1.3);
+  const touch = new THREE.Vector2(0.15, 1.3), anchor = new THREE.Vector2(0.15, 1.3), ripple = new THREE.Vector2(0.15, 1.3);
   let colourIndex = 0, dip = 0, warmed = false, pending = 0, strength = 0, plunge = 0, sway = 0;
+  // The hand visits in cycles: reaches down, touches and stirs the water, lifts away and fades; while it is
+  // away the pond keeps answering the beat on its own, then the hand comes back somewhere new.
+  let visitAge = 0, awayFor = 20 + random() * 10, wasIn = false;
   const toUv = (x: number, z: number) => [(x - POND.left) / (POND.right - POND.left), (z - POND.near) / (POND.far - POND.near)] as const;
+  const press = (amount: number, force: number) => { pending = Math.max(pending, amount); strength = Math.max(strength, force); };
   return {
     scene, camera,
     update(frame) {
       aspect.value = frame.aspect; time.value = frame.time; finish.update(frame);
-      const step = settleStep(frame);
+      const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.6);
-      // A hit swaps the light's colour and sends a stronger ring out from the touch point.
-      if (hits.fired) {
-        // The hand only moves every few hits; in between, each hit presses harder at the same spot.
-        if (!frame.reducedMotion && hits.count % 4 === 0) { const z = 1.1 + random() * 0.6; touch.set((random() - 0.5) * 0.6 * z, z); }
-        colourIndex = 1 - colourIndex; target.set(...(colourIndex ? BLUE : MAGENTA));
-        pending = 1; strength = 0.09 + frame.response.bass * 0.06;
+      sway += still ? 0 : frame.delta;
+      visitAge += step;
+      const { descend, touch: hold, lift } = HAND_TIMING;
+      if (visitAge > descend + hold + lift + awayFor) {
+        visitAge = 0; awayFor = 20 + random() * 10;
+        const z = 1.1 + random() * 0.6; anchor.set((random() - 0.5) * 0.6 * z, z);
       }
-      // Between hits the finger keeps dipping, sending out a steady train of rings.
+      const visit = handVisit(visitAge), inWater = visit.reach > 0.97;
+      // While touching, the fingertips stroke slowly across the water instead of holding still.
+      const stroke = visit.phase === 'touch' && !still ? Math.min(1, (visitAge - descend) / 1.5) : 0;
+      touch.set(anchor.x + Math.sin(sway * 0.35) * 0.12 * stroke, anchor.y + Math.sin(sway * 0.5) * 0.05 * stroke);
+      // A hit swaps the light's colour and sends a ring out: from the fingers when the hand is in the water,
+      // from a fresh spot on the pond when it is away.
+      if (hits.fired) {
+        colourIndex = 1 - colourIndex; target.set(...(colourIndex ? BLUE : MAGENTA));
+        if (inWater) { ripple.copy(touch); press(1, 0.09 + frame.response.bass * 0.06); if (!still) plunge = 1; }
+        else if (visit.phase === 'away') { const z = 1.1 + random() * 1.4; ripple.set((random() - 0.5) * 0.9 * z, z); press(1, 0.07 + frame.response.bass * 0.07); }
+      }
+      // First contact makes the big ring; the fingers leaving the water make a smaller one.
+      if (inWater !== wasIn) { ripple.copy(touch); press(1, inWater ? 0.14 : 0.06); wasIn = inWater; }
+      // In the water the fingers keep stirring, sending out a steady train of rings.
       dip -= step;
-      if (dip < 0 && !frame.reducedMotion) { dip = 0.17; pending = Math.max(pending, 0.4); strength = Math.max(strength, 0.03 + frame.response.bass * 0.03); }
-      // The hand dips in bursts: each hit plunges the fingers into the water, then they lift back to the surface.
-      if (hits.fired && !frame.reducedMotion) plunge = 1;
+      if (inWater && dip < 0 && !still) { dip = 0.17; ripple.copy(touch); press(0.4, 0.03 + frame.response.bass * 0.03); }
       plunge = Math.max(0, plunge - step / 0.7);
       const depthNow = Math.sin(Math.min(1, (1 - plunge) * 3) * Math.PI / 2) * plunge;
-      sway += frame.reducedMotion ? 0 : frame.delta;
+      // Fingers move one by one while stirring, and relax as the hand lifts away.
+      const stir = visit.phase === 'touch' && !still ? 1 : 0;
+      for (let i = 0; i < 4; i++) pose.curl[i] = REST_CURL[i] * (0.6 + visit.reach * 0.4) + Math.sin(sway * 1.3 + i * 1.1) * 0.12 * stir;
+      pose.thumb = 0.3 + visit.reach * 0.1 + Math.sin(sway * 0.8) * 0.06 * stir;
+      handAlpha.value = Math.min(1, visit.reach / 0.4);
+      handQuad.visible = handAlpha.value > 0.001;
       const [tipX, tipY] = pondScreen(touch.x, touch.y);
-      const roll = 2.55 + Math.sin(sway * 0.4) * 0.04, scale = 0.2;
-      const rest = hand.pose(pose, handPlacement(0, 0, scale, roll, -0.55, Math.PI));
-      hand.pose(pose, handPlacement(tipX - rest[1].x + 0.012, tipY - rest[1].y - depthNow * 0.035 + Math.sin(sway * 0.9) * 0.003, scale, roll, -0.55, Math.PI));
+      const roll = 2.55 + Math.sin(sway * 0.4) * 0.04 + (1 - visit.reach) * 0.15, scale = 0.2;
+      if (handQuad.visible) {
+        const rest = hand.pose(pose, handPlacement(0, 0, scale, roll, -0.55, Math.PI));
+        // Reaching down from the top right; away, the hand is lifted out along the arm.
+        const away = 1 - visit.reach;
+        hand.pose(pose, handPlacement(tipX - rest[1].x + 0.012 + away * 0.4, tipY - rest[1].y - depthNow * 0.035 + Math.sin(sway * 0.9) * 0.003 + away * 0.75, scale, roll, -0.55, Math.PI));
+      }
       waterline.value = tipY + 0.004;
       handLight.value = light.value * 0.8 + 0.3;
       colour.value.lerp(target, 1 - Math.exp(-step / 0.25));
-      patchAt.value.lerp(touch, 1 - Math.exp(-step / 0.8));
+      patchAt.value.lerp(inWater || visit.phase !== 'away' ? touch : ripple, 1 - Math.exp(-step / 0.8));
       patchSize.value = approach(patchSize.value, 1.7 + frame.response.loudness * 0.9, step, 0.4);
       light.value = approach(light.value, 0.35 + frame.response.loudness * 0.9 + hits.flash * 0.6, step, 0.12);
       glitter.value = frame.audio.highs;
       sky.value = 1 + hits.flash * 0.15;
-      damping.value = frame.reducedMotion ? 0.985 : 0.996;
+      damping.value = still ? 0.985 : 0.996;
     },
     simulate(renderer) {
       if (!warmed) { step(renderer); first.value = 0; warmed = true; }
       // Two solver steps a frame; the drop is pressed in on the first of them only.
-      const [x, y] = toUv(touch.x, touch.y);
+      const [x, y] = toUv(ripple.x, ripple.y);
       drop.value.set(x, y, pending ? strength * pending : 0, 0.008);
       step(renderer);
       drop.value.z = 0; pending = 0; strength = 0;

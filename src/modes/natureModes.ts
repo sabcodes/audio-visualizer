@@ -1,11 +1,12 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { abs, exp, float, fract, max, mix, mx_fractal_noise_float, mx_noise_float, screenCoordinate, sin, texture as sampleTexture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { abs, exp, float, fract, max, mx_fractal_noise_float, mx_noise_float, positionWorld, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
 import type { QualityBudget } from '../rendering/quality';
-import { disposeScene, approach, settleStep } from './shared';
-import { fullscreen, hash2 } from './shaderModes';
-import { createHits } from './hitPulse';
+import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep } from './shared';
+import { hash2 } from './shaderModes';
+import { createHits, variantSequence } from './hitPulse';
+import { shadowSwitch } from './kitModes';
 import { seededRandom } from '../rendering/diagnostics';
 
 type F = Node<'float'>;
@@ -39,55 +40,112 @@ export function generateMaze(seed: number) {
 /** Spotlight windows: centre and half size in maze units (0–9), never the same spot twice in a row. */
 export const MAZE_WINDOWS = [[2, 2, 1.3, 1], [7, 7, 1.5, 1.2], [7, 2, 1.2, 1.4], [2.5, 6.5, 1.6, 1.1], [4.5, 4.5, 1.1, 1.1], [4.5, 1.5, 2.6, 0.9], [1.5, 4.5, 0.9, 2.4]] as const;
 
-export function createBlackMazeMode(): VisualMode {
-  const { scene, camera, material } = fullscreen();
-  const open = generateMaze(9), data = new Float32Array(LATTICE * LATTICE);
-  open.forEach((value, i) => { data[i] = value; });
-  const lattice = new THREE.DataTexture(data, LATTICE, LATTICE, THREE.RedFormat, THREE.FloatType);
-  lattice.minFilter = lattice.magFilter = THREE.NearestFilter; lattice.needsUpdate = true;
-  const aspect = uniform(1), window = uniform(new THREE.Vector4(2, 2, 1.3, 1)), light = uniform(0), reveal = uniform(0), ambient = uniform(0.02), shadow = uniform(0.18);
-  const p = uv().sub(0.5).mul(vec2(aspect, 1));
-  // The maze fills the frame height; walls are wide plateaus and the paths narrow grooves.
-  const t = p.div(0.96).add(0.5).mul(MAZE + 0.62);
-  const WALL = 0.62;
-  const latticeIndex = (v: F) => { const k = v.floor(), f = fract(v); return f.lessThan(WALL).select(k.mul(2), k.mul(2).add(1)); };
-  const isOpen = (q: V2) => {
-    const index = vec2(latticeIndex(q.x), latticeIndex(q.y));
-    const inside = q.x.greaterThanEqual(0).and(q.y.greaterThanEqual(0)).and(q.x.lessThan(MAZE + WALL)).and(q.y.lessThan(MAZE + WALL));
-    return inside.select(sampleTexture(lattice, index.add(0.5).div(LATTICE)).r, float(0));
-  };
-  const groove = isOpen(t);
-  // Shadow: a groove pixel is dark when the wall toward the light overhangs it.
-  const shaded = isOpen(t.add(vec2(-1, 1).mul(shadow))).oneMinus().mul(groove);
-  // Bevel: wall pixels next to a groove catch a highlight on one side and darken on the other.
-  const nearLit = isOpen(t.add(vec2(0.05, -0.05))).mul(groove.oneMinus());
-  const nearDark = isOpen(t.add(vec2(-0.05, 0.05))).mul(groove.oneMinus());
-  const grime = mx_fractal_noise_float(vec3(t.mul(vec2(1.5, 6)), 1), 4, 2, 0.6).mul(0.5).add(0.5);
-  const speck = mx_noise_float(vec3(t.mul(14), 2)).mul(0.5).add(0.5);
-  const concrete = vec3(0.15, 0.15, 0.16).mul(grime.mul(0.6).add(0.55)).mul(speck.mul(0.25).add(0.85));
-  const albedo = groove.greaterThan(0.5).select(concrete.mul(0.55).mul(shaded.mul(-0.85).add(1)), concrete.mul(nearLit.mul(0.6).add(1)).mul(nearDark.mul(-0.5).add(1)));
-  // The window: a hard-edged rectangle of light that snaps between spots, plus the brief full reveals.
-  const d = t.sub(window.xy).abs().sub(window.zw);
-  const inWindow = max(d.x, d.y).smoothstep(0.08, -0.08);
-  const lamp = inWindow.mul(light).add(reveal).add(ambient);
-  material.fragmentNode = vec4(albedo.mul(lamp).mul(2.4).add(vec3(0.004, 0.003, 0.005)), 1);
+/** Lattice line i in maze units: even lines are the wide wall bands (0.62), odd lines the narrow paths. */
+const WALL = 0.62;
+const latticeStart = (i: number) => Math.floor(i / 2) + (i % 2 ? WALL : 0);
+const latticeWidth = (i: number) => (i % 2 ? 1 - WALL : WALL);
+/** Camera shots the maze cuts between: straight down, a zoom on the lit window, a low three-quarter view, an orbit, and inside a corridor. */
+export const MAZE_SHOTS = ['top', 'zoom', 'low', 'orbit', 'corridor'] as const;
 
+/** Open corridor runs (start cell, direction, length in lattice cells) long enough to fly a camera down. */
+export function mazeCorridors(open: Uint8Array, minimum = 5) {
+  const runs: { x: number; y: number; dx: number; dy: number; length: number }[] = [];
+  for (let y = 1; y < LATTICE - 1; y++) for (let x = 1; x < LATTICE - 1; x++) {
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      if (!open[y * LATTICE + x] || open[(y - dy) * LATTICE + x - dx]) continue;
+      let length = 0;
+      while (open[(y + dy * (length + 1)) * LATTICE + x + dx * (length + 1)]) length++;
+      if (length >= minimum) runs.push({ x, y, dx, dy, length });
+    }
+  }
+  return runs;
+}
+
+export function createBlackMazeMode(): VisualMode {
+  const { scene, camera } = sceneDefaults(0);
+  const lens = camera as THREE.PerspectiveCamera;
+  const open = generateMaze(9), size = MAZE + WALL, centre = size / 2;
+  scene.background = new THREE.Color(0x020203);
+  scene.fog = new THREE.FogExp2(0x020203, 0.04);
+  // Raw concrete: streaky grime and fine speckle, rough and matte.
+  const concrete = new THREE.MeshStandardNodeMaterial({ roughness: 0.92, metalness: 0 });
+  const grime = mx_fractal_noise_float(positionWorld.mul(vec3(1.5, 6, 1.5)), 4, 2, 0.6).mul(0.5).add(0.5);
+  const speck = mx_noise_float(positionWorld.mul(14)).mul(0.5).add(0.5);
+  concrete.colorNode = vec3(0.15, 0.15, 0.16).mul(grime.mul(0.6).add(0.55)).mul(speck.mul(0.25).add(0.85));
+  const walls: [number, number][] = [];
+  for (let y = 0; y < LATTICE; y++) for (let x = 0; x < LATTICE; x++) if (!open[y * LATTICE + x]) walls.push([x, y]);
+  const blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), concrete, walls.length);
+  const matrix = new THREE.Matrix4(), at = new THREE.Vector3(), scale = new THREE.Vector3(), turn = new THREE.Quaternion();
+  walls.forEach(([x, y], i) => {
+    const w = latticeWidth(x), d = latticeWidth(y);
+    blocks.setMatrixAt(i, matrix.compose(at.set(latticeStart(x) + w / 2, 0.35, latticeStart(y) + d / 2), turn, scale.set(w, 0.7, d)));
+  });
+  blocks.castShadow = blocks.receiveShadow = true;
+  const floorMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.95 });
+  floorMaterial.colorNode = concrete.colorNode.mul(0.55);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), floorMaterial);
+  floor.rotation.x = -Math.PI / 2; floor.position.set(centre, 0, centre); floor.receiveShadow = true;
+  // The window: a hard-edged pool of light from straight above, snapping between spots; a wide wash for the reveals.
+  const spot = new THREE.SpotLight(0xfff2e6, 0, 40, 0.12, 0.08, 1);
+  spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.0005;
+  const wash = new THREE.DirectionalLight(0xe8e4ee, 0); wash.position.set(centre - 4, 12, centre + 5); wash.target.position.set(centre, 0, centre);
+  const ambient = new THREE.HemisphereLight(0x8890a0, 0x050505, 0.02);
+  scene.add(blocks, floor, spot, spot.target, wash, wash.target, ambient);
+
+  const corridors = mazeCorridors(open);
   const hits = createHits({ decay: 0.18, interval: 0.4, variants: MAZE_WINDOWS.length, seed: 7 });
+  const shots = variantSequence(MAZE_SHOTS.length, 13), random = seededRandom(31), shadows = shadowSwitch();
+  const look = new THREE.Vector3(), from = new THREE.Vector3(), lit = new THREE.Vector3(2, 0, 2);
+  let shot = 0, shotAge = 0, run = corridors[0], windowSize = 1.3;
+  /** Aim the window at a spot, in maze units, sized to cover a w × h patch. */
+  const aimWindow = (x: number, y: number, w: number, h: number) => { lit.set(x, 0, y); windowSize = Math.max(w, h); };
   return {
     scene, camera,
+    simulate: shadows.simulate,
     update(frame) {
-      aspect.value = frame.aspect;
+      resizeCamera(lens, frame.aspect);
+      const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.02);
-      if (hits.fired) { const [x, y, w, h] = MAZE_WINDOWS[hits.variant]; window.value.set(x, y, w, h); }
+      shotAge += step;
+      if (hits.fired) {
+        const [x, y, w, h] = MAZE_WINDOWS[hits.variant]; aimWindow(x, y, w, h);
+        // Cut to a new angle on a hit once a shot has held for 3 s.
+        if (shotAge > 3 && !still) {
+          shot = shots.next(); shotAge = 0;
+          if (MAZE_SHOTS[shot] === 'corridor' && corridors.length) {
+            run = corridors[Math.floor(random() * corridors.length)];
+            const mid = run.length / 2;
+            aimWindow(latticeStart(run.x + run.dx * mid) + 0.2, latticeStart(run.y + run.dy * mid) + 0.2, 1.4, 1.4);
+          }
+        }
+      }
+      spot.position.set(lit.x, 14, lit.z); spot.target.position.copy(lit);
+      spot.angle = Math.atan(windowSize / 14) * 1.5;
+      spot.intensity = (0.25 + hits.flash * 0.75) * 260;
       // Every fourth hit lights the whole maze for a moment.
       const full = hits.count % 4 === 0 && hits.age < 0.12;
-      reveal.value = full ? 0.6 * (frame.reducedFlash ? 0.4 : 1) : 0;
-      // The window holds after the flash; it only dims toward the dark floor.
-      light.value = 0.2 + hits.flash * 0.8;
-      ambient.value = hits.floor * 0.25 + frame.response.loudness * 0.03;
-      shadow.value = 0.12 + frame.response.bass * 0.18;
+      wash.intensity = full ? 2.2 * (frame.reducedFlash ? 0.4 : 1) : 0;
+      ambient.intensity = 0.06 + hits.floor * 0.3 + frame.response.loudness * 0.2;
+      const t = shotAge, bass = frame.response.bass;
+      switch (MAZE_SHOTS[shot]) {
+        case 'top': from.set(centre, 13 - bass * 0.8, centre + 0.01); look.set(centre, 0, centre); lens.fov = 45; break;
+        case 'zoom': from.set(lit.x + 0.3, 4.2 - Math.min(t * 0.25, 1.2) - bass * 0.4, lit.z + 1.2); look.copy(lit); lens.fov = 50; break;
+        case 'low': from.set(centre - 7 + t * 0.15, 3.2, centre + 8); look.set(centre, 0, centre - 0.5); lens.fov = 50; break;
+        case 'orbit': from.set(centre + Math.sin(t * 0.12) * 9, 6.5, centre + Math.cos(t * 0.12) * 9); look.set(centre, 0, centre); lens.fov = 50; break;
+        case 'corridor': {
+          // Eye height inside the walls, dollying slowly down the corridor.
+          const travel = Math.min(run.length - 1, t * (0.5 + bass * 0.6));
+          const cx = latticeStart(run.x + run.dx * travel) + latticeWidth(run.x) / 2, cy = latticeStart(run.y + run.dy * travel) + latticeWidth(run.y) / 2;
+          from.set(cx, 0.28, cy); look.set(cx + run.dx * 4, 0.22, cy + run.dy * 4); lens.fov = 70; break;
+        }
+      }
+      // A small handheld drift on every shot.
+      const drift = still ? 0 : 0.03;
+      lens.position.set(from.x + Math.sin(frame.time * 0.7) * drift, from.y + Math.sin(frame.time * 0.9) * drift, from.z);
+      lens.lookAt(look);
+      lens.updateProjectionMatrix();
     },
-    dispose() { disposeScene(scene); lattice.dispose(); },
+    dispose() { shadows.dispose(); disposeScene(scene); },
   };
 }
 
@@ -107,7 +165,7 @@ export function canopyTrunks(count: number, seed = 5) {
 export function createStarfallCanopyMode(budget: QualityBudget): VisualMode {
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, -1, 1);
-  const time = uniform(0), aspect = uniform(1), sway = uniform(0), brightness = uniform(1), twinkle = uniform(1), sparkle = uniform(0);
+  const time = uniform(0), aspect = uniform(1), sway = uniform(0), brightness = uniform(0), twinkle = uniform(1), sparkle = uniform(0), density = uniform(0);
   const trunkCount = budget.particleScale >= 2 ? 14 : budget.particleScale >= 1 ? 10 : 6;
   const background = new THREE.MeshBasicNodeMaterial({ depthWrite: false, depthTest: false });
   const p = uv().sub(0.5).mul(vec2(aspect, 1));
@@ -118,27 +176,31 @@ export function createStarfallCanopyMode(budget: QualityBudget): VisualMode {
     const jitter = vec2(hash2(cell.add(seed * 5)), hash2(cell.add(seed * 9))).sub(0.5).mul(0.6);
     const d = fract(g).sub(0.5).sub(jitter).length();
     const rate = h.mul(2.5).add(0.5), flicker = sin(time.mul(rate).mul(twinkle).add(h.mul(60))).mul(0.4).add(0.6);
-    stars = stars.add(h.lessThan(chance).select(float(1), float(0)).mul(d.smoothstep(size, 0)).mul(flicker).mul(seed === 3 ? 1.6 : 1));
+    // More of the sky fills in as the music gets louder; in silence there are no stars at all.
+    stars = stars.add(h.lessThan(density.mul(chance)).select(float(1), float(0)).mul(d.smoothstep(size, 0)).mul(flicker).mul(seed === 3 ? 1.6 : 1));
   }
   // A handful of bright stars carry a diffraction cross.
   const big = p.mul(9), bigCell = big.floor(), bh = hash2(bigCell.add(41)), local = fract(big).sub(0.5);
   const cross = bh.lessThan(0.05).select(float(1), float(0)).mul(exp(local.x.abs().mul(-70)).mul(exp(local.y.abs().mul(-9))).add(exp(local.y.abs().mul(-70)).mul(exp(local.x.abs().mul(-9)))).add(exp(local.length().mul(-60)).mul(2)));
   const crossTwinkle = sin(time.mul(bh.mul(3).add(1)).add(bh.mul(30))).mul(0.35).add(0.65).add(sparkle.mul(0.5));
   const starLight = vec3(1, 0.97, 0.94).mul(stars).add(vec3(0.75, 0.83, 1).mul(cross.mul(crossTwinkle).mul(0.5)));
-  const glow = exp(p.sub(vec2(0, 0.3)).length().mul(-1.8)).mul(0.08);
+  const glow = exp(p.sub(vec2(0, 0.3)).length().mul(-1.8)).mul(0.08).mul(brightness.mul(0.8).add(0.2));
   const sky = vec3(0.0006, 0.0009, 0.003).add(vec3(0.004, 0.008, 0.03).mul(glow.mul(14)));
-  // Silhouettes: tapering trunks converging upward, needle clusters swaying around their crowns and the frame edge.
-  let solid: F = float(0);
+  // Silhouettes: tapering trunks converging upward, each carrying its own crown of needle clusters.
+  let solid: F = float(0), crown: F = float(0);
+  const swayed = p.add(vec2(sway.mul(p.y.add(0.5)).mul(0.02), 0));
   for (const trunk of canopyTrunks(trunkCount)) {
     const a = vec2(trunk.base * 0.5, -0.62), b = vec2(trunk.top * 0.5, -0.5 + trunk.height);
     const ba = b.sub(a), pa = p.sub(a), h = pa.dot(ba).div(ba.dot(ba)).clamp(0, 1);
     const width = float(trunk.width).mul(h.mul(-0.7).add(1));
     solid = max(solid, pa.sub(ba.mul(h)).length().smoothstep(width, width.mul(0.7)));
+    // Branch tufts hug the upper part of the trunk (they sway with it), widest a little below the top.
+    const sa = swayed.sub(a), hs = sa.dot(ba).div(ba.dot(ba)).clamp(0, 1.08);
+    const reach = hs.smoothstep(0.35, 0.75).mul(hs.smoothstep(1.08, 0.85)).mul(0.095);
+    crown = max(crown, sa.sub(ba.mul(hs)).length().smoothstep(reach.add(0.005), 0).mul(hs.greaterThan(0.3).select(float(1), float(0))));
   }
-  const swayed = p.add(vec2(sway.mul(p.y.add(0.5)).mul(0.02), 0));
-  const needles = mx_fractal_noise_float(vec3(swayed.mul(6), time.mul(0.02)), 4, 2.2, 0.6).add(mx_noise_float(vec3(swayed.mul(55), 1)).mul(0.25));
-  const edge = abs(p.x).div(aspect.mul(0.5)).max(p.y.add(0.5).oneMinus().mul(0.4)).pow(2).add(p.y.sub(0.5).abs().oneMinus().smoothstep(0.7, 1).mul(0.6));
-  const foliage = needles.add(edge.mul(0.7)).sub(0.55).smoothstep(0, 0.04);
+  const needles = mx_fractal_noise_float(vec3(swayed.mul(9), time.mul(0.02)), 4, 2.2, 0.6).add(mx_noise_float(vec3(swayed.mul(55), 1)).mul(0.25));
+  const foliage = crown.mul(needles.add(0.45)).sub(0.5).smoothstep(0, 0.04);
   const silhouette = max(solid, foliage);
   const rim = foliage.mul(foliage.oneMinus()).mul(4).add(solid.mul(solid.oneMinus()).mul(4)).mul(0.02);
   background.colorNode = sky.add(starLight.mul(brightness)).mul(silhouette.oneMinus()).add(vec3(0.05, 0.09, 0.19).mul(rim)).add(vec3(glow.mul(silhouette.oneMinus()).mul(0.1)));
@@ -172,7 +234,9 @@ export function createStarfallCanopyMode(budget: QualityBudget): VisualMode {
       hits.update(frame, 0.6);
       swayPhase += frame.reducedMotion ? 0 : frame.delta;
       sway.value = Math.sin(swayPhase * 0.7) * (0.6 + frame.response.bass * 2.4) + Math.sin(swayPhase * 1.9) * 0.3;
-      brightness.value = approach(brightness.value, 0.75 + frame.response.loudness * 0.6, step, 0.3);
+      // The sky only lights up with the music: dark in silence, filling with stars as it gets louder.
+      brightness.value = approach(brightness.value, frame.response.loudness * 1.1 + frame.response.bass * 0.4 + hits.flash * 0.6, step, 0.15);
+      density.value = approach(density.value, Math.min(1.2, frame.response.loudness * 1.3 + hits.flash * 0.3), step, 0.25);
       twinkle.value = 1 + frame.response.loudness * 1.5;
       sparkle.value = frame.audio.highs;
       // A hit sends a single shooting star; a sustained loud passage sets off a star storm (at most one per 8 s).

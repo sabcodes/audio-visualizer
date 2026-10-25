@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { atan, cos, exp, float, fract, mix, max, texture as sampleTexture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { atan, cos, exp, float, fract, mix, max, sin, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import type { ModeFrame, VisualMode } from './types';
-import { disposeScene, approach, settleStep, bandEnergies } from './shared';
+import { disposeScene, approach, settleStep } from './shared';
 import { fullscreen, palette } from './shaderModes';
 import { createHits, linearRgb } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
@@ -76,58 +76,95 @@ export function createPrismBowtieMode(): VisualMode {
 }
 
 /** Block Bowtie colours, one per hit and never the same twice in a row. */
-export const BLOCK_COLOURS = [0xff2bd6, 0x35e010, 0xe5192b, 0x0b1e8f, 0xff6a00, 0x8a22c8] as const;
-const BLOCK_COLUMNS = 16;
+export const BLOCK_COLOURS = [0xff2bd6, 0x35e010, 0xe5192b, 0x1a3cff, 0xff6a00, 0x8a22c8] as const;
+/** Silhouette families the outline blends between: bowtie flare, barrel, wave, diamond, teeth. */
+export const BOWTIE_SHAPES = 5;
 
-/** Mirrored column heights for one re-cut: louder bands rise, and the outline steps between 6 and 10 columns. */
-export function blockOutline(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleRate' | 'audio'>, random: () => number, out = new Float32Array(BLOCK_COLUMNS)) {
-  const columns = 6 + Math.floor(random() * 5), energy = bandEnergies(frame, columns);
-  for (let i = 0; i < BLOCK_COLUMNS; i++) {
-    const column = Math.min(columns - 1, Math.floor(i / BLOCK_COLUMNS * columns));
-    out[i] = 0.45 + energy[column] * 0.35 + random() * 0.3;
-  }
+/**
+ * Target blend for one hit: the hit's own family dominates, a second family mixes in, and louder bass
+ * pushes toward the spikier shapes. Weights sum to 1 so the outline keeps its scale.
+ */
+export function bowtieBlend(primary: number, frame: Pick<ModeFrame, 'response'>, random: () => number, out = new Float32Array(BOWTIE_SHAPES)) {
+  out.fill(0);
+  const secondary = (primary + 1 + Math.floor(random() * (BOWTIE_SHAPES - 1))) % BOWTIE_SHAPES;
+  const share = 0.15 + random() * 0.3 + Math.min(0.2, frame.response.bass * 0.2);
+  out[primary] += 1 - share; out[secondary] += share;
   return out;
 }
 
 export function createBlockBowtieMode(): VisualMode {
   const { scene, camera, material } = fullscreen();
-  const heights = new Float32Array(BLOCK_COLUMNS).fill(0.6);
-  const heightTexture = new THREE.DataTexture(heights, BLOCK_COLUMNS, 1, THREE.RedFormat, THREE.FloatType);
-  heightTexture.minFilter = heightTexture.magFilter = THREE.LinearFilter; heightTexture.needsUpdate = true;
-  const aspect = uniform(1), halfWidth = uniform(0.2), halfHeight = uniform(0.075), colour = uniform(new THREE.Vector3(...linearRgb(0x35e010))), gain = uniform(0.05), core = uniform(0), glow = uniform(0.08);
-  const { q } = mirrored(aspect);
-  // Column heights are linearly filtered, so the steps between columns read as slanted cuts like the reference.
-  const x = q.x.div(halfWidth);
-  const h = sampleTexture(heightTexture, vec2(x.clamp(0, 1).mul(0.94).add(0.03), 0.5)).r.mul(halfHeight);
-  const dx = q.x.sub(halfWidth), dy = q.y.sub(h);
-  const outside = vec2(dx.max(0), dy.max(0)).length();
-  const body = max(dx, dy).smoothstep(0.004, -0.004);
-  // Brighter toward the middle and top edge; the soft halo stands in for heavy bloom.
-  const shade = x.mul(-0.35).add(1).mul(q.y.div(h.max(1e-3)).mul(0.35).add(0.75));
-  const halo = exp(outside.div(glow).negate()).mul(0.35);
-  const spine = exp(q.x.mul(-140)).mul(q.y.lessThan(h).select(float(1), float(0))).mul(core);
-  const rgb = colour.mul(body.mul(shade).add(halo)).add(vec3(1).mul(spine));
+  const aspect = uniform(1), halfWidth = uniform(0.2), halfHeight = uniform(0.075), gain = uniform(0.05), core = uniform(0), glow = uniform(0.08), time = uniform(0);
+  const colour = uniform(new THREE.Vector3(...linearRgb(0x35e010))), accent = uniform(new THREE.Vector3(...linearRgb(0xff2bd6)));
+  const phase = uniform(0), flap = uniform(0), stripes = uniform(0), pinch = uniform(0);
+  const weights = Array.from({ length: BOWTIE_SHAPES }, (_, i) => uniform(i === 0 ? 1 : 0));
+  const { p, q } = mirrored(aspect);
+  /** Outline height at x (0 centre – 1 tip), as a blend of the five families; the phase keeps it rippling. */
+  const profile = (x: F, ph: F) => {
+    const shapes = [
+      mix(float(0.4), float(1.15), x.pow(1.6)).sub(pinch.mul(x.oneMinus()).mul(0.25)),
+      float(1).sub(x.mul(x).mul(0.45)),
+      sin(x.mul(9).sub(ph.mul(2))).mul(0.2).add(0.9),
+      mix(float(1.45), float(0.5), x.pow(0.6)),
+      fract(x.mul(5).add(ph.mul(0.15))).sub(0.5).abs().mul(0.8).add(0.62),
+    ];
+    return shapes.reduce<F>((sum, shape, i) => sum.add(shape.mul(weights[i])), float(0)).mul(x.mul(x).mul(flap).add(1));
+  };
+  /** One mirrored layer: body mask, distance outside it, and its 0–1 coordinates. */
+  const layer = (sx: number, sy: number, ph: F) => {
+    const w = halfWidth.mul(sx), x = q.x.div(w);
+    const h = profile(x.clamp(0, 1), ph).mul(halfHeight).mul(sy);
+    const dx = q.x.sub(w), dy = q.y.sub(h);
+    return { body: max(dx, dy).smoothstep(0.004, -0.004), outside: vec2(dx.max(0), dy.max(0)).length(), x, v: q.y.div(h.max(1e-3)) };
+  };
+  const front = layer(1, 1, phase), back = layer(1.14, 1.3, phase.add(1.7));
+  // Folded-fabric shading: soft vertical pleats, brighter toward the middle and the top edge.
+  const pleats = mix(float(1), cos(front.x.mul(28).add(phase.mul(3))).mul(0.5).add(0.5).pow(2).mul(0.55).add(0.45), stripes);
+  const shade = front.x.mul(-0.35).add(1).mul(front.v.mul(0.35).add(0.75)).mul(pleats);
+  const halo = exp(front.outside.div(glow).negate()).mul(0.35);
+  // Gradient from the accent colour at the core to the main colour at the tips.
+  const body = mix(accent, colour, front.x.clamp(0, 1).pow(0.5));
+  const ghost = colour.mul(back.body.mul(front.body.oneMinus()).mul(0.3));
+  const spine = exp(q.x.mul(-140)).mul(front.body).mul(core);
+  const heart = exp(p.length().div(halfHeight.mul(0.35)).negate()).mul(core).mul(0.6);
+  const rgb = body.mul(front.body.mul(shade)).add(colour.mul(halo)).add(ghost).add(vec3(1).mul(spine.add(heart)));
   material.fragmentNode = vec4(rgb.mul(gain), 1);
 
   const hits = createHits({ decay: 0.2, interval: 0.3, variants: BLOCK_COLOURS.length, seed: 11 });
-  const random = seededRandom(23);
-  let size = 0;
+  const random = seededRandom(23), target = new Float32Array(BOWTIE_SHAPES).fill(0), toColour = new THREE.Vector3(), toAccent = new THREE.Vector3();
+  target[0] = 1; toColour.copy(colour.value); toAccent.copy(accent.value);
+  let size = 0, ripple = 0, punch = 0;
   return {
     scene, camera,
     update(frame) {
-      aspect.value = frame.aspect;
+      aspect.value = frame.aspect; time.value = frame.time;
+      const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.05);
-      if (hits.fired) { blockOutline(frame, random, heights); heightTexture.needsUpdate = true; }
-      size = approach(size, frame.response.bass, settleStep(frame), 0.1);
-      halfWidth.value = frame.aspect * 0.09 * (1 + size * 0.3);
-      halfHeight.value = 0.12 * (1 + size * 0.4);
-      colour.value.set(...linearRgb(BLOCK_COLOURS[hits.variant]));
-      // The navy variant is dark by nature; give it a little more light so it still reads.
-      const navy = BLOCK_COLOURS[hits.variant] === 0x0b1e8f ? 2.2 : 1;
-      core.value = 0.4 + hits.flash * 1.6;
+      // A hit picks a new silhouette blend and colour; the shape then flows there instead of cutting.
+      if (hits.fired) {
+        bowtieBlend(Math.floor(random() * BOWTIE_SHAPES), frame, random, target);
+        toColour.set(...linearRgb(BLOCK_COLOURS[hits.variant]));
+        toAccent.set(...linearRgb(BLOCK_COLOURS[(hits.variant + 1 + Math.floor(random() * (BLOCK_COLOURS.length - 1))) % BLOCK_COLOURS.length]));
+        stripes.value = random() < 0.35 ? 1 : 0;
+        punch = 1;
+      }
+      weights.forEach((weight, i) => { weight.value = approach(weight.value, target[i], step, 0.16); });
+      colour.value.lerp(toColour, 1 - Math.exp(-step / 0.12)); accent.value.lerp(toAccent, 1 - Math.exp(-step / 0.25));
+      punch *= Math.exp(-step / 0.18);
+      size = approach(size, frame.response.bass, step, 0.08);
+      if (!still) ripple += frame.delta * (0.6 + frame.response.loudness * 2.5);
+      phase.value = ripple;
+      // Wings lift and drop with the bass, and the middle pinches in on each hit.
+      flap.value = still ? 0 : Math.sin(frame.time * 2.1) * 0.12 + size * 0.35 - punch * 0.15;
+      pinch.value = punch;
+      halfWidth.value = frame.aspect * 0.12 * (1 + size * 0.25 + punch * 0.1);
+      halfHeight.value = 0.075 * (1 + size * 0.4 + punch * 0.2);
+      // Blue is dark by nature; give it a little more light so it still reads.
+      const dim = Math.max(0.2, toColour.x * 0.3 + toColour.y * 0.6 + toColour.z * 0.1);
+      core.value = 0.15 + hits.flash * 1.2;
       glow.value = 0.04 + frame.response.loudness * 0.06;
-      gain.value = (hits.floor + hits.flash * 1.3) * navy;
+      gain.value = (0.35 + hits.flash * 0.7 + size * 0.15) * Math.min(2.2, 0.45 / dim + 0.6);
     },
-    dispose() { disposeScene(scene); heightTexture.dispose(); },
+    dispose: () => disposeScene(scene),
   };
 }

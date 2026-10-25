@@ -24,7 +24,7 @@ export function createRedCrystalHallMode(budget: QualityBudget): VisualMode {
   const { scene, camera } = sceneDefaults(0);
   (camera as THREE.PerspectiveCamera).fov = 50;
   const mistCount = tier(budget, 40, 20, 10);
-  const time = uniform(0), glow = uniform(0.6), cracks = uniform(0.6), ring = uniform(-1), ringStrength = uniform(0);
+  const time = uniform(0), glow = uniform(0.6), cracks = uniform(0.6), ring = uniform(-1), ringStrength = uniform(0), scanY = uniform(0), scanLevel = uniform(0.3), flare = uniform(0);
   const finish = createCinematic({ grain: 0.06, halation: 0.55, vignette: 0.6, soften: 0.25, shadows: [0.012, 0.004, 0.004] });
   scene.background = new THREE.Color(0x070405);
   scene.fog = new THREE.FogExp2(0x1a0808, 0.022);
@@ -36,8 +36,10 @@ export function createRedCrystalHallMode(budget: QualityBudget): VisualMode {
   const core = exp(positionLocal.xz.length().mul(-1.8)).mul(positionLocal.y.add(6.5).div(13).oneMinus().mul(0.6).add(0.4));
   const rim = normalView.z.oneMinus().pow(2);
   crystalMaterial.colorNode = vec3(0.25, 0.01, 0.005);
-  crystalMaterial.emissiveNode = vec3(0.88, 0.03, 0.01).mul(core.mul(glow).mul(2.5).add(rim.mul(0.6)))
-    .add(vec3(1, 0.35, 0.12).mul(vein.mul(cracks).mul(3)));
+  // A band of light travels up and down the crystal: slowly on its own, and fast on each hit, lighting the cracks as it passes.
+  const scan = exp(positionLocal.y.sub(scanY).abs().mul(-0.9)).mul(scanLevel);
+  crystalMaterial.emissiveNode = vec3(0.88, 0.03, 0.01).mul(core.mul(glow).mul(2.5).add(rim.mul(0.6)).add(scan.mul(1.5)).add(flare))
+    .add(vec3(1, 0.35, 0.12).mul(vein.mul(cracks.add(scan.mul(2.5))).mul(3)));
   const crystal = new THREE.Mesh(new THREE.LatheGeometry(CRYSTAL_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)), 7), crystalMaterial);
   crystal.position.set(0, 11, 0); crystal.scale.set(1.6, 1.25, 1.6);
   const inner = new THREE.PointLight(0xff2a10, 300, 60, 1.4); inner.position.set(0, 9, 0);
@@ -89,7 +91,7 @@ export function createRedCrystalHallMode(budget: QualityBudget): VisualMode {
   });
   const shadows = shadowSwitch();
   const hits = createHits({ decay: 0.4, interval: 0.6 });
-  let ringAge = -1;
+  let ringAge = -1, sweepAge = Infinity, sweepUp = true, drift = 0;
   return {
     scene, camera,
     ready: model.ready,
@@ -100,10 +102,17 @@ export function createRedCrystalHallMode(budget: QualityBudget): VisualMode {
       const step = settleStep(frame), bass = frame.response.bass;
       hits.update(frame, 0.6);
       // Bass brightens the crystal (60–100%) and its cracks; a hit sends a shock ring across the floor and a flare.
-      glow.value = approach(glow.value, 0.6 + bass * 0.4 + hits.flash * 0.3, step, 0.08);
-      cracks.value = approach(cracks.value, 0.4 + bass * 0.9 + hits.flash * 0.8, step, 0.06);
-      inner.intensity = 90 + glow.value * 140; tip.intensity = 50 + glow.value * 80 + hits.flash * 120;
-      if (hits.fired) ringAge = 0;
+      glow.value = approach(glow.value, 0.45 + bass * 0.7 + frame.response.bounce * 0.3 + hits.flash * 0.4, step, 0.06);
+      cracks.value = approach(cracks.value, 0.3 + bass * 1.2 + hits.flash * 0.9, step, 0.05);
+      flare.value = hits.flash * 0.8;
+      inner.intensity = 60 + glow.value * 220 + hits.flash * 150; tip.intensity = 40 + glow.value * 110 + hits.flash * 160;
+      // Each hit sends the glow sweeping the length of the crystal, alternating up and down.
+      if (hits.fired) { ringAge = 0; sweepAge = 0; sweepUp = !sweepUp; }
+      sweepAge += step;
+      if (!frame.reducedMotion) drift += frame.delta * (0.7 + frame.response.loudness);
+      const sweeping = sweepAge < 0.7, t = Math.min(1, sweepAge / 0.7);
+      scanY.value = sweeping ? (sweepUp ? -7 + t * 14 : 7 - t * 14) : Math.sin(drift) * 5;
+      scanLevel.value = sweeping ? 1.2 * (frame.reducedFlash ? 0.6 : 1) : approach(scanLevel.value, 0.25 + bass * 0.6, step, 0.15);
       if (ringAge >= 0) { ringAge += step; if (ringAge > 2.5) ringAge = -1; }
       ring.value = ringAge < 0 ? -1 : ringAge * 9; ringStrength.value = ringAge < 0 ? 0 : Math.max(0, 1 - ringAge / 2.5) * (frame.reducedFlash ? 0.4 : 1);
       const height = 0.6 + frame.response.loudness * 2.2;

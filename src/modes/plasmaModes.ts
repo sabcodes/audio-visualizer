@@ -4,7 +4,7 @@ import { atan, cos, exp, float, fract, max, min, mix, mx_fractal_noise_float, mx
 import type { VisualMode } from './types';
 import { disposeScene, approach, settleStep, createSpectrumTexture, spectrumAxisNode } from './shared';
 import { fullscreen, hash2 } from './shaderModes';
-import { createHits, linearRgb } from './hitPulse';
+import { createHits, linearRgb, variantSequence } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 
 type F = Node<'float'>;
@@ -30,6 +30,9 @@ export const PLASMA_PALETTES = [
   [0x3cff7a, 0x2ef2ff, 0xff8a3d], [0x2ef2ff, 0xffffff, 0xe0572b], [0xff3fd0, 0x2ef2ff, 0xff8a3d], [0x3a4bff, 0xff3fd0, 0x2ef2ff], [0x2ef2ff, 0xffffff, 0x3cff7a],
 ] as const;
 
+/** Grain Smoke forms: S column, shell outline, veined sphere, spray, veined oval ring, smoke ribbon. */
+export const GRAIN_FORMS = 6;
+
 export interface PlasmaPreset {
   /** Monochrome film look (Grain Smoke) instead of the mirrored colour sculpture. */
   mono: boolean;
@@ -47,7 +50,8 @@ export function createPlasmaEngine(preset: PlasmaPreset): VisualMode {
   const { scene, camera, material } = fullscreen();
   const spectrum = createSpectrumTexture();
   const aspect = uniform(1), time = uniform(0), gain = uniform(0.1), flash = uniform(0), spread = uniform(1), bloomSize = uniform(1);
-  const logMapping = uniform(0), nyquist = uniform(24000), core = uniform(0.5), grain = uniform(0.12), tear = uniform(0), tearSeed = uniform(0), shell = uniform(0), column = uniform(0.06);
+  const logMapping = uniform(0), nyquist = uniform(24000), core = uniform(0.5), grain = uniform(0.12), tear = uniform(0), tearSeed = uniform(0), column = uniform(0.06);
+  const fromForm = uniform(0), toForm = uniform(0), morph = uniform(1), scale = uniform(1), sway = uniform(1);
   const weights = SILHOUETTES.map((_, i) => uniform(i === 0 ? 1 : 0));
   const colours = PLASMA_PALETTES[0].map((hex) => uniform(new THREE.Vector3(...linearRgb(hex))));
   const p = uv().sub(0.5).mul(vec2(aspect, 1));
@@ -77,31 +81,43 @@ export function createPlasmaEngine(preset: PlasmaPreset): VisualMode {
     const rgb = tint.mul(strands.mul(dots).mul(1.5)).add(colours[1].mul(heart.add(mask.mul(0.07)))).add(vec3(1).mul(mask.mul(flash).mul(0.12)));
     material.fragmentNode = vec4(rgb.mul(gain).add(vec3(pixelNoise.mul(0.01))), 1);
   } else {
-    const x = p.x, y = p.y;
     // Torn rows: a few horizontal bands slide sideways on a hit.
-    const row = y.mul(60).floor(), torn = hash2(vec2(row, tearSeed)).greaterThan(0.93).select(float(1), float(0)).mul(tear);
-    const xt = x.add(torn.mul(hash2(vec2(row, tearSeed.add(3))).sub(0.5)).mul(0.3));
-    const smoke = mx_fractal_noise_float(vec3(xt.mul(9), y.mul(2.2).sub(time.mul(0.35)), time.mul(0.1)), 4, 2, 0.55).mul(0.5).add(0.5);
-    const columnMask = exp(xt.div(column).pow(2).negate());
-    const powder = smoke.mul(columnMask).mul(1.4).add(columnMask.mul(0.15));
-    // Vertical light spikes near the column, and a few long horizontal streaks.
+    const row = p.y.mul(60).floor(), torn = hash2(vec2(row, tearSeed)).greaterThan(0.93).select(float(1), float(0)).mul(tear);
+    const xt = p.x.add(torn.mul(hash2(vec2(row, tearSeed.add(3))).sub(0.5)).mul(0.3));
+    // Mid-morph the smoke churns: one form dissolves into drifting powder and gathers again as the next.
+    const churn = morph.mul(float(1).sub(morph)).mul(4);
+    const drift = vec2(mx_noise_float(vec3(xt.mul(3), p.y.mul(3), time.mul(0.4))), mx_noise_float(vec3(xt.mul(3).add(5), p.y.mul(3), time.mul(0.4))));
+    const q = vec2(xt, p.y).add(drift.mul(churn.mul(0.14).add(0.012))).div(scale);
+    const smoke = mx_fractal_noise_float(vec3(q.x.mul(9), q.y.mul(2.2).sub(time.mul(0.35)), time.mul(0.1)), 4, 2, 0.55).mul(0.5).add(0.5);
+    const veins = float(1).sub(mx_noise_float(vec3(q.mul(9), time.mul(0.2))).abs()).pow(10);
+    const surface = mx_fractal_noise_float(vec3(q.mul(5), time.mul(0.05)), 3, 2, 0.5).mul(0.5).add(0.5);
+    const tall = q.y.abs().smoothstep(0.46, 0.3);
+    /** The forms from the clip: S column, shell outline, veined sphere, horizontal spray, veined oval ring, smoke ribbon. */
+    const forms: ((index: number) => F)[] = [
+      () => { const cx = sin(q.y.mul(7).add(time.mul(0.6))).mul(0.05).mul(sway); return exp(q.x.sub(cx).div(column).pow(2).negate()).mul(smoke.mul(smoke).mul(2.2).add(0.1)).mul(tall); },
+      () => { const r = q.length().div(0.33); return exp(r.sub(1).abs().mul(-40)).mul(0.6).add(r.smoothstep(1, 0.96).mul(surface.mul(0.18).add(exp(q.x.abs().mul(-300)).mul(0.5)))); },
+      () => { const r = q.length().div(0.3), inside = r.smoothstep(1, 0.96); return inside.mul(surface.mul(0.3).add(veins.mul(0.55)).add(r.pow(5).mul(0.5))).add(exp(r.sub(1).abs().mul(-50)).mul(0.4)); },
+      () => { const a = atan(q.y, q.x.abs()), rays = float(1).sub(fract(a.mul(40).add(mx_noise_float(vec3(q.mul(3), time.mul(0.3))).mul(3))).sub(0.5).abs().mul(2)).pow(8); return exp(q.y.abs().mul(-7)).mul(exp(q.x.abs().mul(-2.5))).mul(rays.mul(0.9).add(smoke.mul(0.6))); },
+      () => { const w = q.mul(vec2(1, 0.75)).add(drift.mul(0.05)), rr = w.length().div(0.3); return exp(rr.sub(1).abs().mul(-12)).mul(smoke.mul(1.1).add(veins.mul(0.7))); },
+      () => { const cx = sin(q.y.mul(5).add(time.mul(0.5))).mul(0.14), width = sin(q.y.mul(3).sub(time.mul(0.3))).mul(0.025).add(0.05); return exp(q.x.sub(cx).div(width).pow(2).negate()).mul(smoke.mul(1.3).add(veins.mul(0.4))).mul(tall); },
+    ];
+    const formAt = (index: F) => forms.reduce<F>((acc, build, i) => index.equal(i).select(build(i), acc), float(0));
+    const ease = morph.mul(morph).mul(float(3).sub(morph.mul(2)));
+    const powder = mix(formAt(fromForm), formAt(toForm), ease);
+    // Vertical light spikes near the centre, and a few long horizontal streaks.
     const spikeCell = xt.mul(260).floor();
-    const spikes = hash2(vec2(spikeCell, 1)).greaterThan(0.94).select(float(1), float(0)).mul(exp(xt.abs().mul(-9))).mul(mx_noise_float(vec3(spikeCell, y.mul(3), time)).mul(0.5).add(0.5));
-    const streak = exp(y.sub(0.22).abs().mul(-400)).add(exp(y.add(0.27).abs().mul(-500))).mul(exp(xt.abs().mul(-5))).mul(0.5);
-    // Shell: a translucent veined sphere with a bright limb.
-    const r = p.length().div(0.35), inside = r.smoothstep(1, 0.97);
-    const veins = float(1).sub(mx_noise_float(vec3(p.mul(9), time.mul(0.2))).abs()).pow(10);
-    const surface = mx_fractal_noise_float(vec3(p.mul(5), 2.5), 3, 2, 0.5).mul(0.5).add(0.5);
-    const shellLight = inside.mul(surface.mul(0.25).add(r.pow(5).mul(0.6)).add(veins.mul(0.35))).add(exp(r.sub(1).abs().mul(-60)).mul(0.45));
-    const light = mix(powder.add(spikes.mul(0.7)).add(streak.mul(tear.add(0.3))), shellLight.add(spikes.mul(0.3)), shell);
+    const spikes = hash2(vec2(spikeCell, 1)).greaterThan(0.94).select(float(1), float(0)).mul(exp(xt.abs().mul(-9))).mul(mx_noise_float(vec3(spikeCell, p.y.mul(3), time)).mul(0.5).add(0.5));
+    const streak = exp(p.y.sub(0.22).abs().mul(-400)).add(exp(p.y.add(0.27).abs().mul(-500))).mul(exp(xt.abs().mul(-5))).mul(0.5);
+    const light = powder.add(spikes.mul(0.6)).add(streak.mul(tear.add(0.3)));
     const tone = mix(vec3(0.95), vec3(0.85, 0.9, 1.05), flash.mul(0.08));
     material.fragmentNode = vec4(tone.mul(light.mul(gain)).add(vec3(pixelNoise.mul(grain))).max(0), 1);
   }
 
-  const variants = preset.mono ? 4 : SILHOUETTES.length;
+  const variants = preset.mono ? 3 : SILHOUETTES.length;
   const hits = createHits({ decay: preset.decay, interval: preset.interval, variants, seed: preset.seed });
   const random = seededRandom(preset.seed * 7 + 1);
-  let shellAge = Infinity, bloom = 1, swell = 0;
+  const forms = variantSequence(GRAIN_FORMS, preset.seed + 3);
+  let formAge = 0, bloom = 1, swell = 0;
   return {
     scene, camera,
     update(frame) {
@@ -112,15 +128,21 @@ export function createPlasmaEngine(preset: PlasmaPreset): VisualMode {
       hits.update(frame, preset.mono ? 0.35 : 0.06);
       swell = approach(swell, frame.response.bass, step, 0.1);
       if (preset.mono) {
-        // Variants: column flare, tear glitch, sphere shell, collapse.
+        // Hits: column flare, tear glitch, collapse. The form only changes on a strong hit after a hold, or
+        // on any hit once a form has run long, and then morphs over 1.6 s instead of cutting.
         if (hits.fired) {
-          if (hits.variant === 1 || hits.variant === 0) { tear.value = 1; tearSeed.value = Math.floor(random() * 1000); }
-          if (hits.variant === 2) shellAge = 0;
+          if (hits.variant === 1) { tear.value = 1; tearSeed.value = Math.floor(random() * 1000); }
+          const strong = frame.response.impact > 0.7 || frame.response.bass > 0.75;
+          if (morph.value >= 1 && ((strong && formAge > 6) || formAge > 14)) {
+            fromForm.value = toForm.value; toForm.value = forms.next(); morph.value = 0; formAge = 0;
+          }
         }
-        shellAge += step;
-        shell.value = shellAge < 1.2 ? Math.min(1, shellAge * 8) * Math.min(1, (1.2 - shellAge) * 4) : 0;
+        formAge += step;
+        morph.value = Math.min(1, morph.value + step / 1.6);
         tear.value = Math.max(0, tear.value - step * 5) * (frame.reducedFlash ? 0.5 : 1);
-        column.value = 0.04 + swell * 0.04 + (hits.variant === 3 ? -hits.level * 0.02 : hits.level * 0.02);
+        column.value = 0.04 + swell * 0.04 + (hits.variant === 2 ? -hits.level * 0.02 : hits.level * 0.025);
+        scale.value = approach(scale.value, 1 + frame.response.bounce * 0.12 + hits.level * 0.08, step, 0.08);
+        sway.value = 1 + frame.response.loudness * 1.5;
         grain.value = 0.08 + frame.response.loudness * 0.08;
         flash.value = hits.flash;
         gain.value = hits.floor * 1.4 + hits.flash * 0.9 + frame.response.loudness * 0.4;
@@ -150,7 +172,9 @@ export const createGrainSmokeMode = () => createPlasmaEngine({ mono: true, decay
 
 export function createAnamorphicFlareMode(): VisualMode {
   const { scene, camera, material } = fullscreen();
+  const spectrum = createSpectrumTexture();
   const aspect = uniform(1), time = uniform(0), coreSize = uniform(0.05), streak = uniform(0.6), fibres = uniform(0.5), fringe = uniform(0.004), burst = uniform(0), gain = uniform(1);
+  const drive = uniform(0.3), kick = uniform(0), bend = uniform(1), climb = uniform(0), logMapping = uniform(0), nyquist = uniform(24000);
   const p = uv().sub(0.5).mul(vec2(aspect, 1));
   const channel = (offset: F) => {
     const q = p.add(vec2(offset, 0));
@@ -161,17 +185,22 @@ export function createAnamorphicFlareMode(): VisualMode {
     return glow.add(line);
   };
   const light = vec3(channel(fringe), channel(float(0)), channel(fringe.negate()));
-  // Vertical fibres: thin curved threads hanging up and down the axis, each its own colour.
+  // Vertical fibres: each one listens to its own band, so they grow and shrink independently; light pulses
+  // run up some and down others, and a hit shoots them all out before they fall back.
   let threads: V3 = vec3(0);
   for (const [scale, seed] of [[260, 1], [420, 2], [680, 3]] as const) {
-    const bend = mx_noise_float(vec3(p.y.mul(2.5), seed * 10, time.mul(0.15))).mul(0.05).mul(p.y.abs().add(0.2));
-    const x = p.x.add(bend), cell = x.mul(scale).floor();
-    const on = hash2(vec2(cell, seed)).lessThan(fibres.mul(0.35)).select(float(1), float(0));
+    const wobble = mx_noise_float(vec3(p.y.mul(2.5), seed * 10, time.mul(0.3))).mul(0.05).mul(p.y.abs().add(0.2)).mul(bend);
+    const x = p.x.add(wobble), cell = x.mul(scale).floor();
+    const on = hash2(vec2(cell, seed)).lessThan(fibres.mul(0.4)).select(float(1), float(0));
     const thin = float(1).sub(fract(x.mul(scale)).sub(0.5).abs().mul(2)).pow(6);
-    const hue = hash2(vec2(cell, seed + 9));
+    const hue = hash2(vec2(cell, seed + 9)), band = hash2(vec2(cell, seed + 4));
     const tint = mix(vec3(0.43, 0.85, 1), mix(vec3(1, 0.69, 0.44), vec3(0.6, 1, 0.69), hue.mul(2).fract()), hue);
-    const reach = exp(x.abs().mul(-22)).mul(exp(p.y.abs().mul(-1.6)));
-    threads = threads.add(tint.mul(on.mul(thin).mul(reach).mul(2.2)));
+    const energy = spectrumAxisNode(spectrum.texture, band.mul(0.6), logMapping, nyquist);
+    const height = energy.mul(drive).mul(1.4).add(kick.mul(0.45)).add(0.08).mul(hue.mul(0.8).add(0.5));
+    const up = band.greaterThan(0.5).select(float(1), float(-1)), speed = hash2(vec2(cell, seed + 2)).mul(0.6).add(0.3);
+    const pulses = float(1).sub(fract(p.y.mul(4).sub(time.mul(speed).mul(up)).sub(climb.mul(up)).add(hue.mul(7))).sub(0.5).abs().mul(2)).pow(10);
+    const reach = exp(x.abs().mul(-14)).mul(p.y.abs().smoothstep(height, height.mul(0.25)));
+    threads = threads.add(tint.mul(on.mul(thin).mul(reach).mul(pulses.mul(3).add(0.5)).mul(3)));
   }
   // Rainbow wings: at peaks the streak spreads into dispersed bands above and below.
   const wingAngle = atan(p.y, p.x.abs());
@@ -180,41 +209,60 @@ export function createAnamorphicFlareMode(): VisualMode {
   // Sensor speckle in a band along the horizon, and a sphere of speckle that bursts on a hit.
   const speck = hash2(screenCoordinate.xy.add(fract(time.mul(7.1)).mul(97))).greaterThan(0.985).select(float(0.5), float(0));
   const band = exp(p.y.abs().mul(-25)).mul(exp(p.x.abs().mul(-1.2)));
-  const sphere = exp(p.length().sub(burst.mul(0.25)).abs().mul(-30)).mul(burst);
+  const sphere = exp(p.length().sub(kick.oneMinus().mul(0.3)).abs().mul(-30)).mul(kick);
   const colour = light.add(threads).add(rainbow.mul(wings.mul(0.6))).add(vec3(0.73).mul(speck.mul(band.add(sphere).add(0.04))));
   material.fragmentNode = vec4(colour.mul(gain), 1);
 
-  const hits = createHits({ decay: 0.26, interval: 0.8 });
+  const hits = createHits({ decay: 0.26, interval: 0.3 });
   return {
     scene, camera,
     update(frame) {
       aspect.value = frame.aspect; time.value = frame.time;
       const step = settleStep(frame);
+      spectrum.update(frame.audio.spectrum);
+      logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
       hits.update(frame, 0.5);
-      coreSize.value = approach(coreSize.value, 0.025 + frame.response.bass * 0.04 + hits.flash * 0.02, step, 0.08);
-      streak.value = approach(streak.value, 0.6 + frame.response.loudness * 1.4 + hits.flash * 0.6, step, 0.2);
-      fibres.value = 0.25 + frame.audio.highs * 0.75;
+      const bounce = frame.response.bounce;
+      // Motion follows the sensitivity-scaled response; reduced flash only tempers brightness.
+      coreSize.value = approach(coreSize.value, 0.022 + frame.response.bass * 0.05 + hits.level * 0.025, step, 0.05);
+      streak.value = approach(streak.value, 0.5 + frame.response.loudness * 1.2 + bounce * 0.8 + hits.level * 0.6, step, 0.12);
+      drive.value = approach(drive.value, 0.25 + frame.response.loudness * 0.9 + bounce * 0.5, step, 0.1);
+      kick.value = hits.level;
+      bend.value = approach(bend.value, 1 + frame.response.bass * 4, step, 0.15);
+      if (!frame.reducedMotion) climb.value += frame.delta * bounce * 1.5;
+      fibres.value = 0.3 + frame.audio.highs * 0.6 + bounce * 0.3;
       fringe.value = 0.003 + hits.flash * 0.01;
       burst.value = hits.flash;
       gain.value = 0.45 + hits.flash * 0.5;
     },
-    dispose: () => disposeScene(scene),
+    dispose() { disposeScene(scene); spectrum.dispose(); },
   };
 }
 
 // ---------------------------------------------------------------- Hair Vortex
 
+/** Inner and outer colours for Hair Vortex; the field drifts from one pair to the next. */
+export const VORTEX_PALETTES = [
+  [0x0a1aff, 0x3a6bff], [0x2a0bff, 0xc23cff], [0x0636ff, 0x2ef2ff], [0x4b1cff, 0xff4fd8], [0x0019c8, 0x9fd4ff],
+] as const;
+
 export function createHairVortexMode(): VisualMode {
   const { scene, camera, material } = fullscreen();
   const aspect = uniform(1), time = uniform(0), arm = uniform(0), eye = uniform(0.1), length = uniform(1), gain = uniform(1), shed = uniform(0);
+  const twist = uniform(0), sway = uniform(0), wave = uniform(-1), waveLevel = uniform(0), flow = uniform(0);
+  const inner = uniform(new THREE.Vector3(...linearRgb(VORTEX_PALETTES[0][0]))), outer = uniform(new THREE.Vector3(...linearRgb(VORTEX_PALETTES[0][1])));
   const p = uv().sub(0.5).mul(vec2(aspect, 1));
-  const r = p.length(), angle = atan(p.y, p.x);
-  // Radial filaments: thousands of angular cells, each a hair of its own length and brightness.
+  const r = p.length();
+  // Differential rotation: the inside turns faster than the edge, so the whole field swirls, not just the arm.
+  const angle = atan(p.y, p.x).add(twist.div(r.add(0.25)));
+  const ring = exp(r.sub(wave).abs().mul(-14)).mul(waveLevel);
+  // Radial filaments: thousands of angular cells, each a hair whose length breathes on its own.
   let hair: F = float(0);
   for (const [count, seed] of [[900, 1], [1500, 2], [2400, 3]] as const) {
-    const a = angle.div(Math.PI * 2).add(0.5).mul(count).add(mx_noise_float(vec3(r.mul(3), seed, time.mul(0.05))).mul(1.5));
+    const a = angle.div(Math.PI * 2).add(0.5).mul(count).add(mx_noise_float(vec3(r.mul(3), seed, flow)).mul(sway.mul(3).add(1.5)));
     const cell = a.floor(), h = hash2(vec2(cell, seed));
-    const reach = h.mul(0.6).add(0.35).mul(length);
+    const grow = mx_noise_float(vec3(cell.mul(0.07), seed, flow.mul(1.6))).mul(0.35).add(1);
+    const reach = h.mul(0.6).add(0.35).mul(length).mul(grow).add(ring.mul(0.08));
     const thin = float(1).sub(fract(a).sub(0.5).abs().mul(2)).pow(3);
     const along = r.smoothstep(eye, eye.add(0.03)).mul(r.smoothstep(reach, reach.mul(0.6)));
     hair = hair.add(thin.mul(along).mul(hash2(vec2(cell, seed + 5)).mul(0.7).add(0.3)));
@@ -223,23 +271,45 @@ export function createHairVortexMode(): VisualMode {
   const spiral = fract(angle.div(Math.PI * 2).sub(r.log().mul(0.35)).sub(arm));
   const armBody = exp(spiral.sub(0.5).abs().mul(-9)).mul(r.smoothstep(eye, eye.add(0.05))).mul(exp(r.mul(-2.2)));
   const grains = hash2(screenCoordinate.xy.div(1.5).floor()).greaterThan(float(0.55).sub(shed.mul(0.2))).select(float(1), float(0.15));
-  const blue = vec3(0.008, 0.03, 1).mul(hair.mul(0.55)).add(vec3(0.16, 0.4, 1).mul(armBody.mul(grains).mul(1.6)));
+  // Gradient: inner colour near the eye to outer colour at the edge, rippled by angle so it is never a flat ring.
+  const t = r.mul(1.6).add(sin(angle.mul(3).add(flow.mul(2))).mul(0.18)).clamp(0, 1);
+  const tint = mix(inner, outer, t);
+  const colour = tint.mul(hair.mul(0.6).mul(ring.mul(1.4).add(1))).add(mix(outer, vec3(0.9, 0.95, 1), 0.3).mul(armBody.mul(grains).mul(1.6)));
   const hole = r.smoothstep(eye.mul(0.95), eye.add(0.01));
-  material.fragmentNode = vec4(blue.mul(hole).mul(gain).add(vec3(0.0006, 0.0014, 0.01)), 1);
+  material.fragmentNode = vec4(colour.mul(hole).mul(gain).add(vec3(0.0006, 0.0014, 0.01)), 1);
 
-  const hits = createHits({ decay: 0.5, interval: 0.5 });
-  let phase = 0;
+  const hits = createHits({ decay: 0.5, interval: 0.4 });
+  const palettes = variantSequence(VORTEX_PALETTES.length, 31);
+  const target = { inner: new THREE.Vector3(), outer: new THREE.Vector3() };
+  target.inner.copy(inner.value); target.outer.copy(outer.value);
+  let phase = 0, spin = 0, drift = 0, paletteAge = 0;
   return {
     scene, camera,
     update(frame) {
       aspect.value = frame.aspect; time.value = frame.time;
-      const step = settleStep(frame);
+      const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.8);
+      const bounce = frame.response.bounce;
       // The arm turns a quarter turn a second, faster when the music drives harder; no hard cuts.
-      if (!frame.reducedMotion) phase += frame.delta * (0.18 + frame.response.bounce * 0.15);
-      arm.value = phase;
-      length.value = approach(length.value, 0.9 + frame.response.bass * 0.2, step, 0.25);
-      eye.value = approach(eye.value, 0.09 + frame.response.bass * 0.02, step, 0.25);
+      if (!still) {
+        phase += frame.delta * (0.18 + bounce * 0.25);
+        spin += frame.delta * (0.05 + bounce * 0.12);
+        drift += frame.delta * (0.25 + frame.response.loudness * 0.6);
+      }
+      arm.value = phase; twist.value = spin; flow.value = drift;
+      sway.value = approach(sway.value, frame.response.bass * 1.2, step, 0.15);
+      // Each hit sends a bright ring out through the hair.
+      if (hits.fired && !still) { wave.value = eye.value; waveLevel.value = 0.6 + frame.response.impact; }
+      wave.value += step * 0.6; waveLevel.value *= Math.exp(-step / 0.6);
+      length.value = approach(length.value, 0.85 + frame.response.bass * 0.35 + hits.level * 0.1, step, 0.15);
+      eye.value = approach(eye.value, 0.09 + frame.response.bass * 0.03, step, 0.2);
+      // A new colour pair on a hit every 8 s or so, blended in over a couple of seconds.
+      paletteAge += step;
+      if (hits.fired && paletteAge > 8) {
+        const next = VORTEX_PALETTES[palettes.next()];
+        target.inner.set(...linearRgb(next[0])); target.outer.set(...linearRgb(next[1])); paletteAge = 0;
+      }
+      inner.value.lerp(target.inner, 1 - Math.exp(-step / 0.8)); outer.value.lerp(target.outer, 1 - Math.exp(-step / 0.8));
       shed.value = hits.flash;
       gain.value = approach(gain.value, 0.75 + frame.response.loudness * 0.35 + hits.flash * 0.15, step, 0.2);
     },
