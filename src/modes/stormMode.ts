@@ -6,6 +6,16 @@ import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 const CLOUD_BASE = 110, BOLTS = 3, BOLT_SEGMENTS = 160;
+/**
+ * Glow palettes, [cloud-end colour, ground-end colour]: the channel stays white-hot and the air and cloud around it
+ * fade through these as the light spreads. Each strike takes the next pair.
+ */
+export const GLOW_PALETTES: readonly (readonly [readonly [number, number, number], readonly [number, number, number]])[] = [
+  [[0.55, 0.25, 1.0], [0.2, 0.6, 1.0]],   // violet into electric blue
+  [[1.0, 0.2, 0.7], [0.5, 0.3, 1.0]],     // magenta into violet
+  [[0.2, 0.45, 1.0], [0.1, 0.9, 0.8]],    // blue into teal
+  [[0.9, 0.3, 1.0], [1.0, 0.45, 0.4]],    // orchid into coral
+];
 
 /**
  * A jagged lightning path from `top` to `bottom` by midpoint displacement, plus forks off the main channel.
@@ -43,11 +53,11 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const { scene, camera } = sceneDefaults(0);
   camera.position.set(0, 8, 70); camera.lookAt(0, 40, -100);
   const random = seededRandom(17);
-  const time = uniform(0), churn = uniform(0), drift = uniform(new THREE.Vector2()), flash = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
+  const time = uniform(0), churn = uniform(0), drift = uniform(new THREE.Vector2()), glowTint = uniform(new THREE.Color(0.55, 0.25, 1.0)), flash = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
   // Sky: near-black with a faint glow at the horizon, lifted by lightning.
   const skyMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false });
   const dir = normalize(positionLocal);
-  skyMaterial.colorNode = mix(vec3(0.02, 0.025, 0.04), vec3(0.003, 0.004, 0.008), dir.y.smoothstep(0, 0.4)).mul(ambient).add(vec3(0.3, 0.35, 0.5).mul(flash.mul(0.08)));
+  skyMaterial.colorNode = mix(vec3(0.02, 0.025, 0.04), vec3(0.003, 0.004, 0.008), dir.y.smoothstep(0, 0.4)).mul(ambient).add(glowTint.mul(0.6).mul(flash.mul(0.08)));
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMaterial));
   // Cloud deck seen from below: fractal noise that rolls past on the wind and churns, lit locally around the strike.
   const cloudMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false });
@@ -58,7 +68,9 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const low = mx_fractal_noise_float(vec3(p.add(drift).mul(0.006), time.mul(0.03).add(churn)), 5, 2, 0.55);
   const density = low.mul(0.7).add(high.mul(0.4)).mul(0.5).add(0.5).smoothstep(0.25, 0.85);
   const lit = exp(p.sub(flashAt).length().div(140).pow(2).negate()).mul(flash);
-  const cloudColour = vec3(0.025, 0.028, 0.04).mul(ambient).add(vec3(0.55, 0.6, 0.85).mul(lit.mul(density).mul(2.2)));
+  // White where the strike is brightest, shading out to the strike's tint across the rest of the lit cloud.
+  const glow = mix(glowTint, vec3(0.9, 0.92, 1.0), lit.div(flash.max(0.001)).smoothstep(0.35, 0.95));
+  const cloudColour = vec3(0.025, 0.028, 0.04).mul(ambient).add(glow.mul(lit.mul(density).mul(2.2)));
   cloudMaterial.colorNode = cloudColour.mul(density.mul(0.8).add(0.2));
   cloudMaterial.opacityNode = density.mul(0.9).add(0.1).mul(p.length().div(700).smoothstep(1, 0.6));
   const clouds = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), cloudMaterial);
@@ -74,10 +86,13 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
     const twin = new THREE.LineSegments(geometry, material); twin.frustumCulled = false; twin.position.x = 0.35; line.add(twin);
     // A soft column of light round the channel: the air glowing, since a 1 px line alone reads too thin.
     const haloMaterial = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const haloColour = uniform(new THREE.Color());
-    haloMaterial.colorNode = haloColour.mul(uv().sub(0.5).mul(vec2(2, 1)).length().smoothstep(0.5, 0).pow(2));
+    // White along the channel, colour in the glow around it, sliding from one tint at the cloud to another at the ground.
+    const haloLevel = uniform(0), tintTop = uniform(new THREE.Color()), tintBottom = uniform(new THREE.Color());
+    const radial = uv().sub(0.5).mul(vec2(2, 1)).length(), core = radial.smoothstep(0.14, 0.02);
+    const haloTint = mix(tintBottom, tintTop, uv().y.smoothstep(0.1, 0.9));
+    haloMaterial.colorNode = mix(haloTint, vec3(1, 1, 1), core).mul(radial.smoothstep(0.5, 0).pow(2)).mul(haloLevel);
     const halo = new THREE.Sprite(haloMaterial); halo.geometry = halo.geometry.clone(); halo.visible = false; scene.add(halo);
-    return { positions, geometry, material, line, halo, haloColour, life: 0, strobe: 0 };
+    return { positions, geometry, material, line, halo, haloLevel, tintTop, tintBottom, life: 0, strobe: 0 };
   });
   // Rain: streaks whose fall is computed on the GPU from a per-streak seed; `density` hides a share of them.
   const drops = Math.round(4000 * budget.particleScale), rain = new Float32Array(drops * 6), ends = new Float32Array(drops * 2);
@@ -92,7 +107,7 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const seed = positionLocal.y.div(90), shown = seed.fract().lessThan(rainAmount).select(float(1), float(0));
   const y = positionLocal.y.sub(fall).mod(90).sub(4);
   rainMaterial.positionNode = vec3(positionLocal.x.add(y.mul(wind)), y.add(attribute<'float'>('tail').mul(2.4)), positionLocal.z);
-  rainMaterial.colorNode = vec3(0.35, 0.4, 0.55).mul(ambient.mul(0.12).add(flash.mul(0.6))).mul(shown);
+  rainMaterial.colorNode = vec3(0.35, 0.4, 0.55).mul(ambient.mul(0.12)).add(mix(vec3(0.35, 0.4, 0.55), glowTint, 0.5).mul(flash.mul(0.6))).mul(shown);
   const rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.frustumCulled = false; scene.add(rainLines);
   // Ground: layered hill silhouettes with a scatter of distant windows.
   const hills = (z: number, height: number, shade: number) => {
@@ -110,7 +125,7 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const windowGeometry = new THREE.BufferGeometry(); windowGeometry.setAttribute('position', new THREE.BufferAttribute(windows, 3));
   scene.add(new THREE.Points(windowGeometry, new THREE.PointsNodeMaterial({ color: new THREE.Color(1.2, 0.8, 0.35) })));
   const strikeGate = beatGate(0.45), top = new THREE.Vector3(), bottom = new THREE.Vector3();
-  let next = 0, idle = 0, flashLevel = 0, shake = 0, rainPhase = 0, gust = 0, pace = 0;
+  let next = 0, palette = 0, idle = 0, flashLevel = 0, shake = 0, rainPhase = 0, gust = 0, pace = 0;
   const strike = (strength: number) => {
     const bolt = bolts[next]; next = (next + 1) % BOLTS;
     const x = (random() - 0.5) * 260, z = -70 - random() * 140;
@@ -119,7 +134,9 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
     bolt.geometry.setDrawRange(0, written * 2); bolt.geometry.attributes.position.needsUpdate = true;
     bolt.life = strength; bolt.strobe = 0;
     bolt.halo.position.set((top.x + bottom.x) / 2, CLOUD_BASE / 2, (top.z + bottom.z) / 2); bolt.halo.scale.set(70, CLOUD_BASE * 1.2, 1);
-    flashAt.value.set(x, z); flashLevel = Math.max(flashLevel, strength);
+    const [upper, lower] = GLOW_PALETTES[palette]; palette = (palette + 1) % GLOW_PALETTES.length;
+    bolt.tintTop.value.setRGB(...upper); bolt.tintBottom.value.setRGB(...lower);
+    flashAt.value.set(x, z); flashLevel = Math.max(flashLevel, strength); glowTint.value.setRGB(...upper);
   };
   return {
     scene, camera,
@@ -142,7 +159,7 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
         const flicker = bolt.strobe < 0.25 ? 0.6 + 0.4 * Math.sign(Math.sin(bolt.strobe * 70)) : 1;
         bolt.life = Math.max(0, bolt.life - step * 1.6);
         bolt.line.visible = bolt.halo.visible = bolt.life > 0;
-        bolt.haloColour.value.setRGB(0.5, 0.55, 0.8).multiplyScalar(bolt.life * flicker * 0.9 * gentle);
+        bolt.haloLevel.value = bolt.life * flicker * 1.1 * gentle;
         bolt.material.color.setRGB(3.5, 3.8, 5).multiplyScalar(bolt.life * flicker * (frame.reducedFlash ? 0.5 : 1));
       }
       flashLevel = Math.max(0, flashLevel - step * 3);
