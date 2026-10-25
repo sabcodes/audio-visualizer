@@ -4,6 +4,7 @@ import { cos, mix, sin, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl
 import type { VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
+import { createBeatPulse } from './beatPulse';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 type F = Node<'float'>;
@@ -187,14 +188,17 @@ export function createPhysarumMode(budget: QualityBudget = presetBudget('balance
   const pixels = new Uint8Array(w * h), map = new THREE.DataTexture(pixels, w, h, THREE.RedFormat, THREE.UnsignedByteType);
   map.minFilter = map.magFilter = THREE.LinearFilter; map.needsUpdate = true;
   const { scene, camera, material } = fullscreen();
-  const hue = uniform(0), glow = uniform(1);
-  const density = texture(map, uv()).x;
+  const hue = uniform(0), glow = uniform(1), pulse = createBeatPulse();
+  // The veins breathe with the bounce, and each beat's burst sends a ripple out from where it lands.
+  const { uv: at, ring: wave } = pulse.warp(uv(), w / h);
+  const density = texture(map, at).x;
   const veins = density.smoothstep(0.05, 0.8);
   const core = density.smoothstep(0.8, 1).mul(0.5);
-  material.colorNode = vec4(mix(vec3(0.004, 0.003, 0.008), palette(hue.add(density.mul(0.3))).mul(veins.mul(1.4)), veins).add(vec3(core)).mul(glow), 1);
+  const lift = glow.mul(pulse.surge.mul(0.9).add(1)).add(wave.mul(1.8));
+  material.colorNode = vec4(mix(vec3(0.004, 0.003, 0.008), palette(hue.add(density.mul(0.3))).mul(veins.mul(1.4)), veins).add(vec3(core)).mul(lift), 1);
   const settings: PhysarumSettings = { sensorAngle: 0.45, sensorDistance: 9, turn: 0.5, speed: 1, repel: false };
   const bands = new Float32Array(SLIME_BANDS), burstGate = beatGate(0.5);
-  let repelFor = 0;
+  let repelFor = 0, hueKick = 0;
   const deposit = (i: number) => 3 + bands[i % SLIME_BANDS] * 6;
   const step = () => {
     physarumStep(agents, trail, w, h, settings, deposit, random);
@@ -211,11 +215,14 @@ export function createPhysarumMode(budget: QualityBudget = presetBudget('balance
     scene, camera,
     update(frame) {
       bandEnergies(frame, SLIME_BANDS, bands);
-      hue.value = frame.hue;
+      hue.value = frame.hue + hueKick;
       glow.value = approach(glow.value, 0.8 + frame.response.loudness * 0.5, settleStep(frame), 0.3);
-      if (burstGate(frame.time, frame.audio.onset)) {
-        // A beat spawns a burst: a tenth of the agents leap to a ring round a random point, heading outward.
-        const cx = w * (0.2 + random() * 0.6), cy = h * (0.2 + random() * 0.6);
+      const beat = burstGate(frame.time, frame.audio.onset);
+      // A beat spawns a burst: a tenth of the agents leap to a ring round a random point, heading outward.
+      const cx = w * (0.2 + random() * 0.6), cy = h * (0.2 + random() * 0.6);
+      pulse.update(frame, beat, [cx / w, cy / h]);
+      if (beat) {
+        hueKick = (hueKick + 0.05) % 1;
         for (let i = 0; i < count / 10; i++) {
           const j = Math.floor(random() * count), a = random() * Math.PI * 2;
           agents.set([cx + Math.cos(a) * 4, cy + Math.sin(a) * 4, a], j * 3);
@@ -224,7 +231,7 @@ export function createPhysarumMode(budget: QualityBudget = presetBudget('balance
       }
       repelFor = Math.max(0, repelFor - settleStep(frame));
       settings.sensorAngle = 0.35 + frame.response.loudness * 0.5;
-      settings.speed = 0.9 + frame.response.bass * 1.2;
+      settings.speed = 0.9 + frame.response.bass * 1.2 + frame.response.bounce * 0.8;
       settings.repel = repelFor > 0;
       const steps = Math.min(3, Math.round(frame.delta * 60));
       for (let i = 0; i < steps; i++) step();
@@ -291,14 +298,22 @@ export function createSnowflakeMode(budget: QualityBudget = presetBudget('balanc
   const radius = budget.particleScale < 1 ? 70 : budget.particleScale > 1 ? 110 : 90;
   const crystal = createReiter(radius), random = seededRandom(66);
   const params: ReiterParams = { alpha: 1, beta: 0.4, gamma: 0.001 };
-  const newParams = () => { params.beta = 0.35 + random() * 0.1; params.gamma = 0.0005 + random() * 0.003; };
+  // The next flake's shape follows the music heard while the last one grew: bass-heavy music grows broad plates
+  // (more vapour), bright music grows fine branching dendrites (faster freezing), with a little chance on top.
+  let heardBass = 0.3, heardHighs = 0.3;
+  const newParams = () => {
+    params.beta = 0.33 + Math.min(1, heardBass) * 0.12 + random() * 0.03;
+    params.gamma = 0.0004 + Math.min(1, heardHighs) * 0.003 + random() * 0.0006;
+  };
   crystal.reset(params.beta);
   const pixels = new Uint8Array(crystal.size * crystal.size * 4), map = new THREE.DataTexture(pixels, crystal.size, crystal.size, THREE.RGBAFormat, THREE.UnsignedByteType);
   map.minFilter = map.magFilter = THREE.LinearFilter; map.needsUpdate = true;
   const { scene, camera, material } = fullscreen();
-  const aspect = uniform(16 / 9), hue = uniform(0), spin = uniform(0), melt = uniform(0), sparkle = uniform(0);
+  const aspect = uniform(16 / 9), hue = uniform(0), spin = uniform(0), melt = uniform(0), sparkle = uniform(0), pulse = createBeatPulse();
+  // The flake breathes with the bounce and each beat sends a ripple through it that lights the ice it crosses.
+  const { uv: at, ring: wave } = pulse.warp(uv(), 16 / 9);
   // Screen → axial hex coordinates (pointy-top), scaled so the hexagon fills most of the height.
-  const p = uv().sub(0.5).mul(vec2(aspect, 1)).mul(2.15 * radius);
+  const p = at.sub(0.5).mul(vec2(aspect, 1)).mul(2.15 * radius);
   const c = cos(spin), sn = sin(spin);
   const x = p.x.mul(c).sub(p.y.mul(sn)), y = p.x.mul(sn).add(p.y.mul(c));
   const q = x.mul(Math.sqrt(3) / 3).sub(y.div(3)), r = y.mul(2 / 3);
@@ -306,7 +321,7 @@ export function createSnowflakeMode(budget: QualityBudget = presetBudget('balanc
   const ice = cell.x.smoothstep(0.45, 0.6), age = cell.y, vapour = cell.z;
   // Older ice (frozen early) is deeper blue; growth rings show as bands in the freeze time.
   const rings = sin(age.mul(60)).mul(0.5).add(0.5).pow(6).mul(0.35);
-  const iceColour = mix(vec3(0.75, 0.9, 1.2), palette(hue.add(0.55)).mul(vec3(0.5, 0.8, 1.3)), age.oneMinus()).mul(rings.add(0.7)).mul(sparkle.mul(0.5).add(1));
+  const iceColour = mix(vec3(0.75, 0.9, 1.2), palette(hue.add(0.55)).mul(vec3(0.5, 0.8, 1.3)), age.oneMinus()).mul(rings.add(0.7)).mul(sparkle.mul(0.9).add(1)).mul(pulse.surge.mul(0.7).add(1).add(wave.mul(1.6)));
   const background = mix(vec3(0.002, 0.004, 0.012), vec3(0.01, 0.02, 0.05), uv().y).add(vec3(0.05, 0.12, 0.25).mul(vapour.mul(0.15)));
   material.colorNode = vec4(mix(background, iceColour.mul(melt.oneMinus()), ice.mul(melt.oneMinus().mul(0.85).add(0.15))), 1);
   const upload = () => {
@@ -322,11 +337,16 @@ export function createSnowflakeMode(budget: QualityBudget = presetBudget('balanc
   for (let i = 0; i < 300; i++) crystal.step(params);
   upload();
   const meltGate = beatGate(6);
-  let melting = -1, grown = 0, turn = 0, stillGrown = false;
+  let melting = -1, grown = 0, turn = 0, hueKick = 0, stillGrown = false;
+  const flashGate = beatGate(0.35);
   return {
     scene, camera,
     update(frame) {
-      aspect.value = frame.aspect; hue.value = frame.hue;
+      aspect.value = frame.aspect; hue.value = frame.hue + hueKick;
+      heardBass = approach(heardBass, frame.response.bass, settleStep(frame), 4); heardHighs = approach(heardHighs, frame.audio.highs * 2, settleStep(frame), 4);
+      const beat = flashGate(frame.time, frame.audio.onset);
+      pulse.update(frame, beat);
+      if (beat) hueKick = (hueKick + 0.04) % 1;
       sparkle.value = approach(sparkle.value, frame.audio.highs, settleStep(frame), 0.2);
       if (melting < 0 && (crystal.extent > radius * 0.85 || grown > 45 || meltGate(frame.time, frame.audio.onset && frame.response.impact > 0.8 && grown > 8))) melting = 0;
       if (melting >= 0) {
@@ -343,7 +363,8 @@ export function createSnowflakeMode(budget: QualityBudget = presetBudget('balanc
       params.gamma = Math.max(0.0003, params.gamma * 0.98 + (0.0006 + frame.audio.highs * 0.004) * 0.02);
       for (let i = 0; i < steps; i++) crystal.step(params);
       if (steps > 0) { upload(); grown += frame.delta; }
-      turn += frame.delta * 0.03; spin.value = turn;
+      // It turns slowly at rest and spins up with the bounce.
+      turn += frame.delta * (0.03 + frame.response.bounce * 0.35); spin.value = turn;
     },
     dispose() { disposeScene(scene); map.dispose(); },
   };

@@ -17,6 +17,7 @@ import { ridgeProfile } from '../../src/modes/landscapeModes';
 import { poseTargets, ROBOT_POSES, ROBOT_JOINTS } from '../../src/modes/robotMode';
 import { bandEnergies, beatGate, settleStep } from '../../src/modes/shared';
 import { CalmAudio } from '../../src/audio/calmAudio';
+import { createBeatPulse } from '../../src/modes/beatPulse';
 import { SpringRig } from '../../src/simulations/springRig';
 import { presetBudget } from '../../src/rendering/quality';
 import type { ModeFrame } from '../../src/modes/types';
@@ -251,6 +252,17 @@ describe('reduced motion', () => {
   it('settles transients with a nominal step while the clock is frozen', () => {
     expect(settleStep({ delta: 0, reducedMotion: true })).toBeCloseTo(1 / 60);
     expect(settleStep({ delta: 0.02, reducedMotion: false })).toBe(0.02);
+  });
+  it('beat pulse ripples on a beat and fades out, but never moves with reduced motion', () => {
+    const pulse = createBeatPulse(), f = frame();
+    f.response = { bass: 0.5, loudness: 0.5, impact: 0.8, bounce: 0.6 };
+    pulse.update(f, true);
+    expect(pulse.ripple).toBeGreaterThan(0.5); expect(pulse.surge.value).toBeCloseTo(0.6);
+    for (let i = 0; i < 90; i++) pulse.update(f, false);
+    expect(pulse.ripple).toBe(0);
+    const still = createBeatPulse(), g = frame(); g.reducedMotion = true; g.delta = 0;
+    still.update(g, true);
+    expect(still.ripple).toBe(0);
   });
   it('every new mode holds a finite still with a frozen clock, even through loud frames', () => {
     for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions]) {

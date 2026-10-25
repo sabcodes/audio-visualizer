@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { exp, float, fract, instanceIndex, instancedBufferAttribute, mix, normalize, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { exp, float, fract, instanceIndex, instancedBufferAttribute, materialColor, mix, mx_noise_float, normalView, normalize, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, beatGate } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, beatGate, approach, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -159,19 +159,28 @@ export function createDiscoMode(): VisualMode {
   spotMaterial.scaleNode = vec2(float(2.6).add(bass.mul(1.2)));
   const spots = new THREE.Sprite(spotMaterial); spots.geometry = spots.geometry.clone(); spots.count = SPOTS; spots.frustumCulled = false;
   ball.add(spots);
-  // Beams: thin additive cones from the ball out to a few of the spots.
-  const beamGeometry = new THREE.CylinderGeometry(0.05, 1.3, ROOM, 10, 1, true); beamGeometry.translate(0, ROOM / 2, 0);
-  const beamMaterials: THREE.MeshBasicNodeMaterial[] = [];
-  for (let i = 0; i < BEAMS; i++) {
+  // Beams read as light, not solid rods: brightest at the source, fading with distance, soft at the edges where the
+  // cone is seen side-on, and grainy where they cut through the haze. `fromTop` says which end the light leaves.
+  const lightShaft = (fromTop: boolean) => {
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    const beam = new THREE.Mesh(beamGeometry, material);
+    const along = fromTop ? uv().y.oneMinus() : uv().y;
+    const falloff = along.oneMinus().pow(1.6), core = normalView.z.abs().pow(1.8);
+    const haze = mx_noise_float(vec3(positionLocal.x.mul(0.25), positionLocal.y.mul(0.06).sub(time.mul(0.3)), positionLocal.z.mul(0.25))).mul(0.35).add(0.75);
+    material.colorNode = materialColor.mul(falloff.mul(core).mul(haze));
+    return material;
+  };
+  const beamGeometry = new THREE.CylinderGeometry(0.4, 3.2, ROOM, 16, 1, true); beamGeometry.translate(0, ROOM / 2, 0);
+  const beams = Array.from({ length: BEAMS }, (_, i) => {
+    const material = lightShaft(false), beam = new THREE.Mesh(beamGeometry, material);
     beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), directions[i * 7]);
-    beamMaterials.push(material); ball.add(beam);
-  }
+    ball.add(beam);
+    return { beam, material, level: 0 };
+  });
   // Sweeping wash lights from the floor corners.
   const washes = [-1, 1].flatMap((x) => [-1, 1].map((z) => {
-    const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    const geometry = new THREE.CylinderGeometry(0.4, 7, 110, 16, 1, true); geometry.translate(0, 55, 0);
+    // The narrow end of each wash cone is its lamp, at the top of the geometry.
+    const material = lightShaft(true);
+    const geometry = new THREE.CylinderGeometry(0.4, 9, 110, 20, 1, true); geometry.translate(0, 55, 0);
     const mesh = new THREE.Mesh(geometry, material); mesh.position.set(x * 50, -30, z * 40); scene.add(mesh);
     return { mesh, material, x, z };
   }));
@@ -184,23 +193,32 @@ export function createDiscoMode(): VisualMode {
   const floor = new THREE.Mesh(new THREE.CircleGeometry(ROOM, 64), floorMaterial); floor.rotation.x = -Math.PI / 2; floor.position.y = -30;
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(ROOM + 2, 48, 24), roomMaterial), floor);
 
-  const flipGate = beatGate(0.45), colour = new THREE.Color();
-  let spin = 0, orbit = 0, flipValue = 0;
+  const flipGate = beatGate(0.45), colour = new THREE.Color(), beamBands = new Float32Array(BEAMS);
+  let spin = 0, orbit = 0, flipValue = 0, chase = 0;
   return {
     scene, camera,
     update(frame) {
       resizeCamera(camera, frame.aspect);
       time.value = frame.time; bass.value = frame.response.bounce;
       sparkle.value = 0.02 + frame.audio.highs * 0.25;
-      if (flipGate(frame.time, frame.audio.onset)) flipValue = (flipValue + (frame.reducedFlash ? 0.08 : 0.33)) % 1;
+      if (flipGate(frame.time, frame.audio.onset)) { flipValue = (flipValue + (frame.reducedFlash ? 0.08 : 0.33)) % 1; chase = (chase + 3) % BEAMS; }
       flip.value = wrap(frame.hue + flipValue, 0, 1);
       spin += frame.delta * (0.25 + frame.response.bass * 0.6);
       ball.rotation.y = spin;
       ball.scale.setScalar(1 + frame.response.bounce * 0.05);
-      beamMaterials.forEach((material, i) => material.color.setHSL(wrap(flip.value + Math.floor(i / 5) / 3, 0, 1), 1, 0.5).multiplyScalar(0.03 + frame.response.bounce * 0.05));
+      // Every beam has its own colour round the wheel and its own slice of the spectrum; all swell and widen with the bounce,
+      // and the beat chase flares a few at a time.
+      bandEnergies(frame, BEAMS, beamBands);
+      beams.forEach((b, i) => {
+        const gap = Math.min(Math.abs(i - chase), BEAMS - Math.abs(i - chase)), flare = Math.exp(-gap * gap / 2);
+        b.level = approach(b.level, 0.12 + beamBands[i] * 0.5 + frame.response.bounce * 0.35 + flare * 0.25, settleStep(frame), 0.08);
+        b.material.color.setHSL(wrap(flip.value + i / BEAMS, 0, 1), 1, 0.55).multiplyScalar(b.level * 0.55);
+        const width = 0.8 + frame.response.bounce * 0.6 + beamBands[i] * 0.4;
+        b.beam.scale.set(width, 1, width);
+      });
       washes.forEach((wash, i) => {
         wash.mesh.rotation.set(Math.sin(frame.time * 0.6 + i) * 0.5 - wash.z * 0.25, 0, Math.cos(frame.time * 0.5 + i * 1.3) * 0.5 - wash.x * 0.3);
-        wash.material.color.copy(colour.setHSL(wrap(flip.value + i * 0.25, 0, 1), 1, 0.5)).multiplyScalar(0.03 + frame.response.bounce * 0.05);
+        wash.material.color.copy(colour.setHSL(wrap(flip.value + i * 0.25 + 0.12, 0, 1), 1, 0.5)).multiplyScalar(0.08 + frame.response.bounce * 0.22);
       });
       orbit += frame.delta * 0.08;
       camera.position.set(Math.sin(orbit) * 48, -6 + Math.sin(frame.time * 0.15) * 4, Math.cos(orbit) * 48);
