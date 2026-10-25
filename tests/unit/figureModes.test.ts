@@ -19,8 +19,10 @@ const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectr
 });
 
 const load = (name: string) => {
-  const bytes = readFileSync(`src/assets/models/${name}.glb`);
-  return new Promise<GLTF>((done, fail) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '', done, fail));
+  const bytes = readFileSync(`src/assets/models/${name}.glb`), loader = new GLTFLoader();
+  // Node has no image decoder; the contract only needs names, so embedded textures are skipped.
+  loader.register(() => ({ name: 'skip-textures', loadTexture: () => Promise.resolve(new THREE.Texture()) }) as never);
+  return new Promise<GLTF>((done, fail) => loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '', done, fail));
 };
 const names = (gltf: GLTF) => {
   const nodes = new Set<string>(), materials = new Set<string>(), morphs = new Set<string>();
@@ -47,10 +49,10 @@ const CONTRACT: Record<string, { nodes?: string[]; materials?: string[]; morphs?
     nodes: ['wing_L_upper', 'wing_L_fore', 'wing_R_upper', 'wing_R_fore', 'head', 'jaw', ...range('neck_', 6), ...range('tail_', 10)],
     materials: ['emissive_vents', 'emissive_mouth'], clips: ['glide', 'breath_fire', 'roar', 'bank_L', 'bank_R'],
   },
-  phoenix: {
-    nodes: ['socket_wingtip_L', 'socket_wingtip_R', 'socket_chest', ...range('crest_', 3), ...['L', 'R'].flatMap((s) => [`wing_${s}_upper`, `wing_${s}_fore`, ...range(`wing_${s}_feather_`, 9)]),
+  phoenix_fenghuang: {
+    nodes: ['chest', ...range('crest_', 3).map((crest) => `${crest}_01`), ...['L', 'R'].flatMap((s) => [`wing_${s}_upper`, `wing_${s}_fore`, `wing_${s}_hand`, ...range(`wing_${s}_feather_`, 6)]),
       ...['A', 'B', 'C', 'D', 'E'].flatMap((s) => range(`tail_${s}_`, 4))],
-    materials: ['emissive_plumage'], clips: ['glide'],
+    materials: ['emissive_plumage', 'emissive_ocelli', 'emissive_cyan_tuft', 'emissive_crest_beads', 'emissive_eye'], clips: ['glide'],
   },
   sky_spires: { nodes: [...ISLANDS] },
   mascot_blob: { nodes: ['body'], materials: ['jelly', 'emissive_core', 'emissive_cheeks'], morphs: ['squash', 'stretch', 'lean_L', 'lean_R', 'blink', 'mouth_open'], clips: ['bounce', 'jump', 'cheer', 'wave', 'look_around'] },
