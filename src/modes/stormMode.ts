@@ -11,10 +11,10 @@ const CLOUD_BASE = 110, BOLTS = 3, BOLT_SEGMENTS = 160;
  * fade through these as the light spreads. Each strike takes the next pair.
  */
 export const GLOW_PALETTES: readonly (readonly [readonly [number, number, number], readonly [number, number, number]])[] = [
-  [[0.55, 0.25, 1.0], [0.2, 0.6, 1.0]],   // violet into electric blue
-  [[1.0, 0.2, 0.7], [0.5, 0.3, 1.0]],     // magenta into violet
-  [[0.2, 0.45, 1.0], [0.1, 0.9, 0.8]],    // blue into teal
-  [[0.9, 0.3, 1.0], [1.0, 0.45, 0.4]],    // orchid into coral
+  [[0.45, 0.06, 1.0], [0.04, 0.35, 1.0]],  // violet into electric blue
+  [[1.0, 0.04, 0.6], [0.45, 0.08, 1.0]],   // magenta into violet
+  [[0.06, 0.25, 1.0], [0.0, 0.9, 0.65]],   // blue into teal
+  [[0.85, 0.08, 1.0], [1.0, 0.22, 0.15]],  // orchid into coral
 ];
 
 /**
@@ -53,11 +53,11 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const { scene, camera } = sceneDefaults(0);
   camera.position.set(0, 8, 70); camera.lookAt(0, 40, -100);
   const random = seededRandom(17);
-  const time = uniform(0), churn = uniform(0), drift = uniform(new THREE.Vector2()), glowTint = uniform(new THREE.Color(0.55, 0.25, 1.0)), flash = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
+  const time = uniform(0), churn = uniform(0), drift = uniform(new THREE.Vector2()), glowTint = uniform(new THREE.Color(0.55, 0.25, 1.0)), flash = uniform(0), afterglow = uniform(0), flashAt = uniform(new THREE.Vector2(0, -120)), ambient = uniform(1);
   // Sky: near-black with a faint glow at the horizon, lifted by lightning.
   const skyMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false });
   const dir = normalize(positionLocal);
-  skyMaterial.colorNode = mix(vec3(0.02, 0.025, 0.04), vec3(0.003, 0.004, 0.008), dir.y.smoothstep(0, 0.4)).mul(ambient).add(glowTint.mul(0.6).mul(flash.mul(0.08)));
+  skyMaterial.colorNode = mix(vec3(0.02, 0.025, 0.04), vec3(0.003, 0.004, 0.008), dir.y.smoothstep(0, 0.4)).mul(ambient).add(glowTint.mul(flash.mul(0.05).add(afterglow.mul(0.12))));
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMaterial));
   // Cloud deck seen from below: fractal noise that rolls past on the wind and churns, lit locally around the strike.
   const cloudMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false });
@@ -67,10 +67,12 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const high = mx_fractal_noise_float(vec3(p.add(drift.mul(0.55)).mul(0.004), churn.mul(0.6)), 4, 2, 0.5);
   const low = mx_fractal_noise_float(vec3(p.add(drift).mul(0.006), time.mul(0.03).add(churn)), 5, 2, 0.55);
   const density = low.mul(0.7).add(high.mul(0.4)).mul(0.5).add(0.5).smoothstep(0.25, 0.85);
-  const lit = exp(p.sub(flashAt).length().div(140).pow(2).negate()).mul(flash);
-  // White where the strike is brightest, shading out to the strike's tint across the rest of the lit cloud.
-  const glow = mix(glowTint, vec3(0.9, 0.92, 1.0), lit.div(flash.max(0.001)).smoothstep(0.35, 0.95));
-  const cloudColour = vec3(0.025, 0.028, 0.04).mul(ambient).add(glow.mul(lit.mul(density).mul(2.2)));
+  // The white flash is a tight, short-lived patch right over the strike; round it, a wider coloured afterglow
+  // lingers in the cloud for seconds after the white has gone.
+  const reach = p.sub(flashAt).length(), lit = exp(reach.div(110).pow(2).negate()).mul(flash);
+  const tinted = exp(reach.div(220).pow(2).negate()).mul(afterglow);
+  const white = lit.mul(exp(reach.div(60).pow(2).negate())).mul(1.8);
+  const cloudColour = vec3(0.025, 0.028, 0.04).mul(ambient).add(vec3(0.9, 0.92, 1.0).mul(white).add(glowTint.mul(lit.mul(1.4).add(tinted.mul(2.4)))).mul(density));
   cloudMaterial.colorNode = cloudColour.mul(density.mul(0.8).add(0.2));
   cloudMaterial.opacityNode = density.mul(0.9).add(0.1).mul(p.length().div(700).smoothstep(1, 0.6));
   const clouds = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), cloudMaterial);
@@ -88,11 +90,11 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
     const haloMaterial = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     // White along the channel, colour in the glow around it, sliding from one tint at the cloud to another at the ground.
     const haloLevel = uniform(0), tintTop = uniform(new THREE.Color()), tintBottom = uniform(new THREE.Color());
-    const radial = uv().sub(0.5).mul(vec2(2, 1)).length(), core = radial.smoothstep(0.14, 0.02);
+    const radial = uv().sub(0.5).mul(vec2(2, 1)).length(), core = radial.smoothstep(0.07, 0.01);
     const haloTint = mix(tintBottom, tintTop, uv().y.smoothstep(0.1, 0.9));
     haloMaterial.colorNode = mix(haloTint, vec3(1, 1, 1), core).mul(radial.smoothstep(0.5, 0).pow(2)).mul(haloLevel);
     const halo = new THREE.Sprite(haloMaterial); halo.geometry = halo.geometry.clone(); halo.visible = false; scene.add(halo);
-    return { positions, geometry, material, line, halo, haloLevel, tintTop, tintBottom, life: 0, strobe: 0 };
+    return { positions, geometry, material, line, halo, haloLevel, tintTop, tintBottom, life: 0, hold: 0, strobe: 0 };
   });
   // Rain: streaks whose fall is computed on the GPU from a per-streak seed; `density` hides a share of them.
   const drops = Math.round(4000 * budget.particleScale), rain = new Float32Array(drops * 6), ends = new Float32Array(drops * 2);
@@ -107,7 +109,7 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const seed = positionLocal.y.div(90), shown = seed.fract().lessThan(rainAmount).select(float(1), float(0));
   const y = positionLocal.y.sub(fall).mod(90).sub(4);
   rainMaterial.positionNode = vec3(positionLocal.x.add(y.mul(wind)), y.add(attribute<'float'>('tail').mul(2.4)), positionLocal.z);
-  rainMaterial.colorNode = vec3(0.35, 0.4, 0.55).mul(ambient.mul(0.12)).add(mix(vec3(0.35, 0.4, 0.55), glowTint, 0.5).mul(flash.mul(0.6))).mul(shown);
+  rainMaterial.colorNode = vec3(0.35, 0.4, 0.55).mul(ambient.mul(0.12)).add(mix(vec3(0.35, 0.4, 0.55), glowTint, 0.5).mul(flash.mul(0.6).add(afterglow.mul(0.25)))).mul(shown);
   const rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.frustumCulled = false; scene.add(rainLines);
   // Ground: layered hill silhouettes with a scatter of distant windows.
   const hills = (z: number, height: number, shade: number) => {
@@ -125,18 +127,18 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
   const windowGeometry = new THREE.BufferGeometry(); windowGeometry.setAttribute('position', new THREE.BufferAttribute(windows, 3));
   scene.add(new THREE.Points(windowGeometry, new THREE.PointsNodeMaterial({ color: new THREE.Color(1.2, 0.8, 0.35) })));
   const strikeGate = beatGate(0.45), top = new THREE.Vector3(), bottom = new THREE.Vector3();
-  let next = 0, palette = 0, idle = 0, flashLevel = 0, shake = 0, rainPhase = 0, gust = 0, pace = 0;
+  let next = 0, palette = 0, idle = 0, flashLevel = 0, glowLevel = 0, glowHold = 0, shake = 0, rainPhase = 0, gust = 0, pace = 0;
   const strike = (strength: number) => {
     const bolt = bolts[next]; next = (next + 1) % BOLTS;
     const x = (random() - 0.5) * 260, z = -70 - random() * 140;
     top.set(x, CLOUD_BASE - 2, z); bottom.set(x + (random() - 0.5) * 60, 0, z + (random() - 0.5) * 30);
     const written = lightningPath(top, bottom, random, bolt.positions);
     bolt.geometry.setDrawRange(0, written * 2); bolt.geometry.attributes.position.needsUpdate = true;
-    bolt.life = strength; bolt.strobe = 0;
+    bolt.life = strength; bolt.hold = 0.5; bolt.strobe = 0;
     bolt.halo.position.set((top.x + bottom.x) / 2, CLOUD_BASE / 2, (top.z + bottom.z) / 2); bolt.halo.scale.set(70, CLOUD_BASE * 1.2, 1);
     const [upper, lower] = GLOW_PALETTES[palette]; palette = (palette + 1) % GLOW_PALETTES.length;
     bolt.tintTop.value.setRGB(...upper); bolt.tintBottom.value.setRGB(...lower);
-    flashAt.value.set(x, z); flashLevel = Math.max(flashLevel, strength); glowTint.value.setRGB(...upper);
+    flashAt.value.set(x, z); flashLevel = Math.max(flashLevel, strength); glowLevel = Math.max(glowLevel, strength); glowHold = 1.5; glowTint.value.setRGB(...upper);
   };
   return {
     scene, camera,
@@ -157,13 +159,16 @@ export function createStormMode(budget: QualityBudget = presetBudget('balanced')
         // Real strokes re-strike: a few quick flickers before fading.
         bolt.strobe += step;
         const flicker = bolt.strobe < 0.25 ? 0.6 + 0.4 * Math.sign(Math.sin(bolt.strobe * 70)) : 1;
-        bolt.life = Math.max(0, bolt.life - step * 1.6);
+        // A bolt holds for half a second, then fades.
+        bolt.hold = Math.max(0, bolt.hold - step); if (bolt.hold === 0) bolt.life = Math.max(0, bolt.life - step * 0.9);
         bolt.line.visible = bolt.halo.visible = bolt.life > 0;
-        bolt.haloLevel.value = bolt.life * flicker * 1.1 * gentle;
+        bolt.haloLevel.value = bolt.life * flicker * 1.6 * gentle;
         bolt.material.color.setRGB(3.5, 3.8, 5).multiplyScalar(bolt.life * flicker * (frame.reducedFlash ? 0.5 : 1));
       }
-      flashLevel = Math.max(0, flashLevel - step * 3);
-      flash.value = flashLevel * gentle;
+      // The white flash fades in about half a second; its coloured afterglow holds for 1.5 s, then dies away over about 3 s.
+      flashLevel = Math.max(0, flashLevel - step * 1.8);
+      glowHold = Math.max(0, glowHold - step); if (glowHold === 0) glowLevel = Math.max(0, glowLevel - step * 0.33);
+      flash.value = flashLevel * gentle; afterglow.value = glowLevel * (frame.reducedFlash ? 0.5 : 1);
       ambient.value = approach(ambient.value, 1 + frame.response.loudness * 0.6, step, 0.4);
       rainAmount.value = approach(rainAmount.value, 0.3 + frame.audio.highs * 0.4 + pace * 0.4, step, 0.5);
       rainPhase += frame.delta * (50 + pace * 60 + frame.response.loudness * 20); fall.value = rainPhase;
