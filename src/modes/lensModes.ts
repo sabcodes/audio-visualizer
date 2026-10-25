@@ -175,9 +175,10 @@ export function createCandyOrbMode(): VisualMode {
   // Soft halo outside, warm on the lit side and blue on the other, like the lens fringe in the clip.
   const fringe = mix(vec3(0.15, 0.3, 1), mid, cos(atan(p.y, p.x).sub(lightAngle)).mul(0.5).add(0.5));
   const halo = exp(r.sub(1).max(0).mul(-9)).mul(r.greaterThan(0.97).select(float(1), float(0))).mul(0.35);
-  const dust = hash2(screenCoordinate.xy.div(3).floor()).greaterThan(0.9985).select(float(0.5), float(0));
+  // No stars: the orb floats in a dark warm haze, as in the clip.
+  const haze = exp(r.mul(-1.4)).mul(0.035).mul(disc.oneMinus());
   const colour = body.mul(disc).mul(hole).add(mix(hot, vec3(1), 0.5).mul(lipLight.mul(disc))).add(film.mul(reflection.mul(0.6)))
-    .add(fringe.mul(halo)).mul(gain).add(vec3(1, 0.6, 0.4).mul(dust.mul(disc.oneMinus()).mul(0.4)));
+    .add(fringe.mul(halo)).mul(gain).add(deep.mul(haze));
   material.fragmentNode = vec4(colour, 1);
 
   const hits = createHits({ decay: 0.45, interval: 0.35, variants: CANDY_PALETTES.length, seed: 17 });

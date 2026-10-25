@@ -6,6 +6,7 @@ import type { QualityBudget } from '../rendering/quality';
 import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep } from './shared';
 import { createGlowPoints, createParticles, loadTexture } from './figures';
 import { createCinematic } from './cinematic';
+import { palette } from './shaderModes';
 import { createHits, linearRgb } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import sparkUrl from '../assets/fx/spark.png?url';
@@ -90,7 +91,9 @@ export function createPoleSparksMode(): VisualMode {
   const stripe = fract(along.mul(160)).lessThan(0.5).select(float(1), float(0));
   cableMaterial.colorNode = kind.lessThan(0.55).select(vec3(...linearRgb(0xb02a3a)), kind.lessThan(0.8).select(vec3(...linearRgb(0x6b7280)), mix(vec3(...linearRgb(0xb02a3a)), vec3(0.85, 0.8, 0.8), stripe)));
   // Toon materials honour emissiveNode at runtime (NodeMaterial reads it); the typings just don't declare it.
-  (cableMaterial as unknown as { emissiveNode: THREE.Node }).emissiveNode = mix(vec3(...linearRgb(0xff4fa0)), vec3(...linearRgb(0xffb0e0)), head).mul(glow.mul(3))
+  // Each pulse glows in its own neon colour (pulse.z picks it); the head burns nearly white.
+  const neon = palette(pulse.z).pow(vec3(2.2)).mul(2.2);
+  (cableMaterial as unknown as { emissiveNode: THREE.Node }).emissiveNode = mix(neon, vec3(1, 0.95, 1), head.mul(0.2)).mul(glow.mul(3))
     // The whole tangle hums with the bass: a faint pink charge rippling along every cable.
     .add(vec3(...linearRgb(0xff4fa0)).mul(hum.mul(fract(along.mul(3).sub(time.mul(1.5)).add(kind.mul(5))).pow(4).mul(0.6).add(0.05))));
   scene.add(new THREE.Mesh(cables, cableMaterial), outline(cables, 0.018));
@@ -99,7 +102,7 @@ export function createPoleSparksMode(): VisualMode {
   // Spark clusters where pulses arrive at the pole.
   const sparks = createParticles(loadTexture(sparkUrl), 300, { gravity: 6, drag: 1.2 });
   scene.add(sparks.object);
-  const live = Array.from({ length: PULSES }, () => ({ cable: -1, at: 0, speed: 1 }));
+  const live = Array.from({ length: PULSES }, () => ({ cable: -1, at: 0, speed: 1, hue: 0 }));
   const hits = createHits({ decay: 0.3, interval: 0.25 });
   let next = 0, randomSpark = 0, feed = 0, kick = 0;
   return {
@@ -111,7 +114,7 @@ export function createPoleSparksMode(): VisualMode {
       hits.update(frame, 0.3);
       // A hit shoots pulses along random cables, from the far end toward the pole: more and faster the harder
       // it hits. Sustained bass keeps feeding extra pulses between hits.
-      const launch = (speed: number) => { live[next] = { cable: Math.floor(random() * CABLES), at: 1, speed }; next = (next + 1) % PULSES; };
+      const launch = (speed: number) => { live[next] = { cable: Math.floor(random() * CABLES), at: 1, speed, hue: random() }; next = (next + 1) % PULSES; };
       if (hits.fired) {
         for (let k = 0, n = 2 + Math.floor(random() * 2 + frame.response.impact * 5); k < n; k++) launch(0.8 + random() * 0.8);
         kick = 1;
@@ -125,10 +128,12 @@ export function createPoleSparksMode(): VisualMode {
         if (p.at <= 0) {
           // Arrival: a spark cluster at the junction.
           const anchor = anchors[p.cable];
-          for (let s = 0, n = 10 + Math.round(frame.response.loudness * 14); s < n; s++) sparks.emit(anchor.x, anchor.y, anchor.z + 0.3, (random() - 0.5) * 7, random() * 6, (random() - 0.5) * 7, 0.12 + random() * 0.18, 0.3, 2, 0.7, 1.4);
+          // The burst takes the pulse's own neon colour (the same cosine palette as the shader).
+          const turn = p.hue * Math.PI * 2, [cr, cg, cb] = [turn, turn - 2.094, turn + 2.094].map((t) => 0.6 + 1.6 * (0.5 + 0.5 * Math.cos(t)));
+          for (let s = 0, n = 10 + Math.round(frame.response.loudness * 14); s < n; s++) sparks.emit(anchor.x, anchor.y, anchor.z + 0.3, (random() - 0.5) * 7, random() * 6, (random() - 0.5) * 7, 0.12 + random() * 0.18, 0.3, cr, cg, cb);
           p.cable = -1; continue;
         }
-        pulseData[p.cable * 4] = p.at; pulseData[p.cable * 4 + 1] = 1;
+        pulseData[p.cable * 4] = p.at; pulseData[p.cable * 4 + 1] = 1; pulseData[p.cable * 4 + 2] = p.hue;
       }
       pulseTexture.needsUpdate = true;
       // Loudness keeps a trickle of stray sparks going.

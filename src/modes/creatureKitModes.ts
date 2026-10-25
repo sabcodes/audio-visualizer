@@ -4,6 +4,7 @@ import type { VisualMode } from './types';
 import type { QualityBudget } from '../rendering/quality';
 import { sceneDefaults, resizeCamera, disposeScene, approach, settleStep } from './shared';
 import { ClipPlayer, TempoTracker, createGlowPoints, instantiate, loadTexture, setMorph, shaftMaterial, whenLoaded, type Figure } from './figures';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { shadowSwitch } from './kitModes';
 import { createCinematic } from './cinematic';
 import { createHits, linearRgb } from './hitPulse';
@@ -134,28 +135,54 @@ export const LIGHT_BIRDS = [
   { at: [-0.2, 1.05, 0.2], scale: 1.3, span: 0.8, beak: 0.09, tail: 0.3, fork: 0.08 },
 ] as const;
 
-/** One light-painted bird seen side on: body outline, eye, tail fan and two wings that pivot at the shoulder. */
+/**
+ * One light-painted bird as a 3D wire sculpture: an egg-shaped body cage (meridians and rings), a wire head and
+ * beak, two cambered wings layered from coverts to secondaries to long primaries, and a fanned tail. Strokes are
+ * merged per part so the bird is a few draw calls; the wings pivot at the shoulders.
+ */
 export function lightBird(spec: (typeof LIGHT_BIRDS)[number], material: THREE.Material) {
-  const group = new THREE.Group();
-  const stroke = (points: readonly (readonly [number, number, number])[], radius = 0.011, closed = false) =>
-    new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)), closed), 120, radius, 8, closed), material);
-  const tip = 0.32 + spec.beak;
-  group.add(stroke([[tip, 0.05, 0], [0.3, 0.09, 0], [0.18, 0.14, 0], [0, 0.12, 0], [-0.22, 0.06, 0], [-0.4, 0.01, 0], [-0.22, -0.07, 0], [0.02, -0.11, 0], [0.2, -0.06, 0], [0.29, 0.01, 0]], 0.012, true));
-  group.add(stroke([[0.29, 0.01, 0], [tip * 0.7 + 0.1, 0.03, 0], [tip, 0.05, 0]], 0.008));
-  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.005, 8, 32), material); eye.position.set(0.22, 0.07, 0.01); group.add(eye);
-  for (const [dy, length] of [[spec.fork, 1], [0, 0.85], [-spec.fork, 1]] as const) {
-    group.add(stroke([[-0.38, 0.01, 0], [-0.38 - spec.tail * 0.5 * length, 0.01 + dy * 0.4, 0], [-0.38 - spec.tail * length, 0.02 + dy, 0]], 0.009));
+  const group = new THREE.Group(), v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const tube = (points: THREE.Vector3[], radius: number, closed = false, segments = 64) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, closed), segments, radius, 6, closed);
+  const part = (pieces: THREE.BufferGeometry[]) => { const mesh = new THREE.Mesh(mergeGeometries(pieces), material); pieces.forEach((piece) => piece.dispose()); return mesh; };
+  // Body: an egg along x (head end +x), 8 meridians and 5 rings.
+  const egg = (u: number, a: number) => { const r = Math.sin(Math.PI * u) * (0.13 + 0.03 * (1 - u)); return v(-0.36 + u * 0.66, 0.02 + Math.cos(a) * r * 0.9, Math.sin(a) * r); };
+  const body: THREE.BufferGeometry[] = [];
+  for (let m = 0; m < 8; m++) body.push(tube(Array.from({ length: 13 }, (_, k) => egg(k / 12, (m / 8) * Math.PI * 2)), 0.006));
+  for (const u of [0.2, 0.4, 0.6, 0.8]) body.push(tube(Array.from({ length: 16 }, (_, k) => egg(u, (k / 16) * Math.PI * 2)), 0.005, true));
+  // Head: three wire rings round a small sphere, an eye, and a beak of four converging strokes.
+  const head = v(0.38, 0.13, 0), tip = v(0.42 + spec.beak, 0.1, 0);
+  for (const axis of [v(1, 0, 0), v(0, 1, 0), v(0, 0, 1)]) {
+    const basis = new THREE.Quaternion().setFromUnitVectors(v(0, 0, 1), axis);
+    body.push(tube(Array.from({ length: 16 }, (_, k) => v(Math.cos(k / 16 * Math.PI * 2) * 0.07, Math.sin(k / 16 * Math.PI * 2) * 0.07, 0).applyQuaternion(basis).add(head)), 0.005, true, 32));
   }
+  for (const [dy, dz] of [[0.03, 0], [-0.02, 0], [0, 0.025], [0, -0.025]]) body.push(tube([v(head.x + 0.05, head.y + dy, dz), v((head.x + tip.x) / 2 + 0.02, (head.y + tip.y) / 2 + dy * 0.4, dz * 0.4), tip], 0.004, false, 16));
+  body.push(tube([v(-0.02, 0.1, 0), v(0.2, 0.15, 0), head], 0.006, false, 24));
+  const eye = new THREE.TorusGeometry(0.015, 0.004, 6, 24); eye.translate(head.x + 0.03, head.y + 0.02, 0.06); body.push(eye);
+  // Tail: seven feathers fanned in 3D, the outer ones longer for a fork.
+  for (let f = 0; f < 7; f++) {
+    const fan = (f / 6 - 0.5) * 1.1, length = spec.tail * (1 + Math.abs(fan) * spec.fork * 6);
+    const end = v(-0.36 - Math.cos(fan) * length, 0.02 - length * 0.15, Math.sin(fan) * length);
+    body.push(tube([v(-0.32, 0.02, 0), v((-0.32 + end.x) / 2, 0.02 - length * 0.05, end.z * 0.5), end], 0.004, false, 24));
+  }
+  group.add(part(body));
+  // Wings: rows of feathers fanning from the arm, cambered (bowed toward +y) so they read in depth.
   const wings = [1, -1].map((side) => {
-    const wing = new THREE.Group(); wing.position.set(0.05, 0.11, side * 0.03);
-    const span = spec.span;
-    // Leading edge, then primaries fanning back from the wrist.
-    wing.add(stroke([[0, 0, 0], [0.05, span * 0.35, side * 0.02], [-0.05, span * 0.75, side * 0.04], [-0.2, span, side * 0.05]], 0.012));
-    for (let f = 0; f < 5; f++) {
-      const t = f / 4, wrist = [0.0, span * 0.6, side * 0.03] as const;
-      wing.add(stroke([wrist, [-0.12 - t * 0.12, span * (0.85 - t * 0.25), side * 0.04], [-0.24 - t * 0.2, span * (0.95 - t * 0.45), side * 0.05]], 0.008));
-    }
-    wing.add(stroke([[0, 0, 0], [-0.12, span * 0.25, side * 0.02], [-0.3, span * 0.4, side * 0.04], [-0.44, span * 0.48, side * 0.05]], 0.009));
+    const wing = new THREE.Group(); wing.position.set(0.06, 0.1, side * 0.1);
+    const span = spec.span, strokes: THREE.BufferGeometry[] = [];
+    const arm = (t: number) => v(-0.04 * t, span * 0.12 * Math.sin(Math.PI * t), side * span * t);
+    strokes.push(tube(Array.from({ length: 9 }, (_, k) => arm(k / 8)), 0.007));
+    const rows = [{ count: 9, from: 0.55, reach: 0.95, back: 0.45 }, { count: 8, from: 0.1, reach: 0.55, back: 0.32 }, { count: 7, from: 0.05, reach: 0.6, back: 0.16 }];
+    rows.forEach((row, r) => {
+      for (let f = 0; f < row.count; f++) {
+        const t = row.from + (row.reach - row.from) * (f / Math.max(1, row.count - 1)), root = arm(t);
+        // Primaries sweep back and out; inner rows are shorter. Each feather bows upward along its length.
+        const sweep = r === 0 ? 0.35 + f * 0.06 : 0.1, length = row.back * span * (r === 0 ? 1 - f * 0.03 : 1);
+        const end = v(root.x - Math.cos(sweep) * length, root.y + 0.01, root.z + side * Math.sin(sweep) * length);
+        const mid = root.clone().lerp(end, 0.5).add(v(0, 0.04 * span * (1 - r * 0.3), 0));
+        strokes.push(tube([root, mid, end], 0.0045 - r * 0.001, false, 24));
+      }
+    });
+    wing.add(part(strokes));
     group.add(wing);
     return wing;
   });
@@ -227,7 +254,7 @@ export function createLightForestMode(budget: QualityBudget): VisualMode {
     // Interleave the code-built birds between the kit sculptures.
     LIGHT_BIRDS.forEach((spec, i) => {
       const bird = lightBird(spec, birdLine); bird.object.position.set(spec.at[0], spec.at[1], spec.at[2]); bird.object.scale.setScalar(spec.scale); bird.object.visible = false;
-      bird.object.rotation.y = i % 2 ? 0.35 : -0.35;
+      bird.object.rotation.set(0.35, i % 2 ? 0.9 : -0.9, 0.1);
       scene.add(bird.object); sculptures.splice(i * 2, 0, { object: bird.object, morphs: [], wings: bird.wings });
     });
   });
@@ -254,6 +281,8 @@ export function createLightForestMode(budget: QualityBudget): VisualMode {
       flap += frame.reducedMotion ? 0 : frame.delta * (6 + frame.response.bass * 10);
       if (current) setMorph(current.morphs, 0.5 + Math.sin(flap) * 0.5);
       current?.wings?.forEach((wing, side) => { wing.rotation.x = (side ? -1 : 1) * (0.15 + Math.sin(flap) * 0.75); });
+      // The wire birds turn slowly while they show, so their depth reads.
+      if (current?.wings && !frame.reducedMotion) current.object.rotation.y = (hits.variant % 2 ? 0.9 : -0.9) + Math.sin(frame.time * 0.5) * 0.6;
       sway.value = approach(sway.value, 0.5 + frame.response.bass * 2, step, 0.3);
       for (const ray of rays) (ray.material as THREE.MeshBasicNodeMaterial).color.setRGB(0.56, 0.72, 0.63).multiplyScalar(0.012 + frame.response.loudness * 0.025);
       (scene.fog as THREE.FogExp2).color.setRGB(0.02, 0.03, 0.025).multiplyScalar(0.5 + frame.response.loudness);

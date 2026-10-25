@@ -9,7 +9,8 @@ import { createErrorMode } from './errorMode';
 import { createFullscreenMode } from './fullscreenModes';
 import { createGlitchMode, createKaleidoscopeMode } from './filterModes';
 import { createChladniMode, createEpicycleMode, createPendulumMode, createPolyhedraMode, createTorusKnotMode } from './geometricModes';
-import { createEventHorizonMode, createInkMarbleMode, createVoronoiMode } from './shaderModes';
+import { createInkMarbleMode, createVoronoiMode } from './shaderModes';
+import { createOuterSpaceMode } from './spaceMode';
 import { createAuroraMode, createGalaxyMode, createRidgelineMode, createSynthwaveMode } from './landscapeModes';
 import { createRobotMode } from './robotMode';
 import { createNeonCityMode } from './neonCityMode';
@@ -29,7 +30,8 @@ import { createBandMode } from './bandMode';
 import { createJellyMode } from './jellyMode';
 import { createBlockBowtieMode, createPrismBowtieMode } from './bilateralModes';
 import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, createHairVortexMode, createMirrorPlasmaMode } from './plasmaModes';
-import { createBlackMazeMode, createStarfallCanopyMode } from './natureModes';
+import { createBlackMazeMode } from './natureModes';
+import { createStarfallCanopyMode } from './canopyMode';
 import { createWindfieldMode } from './windfieldMode';
 import { createBeaconRingsMode, createChromeStreaksMode, createSilkThreadsMode } from './nightSceneModes';
 import { createSignalNightMode } from './signalNightMode';
@@ -86,7 +88,7 @@ export const waveTwoModeDefinitions: readonly ModeDefinition[] = [
   definition('chladni', 'Chladni Plate', (budget) => createChladniMode(budget)),
   definition('metaballs', 'Liquid Metaballs', (budget) => createMetaballMode(budget)),
   definition('ocean', 'Audio Ocean', createOceanMode),
-  definition('eventHorizon', 'Event Horizon (FS)', createEventHorizonMode, 'fullscreen'),
+  definition('eventHorizon', 'Outer Space', (budget) => createOuterSpaceMode(budget)),
   definition('fireworks', 'Beat Fireworks Night', (budget) => createFireworksMode(budget)),
   definition('abyss', 'Abyss (Jellyfish)', (budget) => createAbyssMode(budget)),
   definition('disco', 'Mirror-Ball Disco', createDiscoMode),
