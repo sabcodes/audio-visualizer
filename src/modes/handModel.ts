@@ -20,6 +20,8 @@ export interface HandPose {
   thumb: number;
   /** Extra fan between the fingers, radians. */
   spread: number;
+  /** Wrist bend, radians: positive folds the hand toward the palm side of the forearm (the arm swings back). */
+  wrist?: number;
 }
 
 const FINGERS = [
@@ -37,8 +39,9 @@ export function poseHand(pose: HandPose, placement: THREE.Matrix4, outA: THREE.V
   const scale = new THREE.Vector3().setFromMatrixScale(placement).x;
   const segments: [THREE.Vector3, number, THREE.Vector3, number][] = [];
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-  // Forearm, palm (four metacarpals, a fleshy pad) and the thumb's mound.
-  segments.push([v(0, -6, -0.05), 0.36, v(0, -0.05, 0), 0.25]);
+  // Forearm (turned about the wrist), palm (four metacarpals, a fleshy pad) and the thumb's mound.
+  const elbow = v(0, -6, -0.05).applyAxisAngle(v(1, 0, 0), -(pose.wrist ?? 0));
+  segments.push([elbow, 0.36, v(0, -0.05, 0), 0.25]);
   for (const finger of FINGERS) segments.push([v(finger.base[0] * 0.55, 0.05, 0), 0.13, v(finger.base[0], finger.base[1] - 0.02, 0), 0.115]);
   segments.push([v(0.02, 0.28, 0.03), 0.24, v(0, 0.66, 0.02), 0.22]);
   segments.push([v(0.14, 0.12, 0.05), 0.17, v(0.33, 0.36, 0.08), 0.13]);
