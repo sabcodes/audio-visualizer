@@ -11,68 +11,6 @@ import { seededRandom } from '../rendering/diagnostics';
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 
-// ---------------------------------------------------------------- Windfield
-
-export function createWindfieldMode(): VisualMode {
-  const { scene, camera, material } = fullscreen();
-  const aspect = uniform(1), time = uniform(0), gust = uniform(0), gustFront = uniform(-10), lean = uniform(0.3), shimmer = uniform(0), growth = uniform(0.7), dolly = uniform(0), cloudTime = uniform(0);
-  const p = uv().sub(0.5).mul(vec2(aspect, 1));
-  const horizon = float(-0.08).add(dolly.mul(0.02));
-  // Sky and cumulus: a flat base on the horizon, cauliflower tops that rise as the clouds grow.
-  const above = p.y.sub(horizon);
-  const cx = p.x.mul(1.1).add(cloudTime.mul(0.01));
-  const tops = mx_fractal_noise_float(vec3(cx.mul(1.6), 0, cloudTime.mul(0.02)), 3, 2, 0.5).mul(0.5).add(0.5).mul(0.55).add(0.2).mul(growth);
-  const billow = mx_fractal_noise_float(vec3(cx.mul(5), above.mul(5), cloudTime.mul(0.05)), 5, 2, 0.55);
-  const puff = tops.sub(above).add(billow.mul(0.16));
-  const cloud = puff.smoothstep(0, 0.035).mul(above.smoothstep(-0.005, 0.02));
-  // Self-shadowing: compare the billow with a sample toward the sun (up and left); denser toward the light means shade.
-  const towardSun = mx_fractal_noise_float(vec3(cx.mul(5).sub(0.12), above.mul(5).add(0.1), cloudTime.mul(0.05)), 5, 2, 0.55);
-  const shade = billow.sub(towardSun).mul(-3).add(0.6).clamp(0, 1).mul(0.7).add(mx_fractal_noise_float(vec3(cx.mul(14), above.mul(14), cloudTime.mul(0.05)), 3, 2, 0.5).mul(0.15));
-  const cloudColour = mix(vec3(0.58, 0.63, 0.69), vec3(0.9, 0.92, 0.94), above.div(tops.max(0.05)).smoothstep(0.05, 0.6).mul(0.6).add(shade.mul(0.5)).clamp(0, 1));
-  const sky = mix(vec3(0.16, 0.42, 0.68), vec3(0.027, 0.24, 0.53), above.mul(2.2).clamp(0, 1));
-  const skyColour = mix(sky, cloudColour, cloud);
-  // Meadow: perspective ground with broad gust waves rolling across it and fine blades that lean with the wind.
-  const below = horizon.sub(p.y).max(0.002), depth = float(0.14).div(below);
-  const plane = vec2(p.x.mul(depth), depth);
-  const wind = time.mul(0.6);
-  const swell = mx_fractal_noise_float(vec3(plane.x.mul(0.25).sub(wind.mul(0.4)), plane.y.mul(0.35).add(wind.mul(0.25)), time.mul(0.05)), 3, 2, 0.5);
-  const front = exp(plane.x.mul(0.3).add(plane.y.mul(0.1)).sub(gustFront).abs().mul(-1.4)).mul(gust);
-  const bright = swell.mul(0.9).add(0.5).add(front.mul(0.6)).clamp(0, 1.4);
-  // Blades: streaks stretched along the lean, finer toward the horizon.
-  const scale = float(0.3).div(below.add(0.12));
-  const bx = p.x.add(p.y.mul(lean.add(swell.mul(0.25)).add(front.mul(0.4)))).mul(scale.sqrt()).mul(120);
-  const by = p.y.mul(scale).mul(14);
-  const blades = mx_fractal_noise_float(vec3(bx, by, 3), 2, 2, 0.5).mul(0.5).add(0.5);
-  const tips = hash2(vec2(bx.floor(), by.mul(2).floor())).greaterThan(0.95).select(float(1), float(0)).mul(shimmer);
-  const grass = mix(vec3(0.03, 0.16, 0.015), vec3(0.2, 0.56, 0.07), bright.mul(blades.mul(0.9).add(0.25)).clamp(0, 1.2)).add(vec3(0.3, 0.45, 0.2).mul(tips.mul(0.4)));
-  const haze = below.smoothstep(0, 0.08);
-  const ground = mix(mix(vec3(0.2, 0.35, 0.3), grass, haze), grass, 1);
-  material.fragmentNode = vec4(p.y.greaterThan(horizon).select(skyColour, ground), 1);
-
-  const hits = createHits({ decay: 0.8, interval: 2 });
-  let frontAt = -10, clock = 0;
-  return {
-    scene, camera,
-    update(frame) {
-      aspect.value = frame.aspect; time.value = frame.time;
-      const step = settleStep(frame), still = frame.reducedMotion;
-      hits.update(frame, 1);
-      // A hit sends a gust front rolling across the field.
-      if (hits.fired && !still) frontAt = -8;
-      frontAt += step * 6; gustFront.value = frontAt;
-      gust.value = approach(gust.value, frontAt < 20 ? 0.6 + frame.response.bass : frame.response.bass * 0.5, step, 0.4);
-      lean.value = approach(lean.value, still ? 0.2 : 0.2 + frame.response.loudness * 0.6, step, 0.5);
-      shimmer.value = frame.audio.highs;
-      dolly.value = approach(dolly.value, still ? 0 : frame.response.bass, step, 0.6);
-      // Time-lapse clouds: they billow and grow, then a new bank rolls in.
-      clock += still ? 0 : frame.delta;
-      cloudTime.value = clock * 6;
-      growth.value = 0.6 + 0.4 * Math.abs(Math.sin(clock * 0.02));
-    },
-    dispose: () => disposeScene(scene),
-  };
-}
-
 // ---------------------------------------------------------------- Black Maze
 
 const MAZE = 9, LATTICE = MAZE * 2 + 1;

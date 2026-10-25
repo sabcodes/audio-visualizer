@@ -7,7 +7,7 @@ import { createHits, variantSequence } from '../../src/modes/hitPulse';
 import { generateMaze, MAZE_WINDOWS } from '../../src/modes/natureModes';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
 import { blockOutline } from '../../src/modes/bilateralModes';
-import { growthSlots } from '../../src/modes/illustratedModes';
+import { GROWTH_FORMS, growForm } from '../../src/modes/bloomTouchMode';
 import { WAREHOUSE_GRADES } from '../../src/modes/kitModes';
 import { STAIR_COLOURS, UNDERGROUND_ANGLES } from '../../src/modes/interiorModes';
 import { SCULPTURES } from '../../src/modes/creatureKitModes';
@@ -103,10 +103,17 @@ describe('wave four helpers', () => {
     const loud = blockOutline(f, seededRandom(1));
     expect(loud.reduce((a, b) => a + b)).toBeGreaterThan(quiet.reduce((a, b) => a + b));
   });
-  it('grows the bloom from the fingertip in phase order', () => {
-    const slots = growthSlots(400);
-    expect(slots.filter((slot) => slot.phase === 0).every((slot) => Math.hypot(slot.x, slot.y) < 0.1)).toBe(true);
-    expect(new Set(slots.map((slot) => slot.phase))).toEqual(new Set([0, 1, 2, 3]));
+  it('grows each bloom form from the fingertip, with stems, leaves and several flower shapes', () => {
+    for (const form of GROWTH_FORMS) {
+      const elements = growForm(form, 4, 900);
+      expect(elements.length, form).toBeGreaterThan(20);
+      expect(elements.length).toBeLessThanOrEqual(900);
+      expect(elements.some((e) => e.kind === 0) && elements.some((e) => e.kind >= 1 && e.kind <= 3), form).toBe(true);
+      expect(new Set(elements.filter((e) => e.kind >= 4).map((e) => e.kind)).size, form).toBeGreaterThan(1);
+      // The earliest elements sit at the fingertip.
+      const first = [...elements].sort((a, b) => a.at - b.at)[0];
+      expect(Math.hypot(first.x, first.y), form).toBeLessThan(0.05);
+    }
   });
   it('cycles colours the spec lists', () => {
     expect(WAREHOUSE_GRADES).toHaveLength(3);

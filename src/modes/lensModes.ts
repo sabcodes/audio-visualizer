@@ -187,7 +187,7 @@ export function createCandyOrbMode(): VisualMode {
 // ---------------------------------------------------------------- Liquid Chrome
 
 export const CHROME_PALETTES = [[0xff7a1a, 0xffffff, 0x3a66ff], [0x1a2cc8, 0x5ad0ff, 0xffffff], [0xff3fb0, 0xff7a1a, 0x7a3cff]] as const;
-const BLOBS = 12, DROPLETS = 6;
+const BLOBS = 7;
 
 export interface Blob { x: number; y: number; vx: number; vy: number; r: number; tx: number; ty: number; life: number }
 
@@ -213,84 +213,68 @@ export function stepBlobs(blobs: Blob[], aspect: number, delta: number, merge: n
 
 export function createLiquidChromeMode(): VisualMode {
   const { scene, camera, material } = fullscreen();
-  const aspect = uniform(1), time = uniform(0), highlight = uniform(1), sparkle = uniform(0.3), gain = uniform(1);
-  const blobUniforms = Array.from({ length: BLOBS + DROPLETS }, () => uniform(new THREE.Vector3(0, 0, 0)));
+  const aspect = uniform(1), time = uniform(0), flow = uniform(0), warp = uniform(1), shock = uniform(10), sparkle = uniform(0.3), gain = uniform(1);
+  const blobUniforms = Array.from({ length: BLOBS }, () => uniform(new THREE.Vector3(0, 0, 0)));
   const colours = CHROME_PALETTES[0].map(vec3Uniform);
   const p = centred(aspect);
-  // Metaball field and its analytic gradient.
-  let field: F = float(0), gradient: V2 = vec2(0);
-  for (const blob of blobUniforms) {
-    const delta = p.sub(blob.xy), d2 = delta.dot(delta).add(1e-4), r2 = blob.z.mul(blob.z);
-    field = field.add(r2.div(d2));
-    gradient = gradient.sub(delta.mul(r2.mul(2)).div(d2.mul(d2)));
-  }
-  // Crinkles in the surface, so highlights break into the razor slivers of the reference.
-  const crinkle = vec2(mx_fractal_noise_float(vec3(p.mul(3.5), time.mul(0.3)), 2, 2.2, 0.5), mx_fractal_noise_float(vec3(p.mul(3.5).add(13), time.mul(0.3)), 2, 2.2, 0.5));
-  const slope = gradient.div(field.mul(field).max(1e-3)).mul(0.12).add(crinkle.mul(0.5));
-  const normal = normalize(vec3(slope.negate(), 1));
-  // Studio softboxes reflected from above; R, G and B use slightly different normals for the chromatic edge.
+  // The surface: a domain-warped noise field like Ink Marble, with a few drifting liquid bulges pressed into it.
+  const fbm = (q: V2, z: F) => mx_fractal_noise_float(vec3(q.x, q.y, z), 3, 2, 0.5);
+  const surface = (q: V2) => {
+    const t = time.mul(0.05).add(flow);
+    const a = vec2(fbm(q.mul(0.65), t), fbm(q.mul(0.65).add(vec2(5.2, 1.3)), t.add(3)));
+    const b = vec2(fbm(q.mul(0.65).add(a.mul(warp.mul(1.4))).add(vec2(1.7, 9.2)), t.mul(1.3)), fbm(q.mul(0.65).add(a.mul(warp.mul(1.4))).add(vec2(8.3, 2.8)), t.mul(1.3)));
+    let h: F = fbm(q.mul(0.65).add(b.mul(warp.mul(1.3))), t.mul(0.7));
+    for (const blob of blobUniforms) { const d = q.sub(blob.xy).length(); h = h.add(exp(d.div(blob.z.max(1e-3)).pow(2).negate()).mul(0.5)); }
+    // Beat shockwave: a ring that lifts the metal as it spreads.
+    const r = q.length();
+    return h.add(exp(r.sub(shock.mul(0.8)).abs().mul(-14)).mul(exp(shock.mul(-1.5))).mul(0.6));
+  };
+  const e = 0.004, h0 = surface(p);
+  const slope = vec2(surface(p.add(vec2(e, 0))).sub(h0), surface(p.add(vec2(0, e))).sub(h0)).div(e).mul(0.06);
+  // Studio reflection: a bright sky above, a dark floor, a horizon line and softboxes, tinted by the palette.
   const env = (bend: number) => {
     const n = normalize(vec3(slope.mul(-bend), 1)), rx = n.x.mul(n.z).mul(2), ry = n.y.mul(n.z).mul(2);
-    // Each softbox is a narrow band of reflection angles, so the highlights come out as thin slivers.
-    const stripe = (v: F, at: number) => v.smoothstep(at, at + 0.04).sub(v.smoothstep(at + 0.07, at + 0.14));
-    return colours[1].mul(stripe(rx, 0.3)).add(colours[0].mul(stripe(ry.negate(), 0.26)))
-      .add(colours[2].mul(stripe(ry, 0.34))).add(colours[0].mul(stripe(rx.negate(), 0.4)).mul(0.6));
+    const sky = ry.smoothstep(-0.05, 0.6), horizon = exp(ry.abs().mul(-18)).mul(0.7);
+    const box = rx.smoothstep(0.35, 0.42).sub(rx.smoothstep(0.55, 0.62)).mul(ry.smoothstep(-0.3, 0.1));
+    return colours[2].mul(sky.mul(0.9)).add(colours[1].mul(horizon)).add(colours[0].mul(box.mul(1.4))).add(colours[0].mul(rx.negate().smoothstep(0.45, 0.7).mul(0.5)));
   };
-  const reflection = vec3(env(0.92).x, env(1).y, env(1.08).z);
-  const inside = field.smoothstep(0.92, 1.05);
-  const edge = exp(field.sub(1).abs().div(0.012).negate()).mul(highlight).mul(inside);
-  const grazing = normal.z.oneMinus().mul(3).clamp(0, 1);
-  const glints = hash2(screenCoordinate.xy.div(2).floor().add(time.floor())).greaterThan(0.997).select(float(1), float(0)).mul(sparkle).mul(edge.add(grazing).min(1));
-  const surface = vec3(0.008, 0.008, 0.011).add(reflection.mul(1.4)).add(colours[2].mul(grazing.pow(4).mul(0.12)));
-  const colour = surface.mul(inside).add(mix(colours[0], vec3(1), 0.4).mul(edge.mul(0.5))).add(vec3(glints));
-  material.fragmentNode = vec4(colour.mul(gain).add(vec3(0.005, 0.005, 0.007)), 1);
+  const reflection = vec3(env(0.94).x, env(1).y, env(1.06).z);
+  const steep = slope.length().smoothstep(0.12, 0.7);
+  // Valleys sink into black glass; ridges carry the reflections.
+  const depth = h0.smoothstep(-0.2, 0.45).pow(1.5);
+  const glints = hash2(screenCoordinate.xy.div(2).floor().add(time.floor())).greaterThan(0.996).select(float(1), float(0)).mul(sparkle).mul(steep);
+  const colour = vec3(0.006, 0.006, 0.008).add(reflection.mul(steep.mul(0.9).add(0.05)).mul(depth)).add(vec3(glints));
+  material.fragmentNode = vec4(colour.mul(gain), 1);
 
-  const hits = createHits({ decay: 0.25, interval: 0.3, variants: CHROME_PALETTES.length, seed: 3 });
+  const hits = createHits({ decay: 0.4, interval: 0.4, variants: CHROME_PALETTES.length, seed: 3 });
   const random = seededRandom(97);
-  const wander = () => [(random() - 0.5) * 1.1, (random() - 0.5) * 0.6] as const;
-  const blobs: Blob[] = Array.from({ length: BLOBS + DROPLETS }, (_, i) => {
-    const [tx, ty] = wander();
-    return { x: tx, y: ty, vx: 0, vy: 0, r: i < BLOBS ? 0.06 + random() * 0.09 : 0, tx, ty, life: 0 };
-  });
-  const baseRadius = blobs.map((blob) => blob.r);
-  let nextDroplet = BLOBS, retarget = 0;
+  const wander = () => [(random() - 0.5) * 1.3, (random() - 0.5) * 0.7] as const;
+  const blobs: Blob[] = Array.from({ length: BLOBS }, () => { const [tx, ty] = wander(); return { x: tx, y: ty, vx: 0, vy: 0, r: 0.08 + random() * 0.1, tx, ty, life: 0 }; });
+  const targets = CHROME_PALETTES[0].map((hex) => new THREE.Vector3(...linearRgb(hex)));
+  let retarget = 0, phase = 0, shockAge = 10;
   return {
     scene, camera,
     update(frame) {
       aspect.value = frame.aspect; time.value = frame.time;
       const step = settleStep(frame), still = frame.reducedMotion;
       hits.update(frame, 0.6);
-      retarget -= step;
-      if (retarget < 0) { retarget = 1.5; const blob = blobs[Math.floor(random() * BLOBS)]; [blob.tx, blob.ty] = wander(); }
+      // Hits pick the next palette, but the colours drift there over a couple of seconds rather than snapping.
       if (hits.fired) {
-        CHROME_PALETTES[hits.variant].forEach((hex, i) => colours[i].value.set(...linearRgb(hex)));
-        if (!still) {
-          // Kick every blob away from a random point, and pinch a few droplets off at the seams.
-          const [hx, hy] = wander();
-          for (const blob of blobs.slice(0, BLOBS)) {
-            const dx = blob.x - hx, dy = blob.y - hy, d = Math.max(0.05, Math.hypot(dx, dy));
-            blob.vx += dx / d * 0.4 * (0.5 + frame.response.bass); blob.vy += dy / d * 0.4 * (0.5 + frame.response.bass);
-          }
-          for (let k = 0; k < 2; k++) {
-            const a = blobs[Math.floor(random() * BLOBS)], droplet = blobs[nextDroplet];
-            nextDroplet = BLOBS + (nextDroplet - BLOBS + 1) % DROPLETS;
-            Object.assign(droplet, { x: a.x + a.r, y: a.y, vx: (random() - 0.5) * 0.6, vy: (random() - 0.5) * 0.6, r: 0.025 + random() * 0.02, life: 1.5, tx: a.x, ty: a.y });
-          }
-        }
+        CHROME_PALETTES[hits.variant].forEach((hex, i) => targets[i].set(...linearRgb(hex)));
+        shockAge = 0;
+        if (!still) for (const blob of blobs) { blob.vx += (random() - 0.5) * 0.5; blob.vy += (random() - 0.5) * 0.5; }
       }
-      // Quiet passages drain the sheet to a few small blobs; loud ones swell it.
-      const swell = 0.6 + frame.response.loudness * 0.35 + frame.response.bass * 0.25;
-      blobs.forEach((blob, i) => {
-        if (i < BLOBS) blob.r = approach(blob.r, baseRadius[i] * swell * (i < 4 || frame.response.loudness > 0.15 ? 1 : 0.35), step, 0.3);
-        else { blob.life -= step; blob.r = Math.max(0, blob.life > 0 ? blob.r : blob.r - step * 0.05); }
-      });
+      colours.forEach((c, i) => c.value.lerp(targets[i], 1 - Math.exp(-step / 2.5)));
+      retarget -= step;
+      if (retarget < 0) { retarget = 1.2; const blob = blobs[Math.floor(random() * BLOBS)]; [blob.tx, blob.ty] = wander(); }
       if (!still) stepBlobs(blobs, frame.aspect, Math.min(frame.delta, 1 / 20), frame.audio.mid);
-      blobs.forEach((blob, i) => blobUniforms[i].value.set(blob.x, blob.y, blob.r));
-      highlight.value = 0.5 + frame.response.loudness * 1.2;
+      blobs.forEach((blob, i) => blobUniforms[i].value.set(blob.x, blob.y, blob.r * (0.8 + frame.response.bass * 0.6)));
+      phase += frame.delta * (0.08 + frame.audio.mid * 0.4) * (still ? 0.2 : 1); flow.value = phase;
+      warp.value = approach(warp.value, 0.8 + frame.response.bounce * 0.9, step, still ? 0.6 : 0.15);
+      shockAge += step; shock.value = still ? 10 : shockAge;
       sparkle.value = frame.audio.highs;
-      gain.value = 0.7 + hits.flash * 0.6;
+      gain.value = 0.85 + hits.flash * 0.3 + frame.response.loudness * 0.2;
     },
     dispose: () => disposeScene(scene),
   };
 }
-
