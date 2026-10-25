@@ -3,11 +3,12 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajous', 'boids', 'fftTunnel', 'kaleidoPlane', 'city', 'glitchRing', 'vjRings', 'neonKaleido', 'starTunnel', 'bloomTunnel', 'glitchFX', 'godrays',
   'epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot', 'neonCity',
-  'kraken', 'torusKnot', 'chladni', 'metaballs', 'ocean', 'eventHorizon', 'fireworks', 'abyss', 'disco', 'ferrofluid', 'arena'];
+  'kraken', 'torusKnot', 'chladni', 'metaballs', 'ocean', 'eventHorizon', 'fireworks', 'abyss', 'disco', 'ferrofluid', 'arena',
+  'reactionDiffusion', 'feedback', 'curlFlow', 'attractor', 'physarum', 'snowflake', 'turntable', 'ascii', 'ledAnalyzer', 'storm'];
 
-test('all 40 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 50 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(420000); // 40 modes twice under software rendering
+  test.setTimeout(600000); // 50 modes twice under software rendering
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });

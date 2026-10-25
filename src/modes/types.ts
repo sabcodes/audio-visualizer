@@ -1,4 +1,4 @@
-import type { Camera, Scene, TextureNode, Node } from 'three/webgpu';
+import type { Camera, Scene, TextureNode, Node, WebGPURenderer } from 'three/webgpu';
 import type { AudioFrame } from '../audio/AudioEngine';
 import type { BackendName } from '../rendering/backendSelection';
 import type { QualityBudget } from '../rendering/quality';
@@ -28,6 +28,8 @@ export interface VisualMode {
   camera: Camera;
   update(frame: ModeFrame): void;
   dispose(): void;
+  /** Off-screen passes (simulation steps, feedback buffers) run after update and before the scene renders. */
+  simulate?(renderer: WebGPURenderer): void;
   // Samples the scene's real intermediate pass before linear bloom/output.
   filter?: (input: TextureNode) => Node;
 }

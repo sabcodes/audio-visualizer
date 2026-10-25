@@ -18,6 +18,10 @@ import { createFerrofluidMode, createMetaballMode } from './physicsModes';
 import { createAbyssMode, createOceanMode } from './seaModes';
 import { createDiscoMode, createFireworksMode } from './nightModes';
 import { createArenaMode } from './arenaMode';
+import { createCurlFlowMode, createFeedbackMode, createReactionDiffusionMode } from './feedbackModes';
+import { createAttractorMode, createPhysarumMode, createSnowflakeMode } from './generativeModes';
+import { createAsciiMode, createLedAnalyzerMode, createTurntableMode } from './retroModes';
+import { createStormMode } from './stormMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -68,12 +72,24 @@ export const waveTwoModeDefinitions: readonly ModeDefinition[] = [
   definition('ferrofluid', 'Ferrofluid Spike Pool', createFerrofluidMode),
   definition('arena', 'Arena Light Panels', (budget) => createArenaMode(budget)),
 ];
+export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
+  definition('reactionDiffusion', 'Reaction-Diffusion Organism (FS)', (budget) => createReactionDiffusionMode(budget), 'fullscreen'),
+  definition('feedback', 'Feedback Warp (FS)', (budget) => createFeedbackMode(budget), 'fullscreen'),
+  definition('curlFlow', 'Curl-Noise Flow (FS)', (budget) => createCurlFlowMode(budget), 'fullscreen'),
+  definition('attractor', 'Strange Attractor Garden', (budget) => createAttractorMode(budget)),
+  definition('physarum', 'Physarum Slime Veins (FS)', (budget) => createPhysarumMode(budget), 'fullscreen'),
+  definition('snowflake', 'Snowflake Crystal Bloom (FS)', (budget) => createSnowflakeMode(budget), 'fullscreen'),
+  definition('turntable', 'Turntable Deck', createTurntableMode),
+  definition('ascii', 'ASCII / Halftone Terminal (FS)', createAsciiMode, 'fullscreen'),
+  definition('ledAnalyzer', 'LED Bar Analyzer', createLedAnalyzerMode),
+  definition('storm', 'Thunderstorm Sky', (budget) => createStormMode(budget)),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();

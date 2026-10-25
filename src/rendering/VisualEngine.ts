@@ -134,6 +134,7 @@ export class VisualEngine {
     const size = this.renderer.getSize(this.logicalSize);
     const start = performance.now();
     this.active?.update({ ...frame, aspect: size.x / size.y });
+    this.active?.simulate?.(this.renderer);
     this.pipeline?.render(bloom);
     this.lastFrame.cpuUpdateMs = performance.now() - start;
     this.resolveGpuTime(start);

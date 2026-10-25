@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { BoxGeometry, DodecahedronGeometry, IcosahedronGeometry, OctahedronGeometry, TetrahedronGeometry } from 'three/webgpu';
-import { waveOneModeDefinitions, waveTwoModeDefinitions, modeDefinitions } from '../../src/modes/registry';
+import { waveOneModeDefinitions, waveTwoModeDefinitions, waveThreeModeDefinitions, modeDefinitions } from '../../src/modes/registry';
+import { flowVelocity, RD_PRESETS } from '../../src/modes/feedbackModes';
+import { ATTRACTORS, seedAlongOrbit, physarumStep, diffuseTrail, createReiter } from '../../src/modes/generativeModes';
+import { tonearmYaw, GLYPHS, glyphAtlas, ledZone, LED_SEGMENTS } from '../../src/modes/retroModes';
+import { lightningPath } from '../../src/modes/stormMode';
+import { Vector3 } from 'three/webgpu';
 import { chladni, CHLADNI_MODES, KNOTS } from '../../src/modes/geometricModes';
 import { tentacleBend, KRAKEN_SEGMENTS } from '../../src/modes/creatureModes';
 import { fireworkKind } from '../../src/modes/nightModes';
@@ -235,7 +240,7 @@ describe('reduced motion', () => {
     expect(settleStep({ delta: 0.02, reducedMotion: false })).toBe(0.02);
   });
   it('every new mode holds a finite still with a frozen clock, even through loud frames', () => {
-    for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions]) {
+    for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions]) {
       const mode = definition.create(presetBudget('compatibility')), f = frame();
       f.reducedMotion = true; f.delta = 0;
       f.audio.spectrum.fill(200); f.audio = { ...f.audio, bass: 0.9, mid: 0.8, highs: 0.7, rms: 0.6 };
@@ -245,5 +250,103 @@ describe('reduced motion', () => {
       mode.scene.traverse((object) => { for (const value of object.matrixWorld.elements) expect(Number.isFinite(value), definition.id).toBe(true); });
       mode.dispose();
     }
+  });
+});
+
+describe('wave three modes', () => {
+  it('registers ten more ids after wave two, all on both backends', () => {
+    expect(waveThreeModeDefinitions.map((mode) => mode.id)).toEqual(['reactionDiffusion', 'feedback', 'curlFlow', 'attractor', 'physarum', 'snowflake', 'turntable', 'ascii', 'ledAnalyzer', 'storm']);
+    expect(modeDefinitions.slice(40, 50)).toEqual(waveThreeModeDefinitions);
+    for (const mode of waveThreeModeDefinitions) expect(mode.backends).toEqual(['webgpu', 'webgl2']);
+    expect(new Set(modeDefinitions.map((mode) => mode.id)).size).toBe(modeDefinitions.length);
+  });
+  it('each mode builds, survives silence, loud onsets and a stalled frame, then disposes', () => {
+    for (const definition of waveThreeModeDefinitions) {
+      const mode = definition.create(presetBudget('compatibility')), f = frame();
+      mode.update(f);
+      f.audio.spectrum.fill(220); f.audio.waveform.fill(0.4);
+      f.audio = { ...f.audio, bass: 1, mid: 1, highs: 1, onset: true, rms: 0.5 };
+      f.response = { bass: 1, loudness: 1, impact: 1, bounce: 1 }; f.reducedFlash = false;
+      for (let i = 0; i < 60; i++) { f.time += 1 / 60; mode.update(f); }
+      f.delta = 3; f.spectrumMapping = 'log'; mode.update(f);
+      mode.scene.traverse((object) => {
+        const position = (object as { geometry?: { attributes?: { position?: { array: ArrayLike<number> } } } }).geometry?.attributes?.position;
+        if (position) expect(Array.from(position.array).every(Number.isFinite), definition.id).toBe(true);
+        for (const value of [object.position.x, object.position.y, object.rotation.y, object.scale.y]) expect(Number.isFinite(value), definition.id).toBe(true);
+      });
+      mode.dispose();
+      expect(mode.scene.children).toHaveLength(0);
+    }
+  });
+  it('flow velocity is divergence-free, so streams never pile up', () => {
+    // Float64 buffers so the finite differences aren't swamped by float32 rounding.
+    const buffer = () => new Float64Array(2) as unknown as Float32Array, at = buffer(), dx = buffer(), dy = buffer(), h = 1e-5;
+    for (const [x, y, t] of [[0.1, 0.2, 0], [-1.3, 0.7, 4], [1.8, -0.9, 11]]) {
+      flowVelocity(x + h, y, t, 1.3, dx); flowVelocity(x - h, y, t, 1.3, at);
+      const ddx = (dx[0] - at[0]) / (2 * h);
+      flowVelocity(x, y + h, t, 1.3, dy); flowVelocity(x, y - h, t, 1.3, at);
+      expect(Math.abs(ddx + (dy[1] - at[1]) / (2 * h))).toBeLessThan(1e-4);
+    }
+  });
+  it('reaction-diffusion presets stay inside the Gray-Scott pattern-forming region', () => {
+    for (const [feed, kill] of RD_PRESETS) { expect(feed).toBeGreaterThan(0.01); expect(feed).toBeLessThan(0.09); expect(kill).toBeGreaterThan(0.045); expect(kill).toBeLessThan(0.07); }
+  });
+  it('every attractor stays bounded from seeds along its orbit', () => {
+    const d = new Float32Array(3), random = (() => { let s = 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+    for (const attractor of ATTRACTORS) {
+      const state = new Float32Array(30);
+      seedAlongOrbit(attractor, 10, state, random);
+      for (let step = 0; step < 4000; step++) for (let i = 0; i < 10; i++) {
+        attractor.derive(state[i * 3], state[i * 3 + 1], state[i * 3 + 2], 0.5, d);
+        for (let k = 0; k < 3; k++) state[i * 3 + k] += d[k] * attractor.dt;
+      }
+      for (let i = 0; i < 10; i++) {
+        const r = Math.hypot(state[i * 3] - attractor.center[0], state[i * 3 + 1] - attractor.center[1], state[i * 3 + 2] - attractor.center[2]) * attractor.scale;
+        expect(r, attractor.name).toBeLessThan(3);
+      }
+    }
+  });
+  it('physarum agents stay on the torus and deposit, and diffusion only loses trail to decay', () => {
+    const w = 40, h = 30, agents = new Float32Array([5, 5, 0, 39.5, 29.5, 1, 0.2, 15, 3]), trail = new Float32Array(w * h);
+    for (let i = 0; i < 50; i++) physarumStep(agents, trail, w, h, { sensorAngle: 0.5, sensorDistance: 4, turn: 0.4, speed: 1.3, repel: i % 2 === 0 }, () => 1, Math.random);
+    for (let i = 0; i < agents.length; i += 3) { expect(agents[i]).toBeGreaterThanOrEqual(0); expect(agents[i]).toBeLessThan(w); expect(agents[i + 1]).toBeGreaterThanOrEqual(0); expect(agents[i + 1]).toBeLessThan(h); }
+    const total = trail.reduce((a, b) => a + b, 0), out = new Float32Array(w * h);
+    expect(total).toBeCloseTo(150);
+    diffuseTrail(trail, out, w, h, 0.9);
+    expect(out.reduce((a, b) => a + b, 0)).toBeCloseTo(total * 0.9, 3);
+  });
+  it('the Reiter crystal grows with six-fold symmetry', () => {
+    const crystal = createReiter(30), params = { alpha: 1, beta: 0.4, gamma: 0.002 };
+    crystal.reset(params.beta);
+    for (let i = 0; i < 400; i++) crystal.step(params);
+    expect(crystal.extent).toBeGreaterThan(3);
+    const at = (q: number, r: number) => crystal.s[(q + 30) * crystal.size + (r + 30)];
+    // Rotating (q, r) by 60° about the centre maps to (-r, q + r).
+    for (const [q, r] of [[4, 1], [7, -2], [2, 5]]) expect(at(-r, q + r)).toBeCloseTo(at(q, r), 4);
+  });
+  it('the tonearm yaw puts the stylus at the requested radius', () => {
+    const pivot: [number, number] = [22, -14];
+    for (const radius of [14, 10, 6]) {
+      const yaw = tonearmYaw(pivot, 26.6, radius);
+      expect(Math.hypot(pivot[0] + Math.cos(yaw) * 26.6, pivot[1] + Math.sin(yaw) * 26.6)).toBeCloseTo(radius, 4);
+    }
+  });
+  it('the glyph ramp grows denser, and the atlas packs every glyph', () => {
+    const lit = GLYPHS.map((glyph) => glyph.join('').split('#').length - 1);
+    expect(lit[0]).toBe(0); expect(lit[lit.length - 1]).toBeGreaterThan(lit[1]);
+    const atlas = glyphAtlas();
+    expect(atlas.image.width).toBe(GLYPHS.length * 5); expect(atlas.image.height).toBe(7);
+    atlas.dispose();
+  });
+  it('LED zones run green, amber, red from the bottom', () => {
+    expect(ledZone(0)).toBe(0); expect(ledZone(LED_SEGMENTS - 1)).toBe(2);
+    expect(Array.from({ length: LED_SEGMENTS }, (_, s) => ledZone(s))).toEqual([...Array.from({ length: LED_SEGMENTS }, (_, s) => ledZone(s))].sort());
+  });
+  it('lightning runs from cloud to ground in connected segments', () => {
+    const out = new Float32Array(160 * 6), top = new Vector3(0, 110, -100), bottom = new Vector3(10, 0, -90);
+    const written = lightningPath(top, bottom, Math.random, out);
+    expect(written).toBeGreaterThan(64);
+    expect(out[1]).toBeCloseTo(110); expect(out[63 * 6 + 4]).toBeCloseTo(0);
+    for (let i = 1; i < 64; i++) for (let k = 0; k < 3; k++) expect(out[i * 6 + k]).toBeCloseTo(out[(i - 1) * 6 + 3 + k]);
   });
 });
