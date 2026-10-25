@@ -245,7 +245,7 @@ export const BEACON_STAGES = [
 const RINGS = 12;
 /** What the rings do on a hit, besides advancing the stage: flat stack, gyroscope, tunnel, helix, ripple. */
 export const BEACON_ACTIONS = ['stack', 'gyro', 'tunnel', 'helix', 'ripple'] as const;
-/** Cave and ring colours: cave tint, inner ring colour, outer ring colour. Changes on a hit every 30 s or so. */
+/** Cave and ring colours: cave tint, inner ring colour, outer ring colour. Changes on a hit every 15 s or so. */
 export const BEACON_PALETTES = [
   [0x420804, 0xfff0e0, 0xff4a2a], [0x08143a, 0xe0f4ff, 0x4a6bff], [0x2a0838, 0xffe0f8, 0xc23cff], [0x04302a, 0xe0fff4, 0x2affc0], [0x3a1a04, 0xfff4d0, 0xff8a1a],
 ] as const;
@@ -301,15 +301,15 @@ export function createBeaconRingsMode(budget: QualityBudget): VisualMode {
       if (hits.fired) {
         stage = (stage + 1) % BEACON_STAGES.length;
         action = actions.next(); rippleAge = 0;
-        // Every 30 s or so a hit also moves the cave and rings to a new palette.
-        if (paletteAge > 30) {
+        // Every 15 s or so a hit also moves the cave and rings to a new palette.
+        if (paletteAge > 15) {
           const next = BEACON_PALETTES[palettes.next()]; paletteAge = 0;
           targets.cave.set(...linearRgb(next[0])); targets.inner.set(...linearRgb(next[1])); targets.outer.set(...linearRgb(next[2]));
         }
       }
       if (hits.age > 6) stage = 0;
       paletteAge += step; rippleAge += step;
-      const blend = 1 - Math.exp(-step / 1.5);
+      const blend = 1 - Math.exp(-step / 0.6);
       caveTint.value.lerp(targets.cave, blend); innerColour.value.lerp(targets.inner, blend); outerColour.value.lerp(targets.outer, blend);
       // The background turns and flows slowly, at its own pace.
       flowClock += still ? 0 : frame.delta;

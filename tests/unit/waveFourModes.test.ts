@@ -6,6 +6,8 @@ import { modeDefinitions, waveFourModeDefinitions } from '../../src/modes/regist
 import { createHits, variantSequence } from '../../src/modes/hitPulse';
 import { generateMaze, mazeCorridors, MAZE_WINDOWS } from '../../src/modes/natureModes';
 import { FINGER_GESTURES, HAND_TIMING, gestureShape, handVisit } from '../../src/modes/moonPondMode';
+import { canopyLayout, canopyTrunks } from '../../src/modes/canopyMode';
+import { FILM_SHOTS } from '../../src/modes/filmMode';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
 import { BOWTIE_SHAPES, bowtieBlend } from '../../src/modes/bilateralModes';
 import { BLOOM_CYCLE, BLOOM_TIMING, GROWTH_FORMS, bloomPhase, growForm } from '../../src/modes/bloomTouchMode';
@@ -106,6 +108,19 @@ describe('wave four helpers', () => {
     }
     expect(gestureShape('dab', 0.3, 1, 1).curl[0]).toBeLessThan(gestureShape('dab', 0.3, 0, 1).curl[0]);
     expect(gestureShape('sink', 2.2, 0, 1).dip).toBeGreaterThan(gestureShape('sink', 0, 0, 1).dip);
+  });
+  it('hangs every canopy leaf from a branch or a trunk top', () => {
+    const trunks = canopyTrunks(10), { branches, leaves } = canopyLayout(trunks, 20);
+    expect(leaves.length).toBe(trunks.length * (branches.length / trunks.length + 1) * 20);
+    for (const leaf of leaves) {
+      if (leaf.branch < 0) continue;
+      const b = branches[leaf.branch], ex = b.x + Math.cos(b.angle) * b.length * leaf.along, ey = b.y + Math.sin(b.angle) * b.length * leaf.along;
+      expect(Math.hypot(leaf.x - ex, leaf.y - ey)).toBeLessThan(0.04);
+    }
+  });
+  it('gives Light Leak Film at least six distinct camera angles', () => {
+    expect(FILM_SHOTS.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(FILM_SHOTS.map(([from]) => from.join())).size).toBe(FILM_SHOTS.length);
   });
   it('walks the Moon Pond hand through reach, touch, lift and away', () => {
     const { descend, touch, lift } = HAND_TIMING;
