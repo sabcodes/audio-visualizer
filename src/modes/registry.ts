@@ -22,6 +22,11 @@ import { createCurlFlowMode, createFeedbackMode, createReactionDiffusionMode } f
 import { createAttractorMode, createPhysarumMode, createSnowflakeMode } from './generativeModes';
 import { createAsciiMode, createLedAnalyzerMode, createTurntableMode } from './retroModes';
 import { createStormMode } from './stormMode';
+import { createGiantMode } from './giantMode';
+import { createDragonMode, createPhoenixMode } from './flightModes';
+import { createCrowdMode } from './crowdMode';
+import { createBandMode } from './bandMode';
+import { createJellyMode } from './jellyMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -84,12 +89,21 @@ export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
   definition('ledAnalyzer', 'LED Bar Analyzer', createLedAnalyzerMode),
   definition('storm', 'Thunderstorm Sky', (budget) => createStormMode(budget)),
 ];
+/** Figure modes built from the supplied glTF models (Model assets/wave3_assets, spec in docs/3d-asset-spec.md), labelled experimental in the menu. */
+export const figureModeDefinitions: readonly ModeDefinition[] = [
+  definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
+  definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
+  definition('phoenix', '<EXPERIMENTAL> Phoenix', createPhoenixMode),
+  definition('crowdMascot', '<EXPERIMENTAL> Crowd + Mascot', (budget) => createCrowdMode(budget)),
+  definition('skeletonBand', '<EXPERIMENTAL> Skeleton Band', createBandMode),
+  definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();

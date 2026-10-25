@@ -320,6 +320,7 @@ if (import.meta.env.DEV) {
   // Test-only window into lifecycle state; absent from production builds.
   Object.assign(window, { __visualizerDebug: {
     get activeMode() { return engine?.activeMode; },
+    get activeScene() { return engine?.activeScene; },
     get pipelineAa() { return engine?.pipelineAa; },
     get adaptiveHolding() { return adaptive.isHolding(performance.now()); },
     get adaptiveLocked() { return adaptive.isLocked; },
