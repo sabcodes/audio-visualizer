@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { cos, dot, float, fract, max, min, mix, mx_fractal_noise_float, select, sin, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approach } from './shared';
+import { disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approach, settleStep } from './shared';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -46,11 +46,12 @@ export function createVoronoiMode(): VisualMode {
   return {
     scene, camera,
     update(frame) {
-      time.value = frame.time; aspect.value = frame.aspect; bass.value = frame.response.bounce; hue.value = frame.hue;
+      time.value = frame.time; aspect.value = frame.aspect; hue.value = frame.hue;
+      bass.value = frame.reducedMotion ? approach(bass.value, frame.response.bounce, settleStep(frame), 0.4) : frame.response.bounce;
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
       if (flashGate(frame.time, frame.audio.onset)) { flashLevel = 1; flashSeed.value = (flashSeed.value + 0.37) % 1; }
-      flashLevel = Math.max(0, flashLevel - frame.delta * 3);
+      flashLevel = Math.max(0, flashLevel - settleStep(frame) * 3);
       flash.value = frame.reducedFlash ? flashLevel * 0.25 : flashLevel;
     },
     dispose() { disposeScene(scene); spectrum.dispose(); },
@@ -81,11 +82,13 @@ export function createInkMarbleMode(): VisualMode {
     scene, camera,
     update(frame) {
       time.value = frame.time; aspect.value = frame.aspect; hue.value = frame.hue;
-      warp.value = 0.8 + frame.response.bounce * 1.1;
-      film.value = 0.6 + frame.response.bass * 1.4;
+      // Reduced motion eases the whole-field warp so the marble drifts instead of jumping with each kick.
+      const calm = frame.reducedMotion ? 1 - Math.exp(-settleStep(frame) / 0.6) : 1;
+      warp.value += (0.8 + frame.response.bounce * 1.1 - warp.value) * calm;
+      film.value += (0.6 + frame.response.bass * 1.4 - film.value) * calm;
       flowPhase += frame.audio.mid * frame.delta * 0.6; flow.value = flowPhase;
       if (shockGate(frame.time, frame.audio.onset)) shockAge = 0;
-      shockAge += frame.delta; shock.value = shockAge;
+      shockAge += settleStep(frame); shock.value = shockAge;
       ringGlow.value = frame.reducedFlash ? 0 : 0.6;
     },
     dispose: () => disposeScene(scene),
@@ -128,11 +131,11 @@ export function createEventHorizonMode(): VisualMode {
     scene, camera,
     update(frame) {
       time.value = frame.time; aspect.value = frame.aspect; hue.value = frame.hue;
-      bass.value = approach(bass.value, frame.response.bounce, frame.delta, 0.08);
-      lens.value = approach(lens.value, 1 + frame.response.loudness * 0.25, frame.delta, 0.4);
+      bass.value = approach(bass.value, frame.response.bounce, settleStep(frame), 0.08);
+      lens.value = approach(lens.value, 1 + frame.response.loudness * 0.25, settleStep(frame), 0.4);
       swirlPhase += frame.delta * (0.35 + frame.response.bass * 0.4); spin.value = swirlPhase;
       if (ringGate(frame.time, frame.audio.onset)) ringAge = 0;
-      if (ringAge >= 0) { ringAge += frame.delta; if (ringAge > 1) ringAge = -1; }
+      if (ringAge >= 0) { ringAge += settleStep(frame); if (ringAge > 1) ringAge = -1; }
       // Rings fall inward from the disk's outer edge to the horizon.
       infall.value = ringAge < 0 || frame.reducedFlash ? -1 : 1 - ringAge;
     },

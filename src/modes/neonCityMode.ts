@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { abs, dot, float, fract, instancedBufferAttribute, max, mix, mx_noise_float, normalLocal, positionView, positionWorld, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approach } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, createSpectrumTexture, spectrumAxisNode, beatGate, approach, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -157,11 +157,11 @@ export function createNeonCityMode(budget: QualityBudget = presetBudget('balance
       resizeCamera(camera, frame.aspect);
       spectrum.update(frame.audio.spectrum);
       logMapping.value = frame.spectrumMapping === 'log' ? 1 : 0; nyquist.value = frame.sampleRate / 2;
-      time.value = frame.time; bass.value = approach(bass.value, frame.response.bounce, frame.delta, 0.05);
+      time.value = frame.time; bass.value = approach(bass.value, frame.response.bounce, settleStep(frame), 0.05);
       if (beat(frame.time, frame.audio.onset)) { level = 1; beatSeed.value = (beatSeed.value + 0.618) % 1; if (sweepAge < 0) sweepAge = 0; }
-      level = Math.max(0, level - frame.delta * 2.5);
+      level = Math.max(0, level - settleStep(frame) * 2.5);
       beatLevel.value = frame.reducedFlash ? level * 0.2 : level;
-      if (sweepAge >= 0) { sweepAge += frame.delta; if (sweepAge > 1.4) sweepAge = -1; }
+      if (sweepAge >= 0) { sweepAge += settleStep(frame); if (sweepAge > 1.4) sweepAge = -1; }
       sweep.value = sweepAge < 0 || frame.reducedFlash ? -1 : sweepAge / 1.2;
       drift += frame.delta * 0.02;
       camera.position.set(Math.sin(drift) * 24, 108 + Math.sin(frame.time * 0.13) * 1.2, 52);

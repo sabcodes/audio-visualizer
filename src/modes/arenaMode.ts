@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { float, fract, instancedBufferAttribute, mix, mx_noise_float, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, bandEnergies, approach, beatGate } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -137,16 +137,16 @@ export function createArenaMode(budget: QualityBudget = presetBudget('balanced')
       }
       // A new look every 8 beats, or every 10 s in silence; the palette moves on with it.
       if (beats >= 8 || idle > 10) { beats = 0; idle = 0; look = (look + 1) % LOOKS.length; palette = (palette + 1) % PALETTES.length; lookTargets(look, lightTargets); }
-      flash = Math.max(0, flash - frame.delta * 3); jumpLevel = Math.max(0, jumpLevel - frame.delta * 4);
+      flash = Math.max(0, flash - settleStep(frame) * 3); jumpLevel = Math.max(0, jumpLevel - settleStep(frame) * 4);
       const flashLevel = frame.reducedFlash ? flash * 0.15 : flash;
       bandEnergies(frame, PANELS, bands);
       sweep += frame.delta * (0.6 + frame.audio.mid * 1.8);
       const [pr, pg, pb] = PALETTES[palette];
       haze.value.setRGB(pr, pg, pb).multiplyScalar(0.12 + frame.response.bounce * 0.12);
       for (let p = 0; p < PANELS; p++) {
-        level[p] = approach(level[p], bands[p], frame.delta, 0.08);
+        level[p] = approach(level[p], bands[p], settleStep(frame), 0.08);
         // Lights come up faster than they die away, like a lamp's warm-up versus its afterglow.
-        light[p] = approach(light[p], lightTargets[p], frame.delta, lightTargets[p] > light[p] ? 0.25 : 0.5);
+        light[p] = approach(light[p], lightTargets[p], settleStep(frame), lightTargets[p] > light[p] ? 0.25 : 0.5);
         const [x, y, homeZ, tilt] = PANEL_HOMES[p], z = STAGE_Z + homeZ;
         dummy.position.set(x, y, z); dummy.rotation.set(0, 0, tilt); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
         panels.setMatrixAt(p, dummy.matrix); frames.setMatrixAt(p, dummy.matrix);

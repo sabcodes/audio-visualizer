@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { cameraPosition, cos, dot, exp, float, fract, max, mix, mx_noise_float, normalView, normalize, positionLocal, reflect, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { VisualMode } from './types';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -61,10 +61,10 @@ export function createOceanMode(): VisualMode {
     update(frame) {
       resizeCamera(camera, frame.aspect);
       time.value = frame.time; hue.value = frame.hue;
-      swell.value = approach(swell.value, 0.7 + frame.response.bounce * 1.4, frame.delta, 0.25);
-      steep.value = approach(steep.value, 0.3 + frame.audio.mid * 1.2, frame.delta, 0.3);
+      swell.value = approach(swell.value, 0.7 + frame.response.bounce * 1.4, settleStep(frame), 0.25);
+      steep.value = approach(steep.value, 0.3 + frame.audio.mid * 1.2, settleStep(frame), 0.3);
       if (impact(frame.time, frame.audio.onset && frame.response.impact > 0.4)) ringAge = 0;
-      if (ringAge >= 0) { ringAge += frame.delta; if (ringAge > 4) ringAge = -1; }
+      if (ringAge >= 0) { ringAge += settleStep(frame); if (ringAge > 4) ringAge = -1; }
       ring.value = ringAge;
       camera.position.y = 14 + Math.sin(frame.time * 0.3) * 1.2;
       camera.rotation.z = Math.sin(frame.time * 0.25) * 0.015;
@@ -77,6 +77,9 @@ export function createOceanMode(): VisualMode {
 
 export const JELLIES = 9;
 const TENDRILS = 6, TENDRIL_POINTS = 24;
+/** Heights: the mirror-like surface, where jellies fade out before it, and where they fade back in. */
+export const ABYSS_SURFACE = 40;
+const ABYSS_TOP = 34, ABYSS_FLOOR = -60, SNOW_FLOOR = -70;
 
 export function createAbyssMode(budget: QualityBudget = presetBudget('balanced')): VisualMode {
   const { scene, camera } = sceneDefaults(80);
@@ -88,30 +91,46 @@ export function createAbyssMode(budget: QualityBudget = presetBudget('balanced')
   const caustic = mx_noise_float(vec3(dir.x.mul(8), dir.z.mul(8), time.mul(0.15))).abs().oneMinus().pow(6).mul(dir.y.smoothstep(0.3, 1)).mul(0.05);
   waterMaterial.colorNode = mix(vec3(0, 0.002, 0.008), vec3(0.0, 0.035, 0.06), dir.y.smoothstep(-0.4, 0.9)).add(vec3(0.1, 0.4, 0.5).mul(caustic));
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), waterMaterial));
+  // The underside of the surface: seen from below past the critical angle it acts as a rippling mirror.
+  const surfaceMaterial = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const ripple = mx_noise_float(vec3(positionLocal.x.mul(0.05), positionLocal.y.mul(0.05), time.mul(0.25))).abs().oneMinus().pow(8);
+  surfaceMaterial.colorNode = vec3(0.05, 0.22, 0.28).mul(ripple.mul(0.18).add(0.025)).mul(positionLocal.xy.length().div(260).smoothstep(1, 0.2));
+  const surface = new THREE.Mesh(new THREE.PlaneGeometry(520, 520), surfaceMaterial);
+  surface.rotation.x = Math.PI / 2; surface.position.y = ABYSS_SURFACE;
+  scene.add(surface);
 
   const bellGeometry = new THREE.SphereGeometry(5, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
-  const jellies = Array.from({ length: JELLIES }, (_, i) => {
-    const glow = uniform(new THREE.Color()), pulse = uniform(0);
+  // Rim-lit translucent bell with radial ribs and a brighter skirt; the reflection shares it, wobbled by the ripples.
+  const bellMaterial = (glow: THREE.UniformNode<'color', THREE.Color>, pulse: F, fade: F, phase: number, mirrored: boolean) => {
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    // Rim-lit translucent bell with radial ribs and a brighter skirt.
     const rim = normalView.z.abs().oneMinus().pow(1.5);
     const ribs = cos(uv().x.mul(Math.PI * 2 * 8)).mul(0.5).add(0.5).pow(4).mul(0.4);
     const skirt = uv().y.smoothstep(0.62, 0.5).mul(0.6);
-    material.colorNode = glow.mul(rim.add(ribs).add(skirt).mul(pulse.mul(1.6).add(0.5)));
-    const bell = new THREE.Mesh(bellGeometry, material);
+    material.colorNode = glow.mul(rim.add(ribs).add(skirt).mul(pulse.mul(1.6).add(0.5))).mul(fade);
+    if (mirrored) material.positionNode = positionLocal.add(vec3(sin(positionLocal.y.mul(1.3).add(time.mul(2.1)).add(phase)).mul(0.35), 0, 0));
+    return material;
+  };
+  const jellies = Array.from({ length: JELLIES }, (_, i) => {
+    const glow = uniform(new THREE.Color()), pulse = uniform(0), fade = uniform(1), reflection = uniform(0), phase = random() * Math.PI * 2;
+    const bell = new THREE.Mesh(bellGeometry, bellMaterial(glow, pulse, fade, phase, false));
     const tendrilMaterial = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     const positions = new Float32Array(TENDRILS * TENDRIL_POINTS * 2 * 3), geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const tendrils = new THREE.LineSegments(geometry, tendrilMaterial); tendrils.frustumCulled = false;
     const group = new THREE.Group(); group.add(bell, tendrils);
-    group.position.set((i - (JELLIES - 1) / 2) * 13 + (random() - 0.5) * 6, (random() - 0.5) * 50, (random() - 0.5) * 40);
-    scene.add(group);
-    return { group, bell, glow, pulse, tendrilMaterial, positions, geometry, phase: random() * Math.PI * 2, rise: 2 + random() * 2, size: 0.7 + random() * 0.6, energy: 0 };
+    group.position.set((i - (JELLIES - 1) / 2) * 13 + (random() - 0.5) * 6, ABYSS_FLOOR + random() * (ABYSS_TOP - ABYSS_FLOOR), (random() - 0.5) * 40);
+    // The mirror image: same geometry flipped about the surface plane, dimmer the deeper the jelly swims.
+    const mirrorBell = new THREE.Mesh(bellGeometry, bellMaterial(glow, pulse, reflection, phase, true));
+    const mirrorTendrilMaterial = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const mirrorTendrils = new THREE.LineSegments(geometry, mirrorTendrilMaterial); mirrorTendrils.frustumCulled = false;
+    const mirror = new THREE.Group(); mirror.add(mirrorBell, mirrorTendrils);
+    scene.add(group, mirror);
+    return { group, bell, glow, pulse, fade, reflection, tendrilMaterial, mirror, mirrorBell, mirrorTendrilMaterial, positions, geometry, phase, rise: 2 + random() * 2, size: 0.7 + random() * 0.6, energy: 0 };
   });
 
-  // Marine snow, sized by the quality budget.
-  const snowCount = Math.round(2500 * budget.particleScale), snow = new Float32Array(snowCount * 3);
-  for (let i = 0; i < snowCount; i++) snow.set([(random() - 0.5) * 200, (random() - 0.5) * 140, (random() - 0.5) * 140], i * 3);
+  // Marine snow, sized by the quality budget, kept below the surface.
+  const snowCount = Math.round(2500 * budget.particleScale), snow = new Float32Array(snowCount * 3), snowSpan = ABYSS_SURFACE - 2 - SNOW_FLOOR;
+  for (let i = 0; i < snowCount; i++) snow.set([(random() - 0.5) * 200, SNOW_FLOOR + random() * snowSpan, (random() - 0.5) * 140], i * 3);
   const snowGeometry = new THREE.BufferGeometry(); snowGeometry.setAttribute('position', new THREE.BufferAttribute(snow, 3));
   scene.add(new THREE.Points(snowGeometry, new THREE.PointsNodeMaterial({ color: 0x88b8d0, transparent: true, opacity: 0.5, depthWrite: false })));
 
@@ -123,22 +142,30 @@ export function createAbyssMode(budget: QualityBudget = presetBudget('balanced')
       resizeCamera(camera, frame.aspect);
       time.value = frame.time;
       if (flashGate(frame.time, frame.audio.onset)) flash = 1;
-      flash = Math.max(0, flash - frame.delta * 1.8);
+      flash = Math.max(0, flash - settleStep(frame) * 1.8);
       current = approach(current, frame.response.bass * 10, frame.delta, 0.4);
       bandEnergies(frame, JELLIES, bands);
       jellies.forEach((jelly, i) => {
-        jelly.energy = approach(jelly.energy, bands[i], frame.delta, 0.08);
+        jelly.energy = approach(jelly.energy, bands[i], settleStep(frame), 0.08);
         // Each contraction pushes the jelly upward; louder bands swim harder.
         jelly.phase += frame.delta * (1.4 + jelly.energy * 3);
         const squeeze = Math.max(0, Math.sin(jelly.phase)) ** 2;
-        jelly.group.position.y += frame.delta * (jelly.rise * (0.4 + squeeze * 1.6) + jelly.energy * 4);
-        jelly.group.position.x += frame.delta * current * 0.3;
-        if (jelly.group.position.y > 45) jelly.group.position.y -= 95;
-        if (jelly.group.position.x > 70) jelly.group.position.x -= 140;
+        const position = jelly.group.position;
+        position.y += frame.delta * (jelly.rise * (0.4 + squeeze * 1.6) + jelly.energy * 4);
+        position.x += frame.delta * current * 0.3;
+        if (position.y > ABYSS_TOP) position.y -= ABYSS_TOP - ABYSS_FLOOR;
+        if (position.x > 70) position.x -= 140;
+        // Fade in from the dark below and out just under the surface, so wrapping around never pops.
+        jelly.fade.value = Math.min(1, (position.y - ABYSS_FLOOR) / 12, (ABYSS_TOP - position.y) / 8);
+        jelly.reflection.value = jelly.fade.value * 0.45 * Math.exp(-(ABYSS_SURFACE - position.y) / 30);
         jelly.bell.scale.set(jelly.size * (1 - squeeze * 0.22), jelly.size * (1 + squeeze * 0.18), jelly.size * (1 - squeeze * 0.22));
+        jelly.mirror.position.set(position.x, 2 * ABYSS_SURFACE - position.y, position.z);
+        jelly.mirror.scale.set(1, -1, 1);
+        jelly.mirrorBell.scale.copy(jelly.bell.scale);
         jelly.pulse.value = jelly.energy * 1.5 + squeeze * 0.3 + (frame.reducedFlash ? 0 : flash * 0.8);
         jelly.glow.value.setHSL(wrap(frame.hue + i / JELLIES * 0.4, 0, 1), 1, 0.55);
-        jelly.tendrilMaterial.color.copy(jelly.glow.value).multiplyScalar(0.6 + jelly.energy * 1.5);
+        jelly.tendrilMaterial.color.copy(jelly.glow.value).multiplyScalar((0.6 + jelly.energy * 1.5) * jelly.fade.value);
+        jelly.mirrorTendrilMaterial.color.copy(jelly.glow.value).multiplyScalar((0.6 + jelly.energy * 1.5) * jelly.reflection.value);
         let o = 0;
         for (let t = 0; t < TENDRILS; t++) {
           const a = t / TENDRILS * Math.PI * 2, rx = Math.cos(a) * 3.5 * jelly.size, rz = Math.sin(a) * 3.5 * jelly.size;
@@ -155,13 +182,13 @@ export function createAbyssMode(budget: QualityBudget = presetBudget('balanced')
       for (let i = 0; i < snowCount; i++) {
         snow[i * 3 + 1] -= frame.delta * (0.8 + (i % 5) * 0.25);
         snow[i * 3] += frame.delta * current;
-        if (snow[i * 3 + 1] < -70) snow[i * 3 + 1] += 140;
+        if (snow[i * 3 + 1] < SNOW_FLOOR) snow[i * 3 + 1] += snowSpan;
         if (snow[i * 3] > 100) snow[i * 3] -= 200;
       }
       snowGeometry.attributes.position.needsUpdate = true;
       orbit += frame.delta * 0.04;
-      camera.position.set(Math.sin(orbit) * 80, Math.sin(frame.time * 0.1) * 6, Math.cos(orbit) * 80);
-      camera.lookAt(0, 0, 0);
+      camera.position.set(Math.sin(orbit) * 80, -6 + Math.sin(frame.time * 0.1) * 5, Math.cos(orbit) * 80);
+      camera.lookAt(0, 8, 0);
     },
     dispose: () => disposeScene(scene),
   };

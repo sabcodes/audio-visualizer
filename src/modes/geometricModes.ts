@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { VisualMode } from './types';
 import { instancedBufferAttribute, normalLocal, normalView, positionLocal, sin, uniform, uv, vec2, vec3 } from 'three/tsl';
-import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode } from './shared';
+import { sceneDefaults, resizeCamera, disposeScene, wrap, bandEnergies, approach, beatGate, createSpectrumTexture, spectrumAxisNode, settleStep } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
@@ -57,7 +57,11 @@ export function createEpicycleMode(): VisualMode {
   const circles = line(EPI_TERMS * EPI_SEGMENTS * 2, true), arms = line(EPI_TERMS + 1, false);
   const fade = new Float32Array(EPI_TRAIL * 3), trail = line(EPI_TRAIL, false, fade);
   const history = new Float32Array(EPI_TRAIL * 2);
-  const bands = new Float32Array(EPI_TERMS), smooth = new Float32Array(EPI_TERMS);
+  const bands = new Float32Array(EPI_TERMS), smooth = new Float32Array(EPI_TERMS), gains = new Float32Array(EPI_TERMS);
+  const blendTerm = (term: EpicycleTerm, ph: number) => {
+    const a = term.freq * ph * Math.PI * 2 + term.phase;
+    return [Math.cos(a) * term.amp, Math.sin(a) * term.amp];
+  };
   const nextShape = beatGate(2.4);
   const tint = new THREE.Color();
   let shape = 0, blend = 1, previous = 0, phase = 0, head = 0, filled = 0;
@@ -66,20 +70,17 @@ export function createEpicycleMode(): VisualMode {
     update(frame) {
       resizeCamera(camera, frame.aspect);
       if (nextShape(frame.time, frame.audio.onset)) { previous = shape; shape = (shape + 1) % library.length; blend = 0; }
-      blend = Math.min(1, blend + frame.delta / 0.8);
+      const settle = settleStep(frame);
+      blend = Math.min(1, blend + settle / 0.8);
       phase += (0.12 + frame.response.bass * 0.35) * frame.delta;
       bandEnergies(frame, EPI_TERMS, bands);
       let x = 0, y = 0;
       arms.positions.fill(0);
       const ease = blend * blend * (3 - 2 * blend);
       for (let i = 0; i < EPI_TERMS; i++) {
-        smooth[i] = approach(smooth[i], bands[Math.min(EPI_TERMS - 1, Math.abs(library[shape][i].freq))], frame.delta, 0.08);
-        const blendTerm = (term: EpicycleTerm) => {
-          const a = term.freq * phase * Math.PI * 2 + term.phase;
-          return [Math.cos(a) * term.amp, Math.sin(a) * term.amp];
-        };
-        const [ax, ay] = blendTerm(library[previous][i]), [bx, by] = blendTerm(library[shape][i]);
-        const gain = EPI_SCALE * (1 + smooth[i] * 0.9 + frame.response.bounce * 0.25);
+        smooth[i] = approach(smooth[i], bands[Math.min(EPI_TERMS - 1, Math.abs(library[shape][i].freq))], settle, 0.08);
+        const [ax, ay] = blendTerm(library[previous][i], phase), [bx, by] = blendTerm(library[shape][i], phase);
+        const gain = gains[i] = EPI_SCALE * (1 + smooth[i] * 0.9 + frame.response.bounce * 0.25);
         const dx = (ax + (bx - ax) * ease) * gain, dy = (ay + (by - ay) * ease) * gain, r = Math.hypot(dx, dy);
         for (let s = 0; s < EPI_SEGMENTS; s++) {
           const p = (i * EPI_SEGMENTS + s) * 6, a0 = s / EPI_SEGMENTS * Math.PI * 2, a1 = (s + 1) / EPI_SEGMENTS * Math.PI * 2;
@@ -89,13 +90,27 @@ export function createEpicycleMode(): VisualMode {
         x += dx; y += dy;
         arms.positions[(i + 1) * 3] = x; arms.positions[(i + 1) * 3 + 1] = y;
       }
-      history[head * 2] = x; history[head * 2 + 1] = y;
-      head = (head + 1) % EPI_TRAIL; filled = Math.min(EPI_TRAIL, filled + 1);
+      if (frame.reducedMotion) {
+        // The clock is frozen, so draw the whole figure (one full period, oldest first) instead of a growing trail.
+        for (let k = 0; k < EPI_TRAIL; k++) {
+          const ph = phase - (EPI_TRAIL - 1 - k) / EPI_TRAIL;
+          let tx = 0, ty = 0;
+          for (let i = 0; i < EPI_TERMS; i++) {
+            const [ax, ay] = blendTerm(library[previous][i], ph), [bx, by] = blendTerm(library[shape][i], ph);
+            tx += (ax + (bx - ax) * ease) * gains[i]; ty += (ay + (by - ay) * ease) * gains[i];
+          }
+          history[k * 2] = tx; history[k * 2 + 1] = ty;
+        }
+        head = 0; filled = EPI_TRAIL;
+      } else {
+        history[head * 2] = x; history[head * 2 + 1] = y;
+        head = (head + 1) % EPI_TRAIL; filled = Math.min(EPI_TRAIL, filled + 1);
+      }
       // Oldest first so the fixed colour ramp reads as a fading tail.
       for (let i = 0; i < EPI_TRAIL; i++) {
         const back = Math.min(EPI_TRAIL - 1 - i, filled - 1), source = (head - 1 - back + EPI_TRAIL * 2) % EPI_TRAIL;
         trail.positions[i * 3] = history[source * 2]; trail.positions[i * 3 + 1] = history[source * 2 + 1];
-        const glow = Math.pow(i / (EPI_TRAIL - 1), 1.3) * 3.2;
+        const glow = frame.reducedMotion ? 1.8 : Math.pow(i / (EPI_TRAIL - 1), 1.3) * 3.2;
         tint.setHSL(wrap(frame.hue + i / EPI_TRAIL * 0.25, 0, 1), 1, 0.55);
         fade[i * 3] = tint.r * glow; fade[i * 3 + 1] = tint.g * glow; fade[i * 3 + 2] = tint.b * glow;
       }
@@ -166,7 +181,7 @@ export function createPolyhedraMode(): VisualMode {
       }
       const spectrum = frame.audio.spectrum;
       for (const shell of shells) {
-        shell.progress = Math.min(1, shell.progress + frame.delta / (0.9 - frame.response.bass * 0.5));
+        shell.progress = Math.min(1, shell.progress + settleStep(frame) / (0.9 - frame.response.bass * 0.5));
         const t = shell.progress, ease = t < 1 ? 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 1.5) : 1;
         const from = solids[shell.from], to = solids[shell.to], scale = shell.scale * (1 + frame.response.bounce * 0.35);
         for (let v = 0; v < POLY_SEGMENTS * 2; v++) {
@@ -219,14 +234,14 @@ export function createPendulumMode(): VisualMode {
       if (resync(frame.time, frame.audio.onset && frame.response.impact > 0.6)) { rewind = 1; rewindFrom = tau; }
       if (rewind > 0) {
         // Ease τ to the next whole cycle, where every pendulum lines up again.
-        rewind = Math.max(0, rewind - frame.delta / 0.9);
+        rewind = Math.max(0, rewind - settleStep(frame) / 0.9);
         const goal = Math.ceil(rewindFrom / PENDULUM_CYCLE) * PENDULUM_CYCLE, k = 1 - rewind;
         tau = rewindFrom + (goal - rewindFrom) * (k * k * (3 - 2 * k));
         if (rewind === 0) tau = goal + 0.001;
       } else tau += frame.delta * (0.6 + frame.response.bass * 1.6);
       bandEnergies(frame, PENDULUMS, bands);
       for (let i = 0; i < PENDULUMS; i++) {
-        amplitude[i] = approach(amplitude[i], 0.32 + bands[i] * 0.5 + frame.response.bounce * 0.15, frame.delta, 0.12);
+        amplitude[i] = approach(amplitude[i], 0.32 + bands[i] * 0.5 + frame.response.bounce * 0.15, settleStep(frame), 0.12);
         const angle = amplitude[i] * Math.sin(pendulumPhase(i, tau)), L = length(i), z = (i - (PENDULUMS - 1) / 2) * spacing;
         const x = Math.sin(angle) * L, y = top - Math.cos(angle) * L;
         dummy.position.set(x, y, z); dummy.scale.setScalar(1 + bands[i] * 0.6); dummy.updateMatrix();
@@ -279,8 +294,9 @@ export function createTorusKnotMode(): VisualMode {
       // Shrink out, rebuild the next (p, q) knot, then grow back in; silence still cycles slowly.
       if (swap === 0 && (next(frame.time, frame.audio.onset) || idle > 9)) { swap = 1; idle = 0; }
       if (swap > 0) {
-        swap += frame.delta / 0.35;
-        if (swap >= 2 && swap - frame.delta / 0.35 < 2) { knot.geometry.dispose(); index = (index + 1) % KNOTS.length; knot.geometry = build(KNOTS[index]); }
+        const step = settleStep(frame) / 0.35;
+        swap += step;
+        if (swap >= 2 && swap - step < 2) { knot.geometry.dispose(); index = (index + 1) % KNOTS.length; knot.geometry = build(KNOTS[index]); }
         if (swap >= 3) swap = 0;
       }
       const shrink = swap === 0 ? 1 : swap < 2 ? 1 - (swap - 1) : swap - 2;
@@ -336,15 +352,17 @@ export function createChladniMode(budget: QualityBudget = presetBudget('balanced
         let loudest = 0; for (let i = 1; i < bands.length; i++) if (bands[i] > bands[loudest]) loudest = i;
         mode = bands[loudest] > 0.05 && loudest !== mode ? loudest : (mode + 1) % CHLADNI_MODES.length;
       }
-      scatter = Math.max(0, scatter - frame.delta * 1.5);
-      vibration = approach(vibration, 0.25 + frame.response.bounce * 0.9 + frame.audio.rms, frame.delta, 0.1);
-      const [n, m] = CHLADNI_MODES[mode], dt = Math.min(frame.delta, 1 / 20);
+      const settle = settleStep(frame);
+      scatter = frame.reducedMotion ? 0 : Math.max(0, scatter - settle * 1.5);
+      vibration = approach(vibration, 0.25 + frame.response.bounce * 0.9 + frame.audio.rms, settle, 0.1);
+      // Reduced motion: no shaking, so the sand settles onto the nodal lines once and stays.
+      const [n, m] = CHLADNI_MODES[mode], dt = frame.reducedMotion ? 1 / 20 : Math.min(frame.delta, 1 / 20), agitation = frame.reducedMotion ? 0 : 1;
       for (let i = 0; i < count; i++) {
         let x = grains[i * 2], y = grains[i * 2 + 1];
         const wave = chladni(n, m, x, y), sign = Math.sign(wave.value) || 1;
         // Descend |f| toward the nodal lines; shaking scales with how far from a node the grain sits.
-        const shake = (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * (random() * 2 - 1);
-        x += -sign * wave.dx * 0.004 * dt * 60 + shake; y += -sign * wave.dy * 0.004 * dt * 60 + (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * (random() * 2 - 1);
+        const shake = (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * agitation * (random() * 2 - 1);
+        x += -sign * wave.dx * 0.004 * dt * 60 + shake; y += -sign * wave.dy * 0.004 * dt * 60 + (Math.abs(wave.value) * vibration * 0.06 + scatter * 0.05) * agitation * (random() * 2 - 1);
         grains[i * 2] = x < -1 ? -1 : x > 1 ? 1 : x; grains[i * 2 + 1] = y < -1 ? -1 : y > 1 ? 1 : y;
         positions[i * 3] = grains[i * 2] * half; positions[i * 3 + 1] = Math.abs(wave.value) * scatter * 2; positions[i * 3 + 2] = grains[i * 2 + 1] * half;
       }

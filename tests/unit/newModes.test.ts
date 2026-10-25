@@ -10,7 +10,8 @@ import { Sprite } from 'three/webgpu';
 import { epicycleShape, epicycleTerms, polyhedronSegments, POLY_SEGMENTS, pendulumPhase, PENDULUMS, PENDULUM_CYCLE, EPICYCLE_SHAPES } from '../../src/modes/geometricModes';
 import { ridgeProfile } from '../../src/modes/landscapeModes';
 import { poseTargets, ROBOT_POSES, ROBOT_JOINTS } from '../../src/modes/robotMode';
-import { bandEnergies, beatGate } from '../../src/modes/shared';
+import { bandEnergies, beatGate, settleStep } from '../../src/modes/shared';
+import { CalmAudio } from '../../src/audio/calmAudio';
 import { SpringRig } from '../../src/simulations/springRig';
 import { presetBudget } from '../../src/rendering/quality';
 import type { ModeFrame } from '../../src/modes/types';
@@ -212,6 +213,36 @@ describe('arena light panels', () => {
     for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions]) {
       const mode = definition.create(presetBudget('balanced')), shared = new Sprite().geometry;
       mode.scene.traverse((object) => { if (object instanceof Sprite) expect(object.geometry, definition.id).not.toBe(shared); });
+      mode.dispose();
+    }
+  });
+});
+
+describe('reduced motion', () => {
+  const audio = (level: number, onset = false) => ({ waveform: new Float32Array(8), spectrum: new Uint8Array(512).fill(level), bass: level / 255, mid: 0, highs: 0, rms: level / 255, onset, time: 0 });
+  it('calms audio: no onsets, the first frame snaps, later jumps ease in over about half a second', () => {
+    const calm = new CalmAudio();
+    const first = calm.update(audio(200, true), 1 / 60);
+    expect(first.onset).toBe(false); expect(first.spectrum[10]).toBe(200); expect(first.bass).toBeCloseTo(200 / 255);
+    const eased = calm.update(audio(0, true), 1 / 60);
+    expect(eased.spectrum[10]).toBeGreaterThan(190); expect(eased.bass).toBeGreaterThan(0.7);
+    for (let i = 0; i < 180; i++) calm.update(audio(0), 1 / 60);
+    expect(calm.update(audio(0), 1 / 60).spectrum[10]).toBeLessThan(5);
+    calm.reset(); expect(calm.update(audio(120), 1 / 60).spectrum[10]).toBe(120);
+  });
+  it('settles transients with a nominal step while the clock is frozen', () => {
+    expect(settleStep({ delta: 0, reducedMotion: true })).toBeCloseTo(1 / 60);
+    expect(settleStep({ delta: 0.02, reducedMotion: false })).toBe(0.02);
+  });
+  it('every new mode holds a finite still with a frozen clock, even through loud frames', () => {
+    for (const definition of [...waveOneModeDefinitions, ...waveTwoModeDefinitions]) {
+      const mode = definition.create(presetBudget('compatibility')), f = frame();
+      f.reducedMotion = true; f.delta = 0;
+      f.audio.spectrum.fill(200); f.audio = { ...f.audio, bass: 0.9, mid: 0.8, highs: 0.7, rms: 0.6 };
+      f.response = { bass: 0.8, loudness: 0.8, impact: 0.2, bounce: 0.2 };
+      for (let i = 0; i < 60; i++) mode.update(f);
+      mode.scene.updateMatrixWorld(true);
+      mode.scene.traverse((object) => { for (const value of object.matrixWorld.elements) expect(Number.isFinite(value), definition.id).toBe(true); });
       mode.dispose();
     }
   });
