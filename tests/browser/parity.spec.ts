@@ -8,11 +8,12 @@ const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajo
   'swampGiant', 'dragon', 'phoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob',
   'prismBowtie', 'blockBowtie', 'pongOrbs', 'candyOrb', 'moonPond', 'liquidChrome', 'mirrorPlasma', 'grainSmoke', 'anamorphicFlare', 'hairVortex',
   'windfield', 'blackMaze', 'starfallCanopy', 'silkThreads', 'chromeStreaks', 'signalNight', 'beaconRings', 'lightLeakFilm', 'warehouseHall', 'redStairwell',
-  'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke'];
+  'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke',
+  'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards'];
 
-test('all 85 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 91 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(900000); // 85 modes twice under software rendering
+  test.setTimeout(900000); // 91 modes twice under software rendering
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
