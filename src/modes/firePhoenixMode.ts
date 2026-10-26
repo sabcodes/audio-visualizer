@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
-  Fn, abs, attribute, dot, exp, float, floor, fract, instancedBufferAttribute, mix, mx_fractal_noise_float, mx_fractal_noise_vec3, mx_noise_float, normalize, positionLocal,
+  Fn, abs, attribute, dot, exp, float, floor, fract, instancedBufferAttribute, mix, mx_fractal_noise_float, mx_noise_float, mx_noise_vec3, normalize, positionLocal,
   positionWorld, sign, sin, smoothstep, step, transformNormalToView, uniform, uv, varying, vec2, vec3,
 } from 'three/tsl';
 import type { VisualMode } from './types';
@@ -365,7 +365,9 @@ export function createFirePhoenixMode(budget: QualityBudget): VisualMode {
   const surfaceNormal = varying(slopeNormal);
   const rp = vec3(positionWorld.x, positionWorld.y, positionWorld.z.sub(travel));
   // Rock grain: a noisy tilt of the shading normal, so faces read as fractured stone between the vertices.
-  rock.normalNode = transformNormalToView(normalize(surfaceNormal.add(mx_fractal_noise_vec3(rp.mul(vec3(0.3, 0.6, 0.3)), 2, 2, 0.5).mul(0.4))));
+  // Two octaves summed by hand: three.js's vector fractal noise takes minutes to compile on software WebGL2.
+  const grainAt = rp.mul(vec3(0.3, 0.6, 0.3)), grain = mx_noise_vec3(grainAt).add(mx_noise_vec3(grainAt.mul(2)).mul(0.5));
+  rock.normalNode = transformNormalToView(normalize(surfaceNormal.add(grain.mul(0.4))));
   const grit = mx_fractal_noise_float(rp.mul(0.3), 2, 2, 0.5).mul(0.5).add(0.5);
   const strata = sin(rp.y.mul(1.3).add(mx_noise_float(rp.mul(0.04)).mul(5))).mul(0.5).add(0.5).pow(3);
   const basalt = mix(rgb(0.03, 0.022, 0.019), rgb(0.12, 0.08, 0.062), grit.mul(0.6).add(strata.mul(0.45)));
