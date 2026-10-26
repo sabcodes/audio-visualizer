@@ -20,7 +20,7 @@ const rotate2 = (p: V2, angle: F) => vec2(p.x.mul(cos(angle)).sub(p.y.mul(sin(an
 export const VORTEX_ORB = 0.16, VORTEX_LENS = 0.035;
 
 /**
- * Dot Vortex (wave 5, clip 10): a white orb with a pink rim and a dark tilted shadow disc, wrapped in an
+ * Dot Vortex (wave 5, clip 10): a white orb with a pink rim, wrapped in an
  * endless dotted lattice that a gravitational lens bends into a fan above and a curling spiral below, with
  * tangential streaks across the equator. The orb barely moves: the bounce lives in the lattice (inward
  * scroll, twist and lens strength pulse with the bass), and the rainbow rotates around it.
@@ -55,10 +55,7 @@ export function createDotVortexMode(): VisualMode {
   const inside = r.smoothstep(radius, radius.mul(0.99));
   const out = r.sub(radius).max(0);
   const rim = rgb(0xff6fae).mul(exp(out.div(0.012).negate()).mul(1.4).add(exp(out.div(0.09).negate()).mul(0.35)));
-  // The shadow disc: a thin dark ellipse at the equator, behind the orb on top and across it below.
-  const ellipse = vec2(disc.x.div(radius.mul(1.95)), disc.y.div(radius.mul(0.15))).length();
-  const shadow = ellipse.smoothstep(1, 0.92).mul(inside.oneMinus().max(disc.y.lessThan(0).select(float(1), float(0))));
-  const colour = lattice.add(rim.mul(inside.oneMinus())).mul(shadow.mul(0.92).oneMinus()).add(vec3(1, 0.97, 0.98).mul(inside).mul(shadow.mul(0.85).oneMinus()));
+  const colour = lattice.add(rim.mul(inside.oneMinus())).add(vec3(1, 0.97, 0.98).mul(inside));
   material.fragmentNode = vec4(colour.mul(gain), 1);
 
   const hits = createHits({ decay: 0.15, interval: 0.18 });
@@ -80,7 +77,7 @@ export function createDotVortexMode(): VisualMode {
       radius.value = approach(radius.value, VORTEX_ORB * (1 + bass * 0.08), step, 0.1);
       turn += motion * (0.05 + frame.audio.mid * 0.3);
       hueShift.value = turn;
-      // A slow ±15° roll of the disc; the orb itself moves at most a few pixels.
+      // A slow ±15° roll of the streak band; the orb itself moves at most a few pixels.
       tilt.value = Math.sin(frame.time * 0.35) * 0.26 * (frame.reducedMotion ? 0 : 1);
       nudge.value.set(Math.sin(frame.time * 1.3) * 0.004 * bounce, kick * 0.006);
       pulse.value = hits.flash * 0.6 + bass * 0.3;
