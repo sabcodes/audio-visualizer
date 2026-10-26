@@ -57,6 +57,7 @@ import { createLanternTreeMode } from './lanternTreeMode';
 import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 import { createWindowGridMode } from './windowGridMode';
+import { createHeatShoalMode } from './heatShoalMode';
 import { createScanSproutMode } from './scanSproutMode';
 import { createLidarTrailMode } from './lidarTrailMode';
 import { createGlyphBloomMode } from './glyphBloomMode';
@@ -218,6 +219,7 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('glyphBloom', 'Glyph Bloom', createGlyphBloomMode),
   waveSix('lidarTrail', 'LIDAR Trail', (budget) => createLidarTrailMode(budget), 'scene', { grain: 0.12, halation: 0, vignette: 0.5, soften: 0.15 }),
   waveSix('scanSprout', 'Scan Sprout', (budget) => createScanSproutMode(budget), 'scene', CLEAN),
+  waveSix('heatShoal', 'Heat Shoal', (budget) => createHeatShoalMode(budget)),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
