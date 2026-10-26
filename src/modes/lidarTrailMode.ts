@@ -10,7 +10,7 @@ import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
 /** The forest repeats every TILE metres along the path, so the walk never ends. */
-export const LIDAR = { tile: 48, points: 600_000 };
+export const LIDAR = { tile: 48, points: 450_000 };
 /** Where the path runs across at depth z (a gentle S that repeats with the tile). */
 export const pathX = (z: number) => Math.sin((z / LIDAR.tile) * Math.PI * 2) * 1.2;
 

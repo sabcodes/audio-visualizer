@@ -8,7 +8,7 @@ import { PointSet, createPointCloud, plexusGeometry, unfold } from './pointCloud
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 
-export const SPROUT = { height: 6, leaves: 16, points: 260_000, flares: 10 };
+export const SPROUT = { height: 6, leaves: 16, points: 200_000, flares: 10 };
 
 /**
  * A leafy plant grown as points: a wavering stem that rises with growth and broad, drooping, serrated leaves that

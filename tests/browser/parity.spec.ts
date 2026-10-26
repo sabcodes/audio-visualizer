@@ -18,7 +18,7 @@ const gpuOnly = ['sparkPlume'];
 
 test('all 115 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(900000); // 115 modes twice under software rendering
+  test.setTimeout(1800000); // 115 modes twice under software rendering; the point-cloud modes are slow there
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
