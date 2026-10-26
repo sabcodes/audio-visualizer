@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { attribute, float, mix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, uniform, uv, vec2, vec3, vec4, dot } from 'three/tsl';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { seededRandom } from '../rendering/diagnostics';
 import { createParticles, loadTexture } from './figures';
 import { sceneDefaults } from './shared';
@@ -28,14 +28,27 @@ const BARK = new THREE.Color(0x3a2a1c);
  * Faceted, flat-shaded copy of a geometry with a colour per face and a lava mask per vertex:
  * `paint` returns the face colour and how much lava glows through it.
  */
-function facet(source: THREE.BufferGeometry, paint: (normal: THREE.Vector3, centre: THREE.Vector3) => { colour: THREE.Color; lava: number }) {
-  const geometry = source.toNonIndexed();
-  geometry.deleteAttribute('uv');
+function facet(source: THREE.BufferGeometry, paint: (normal: THREE.Vector3, centre: THREE.Vector3) => { colour: THREE.Color; lava: number },
+  options: { smooth?: boolean; sway?: (position: THREE.Vector3) => number } = {}) {
+  let geometry = source;
+  geometry.deleteAttribute('uv'); geometry.deleteAttribute('normal');
+  // Smooth shading welds the vertices first so neighbouring faces share one normal; flat shading splits them apart.
+  if (options.smooth) geometry = mergeVertices(geometry, 1e-3);
   geometry.computeVertexNormals();
+  geometry = geometry.toNonIndexed();
   const position = geometry.getAttribute('position'), normal = geometry.getAttribute('normal');
-  const colours = new Float32Array(position.count * 3), lava = new Float32Array(position.count);
+  const colours = new Float32Array(position.count * 3), lava = new Float32Array(position.count), sway = new Float32Array(position.count);
   const n = new THREE.Vector3(), c = new THREE.Vector3(), tmp = new THREE.Vector3();
+  if (options.sway) for (let i = 0; i < position.count; i++) sway[i] = options.sway(tmp.fromBufferAttribute(position, i));
   for (let i = 0; i < position.count; i += 3) {
+    if (options.smooth) {
+      for (let k = 0; k < 3; k++) {
+        n.fromBufferAttribute(normal, i + k); c.fromBufferAttribute(position, i + k);
+        const { colour, lava: mask } = paint(n, c);
+        colours.set([colour.r, colour.g, colour.b], (i + k) * 3); lava[i + k] = mask;
+      }
+      continue;
+    }
     n.fromBufferAttribute(normal, i);
     c.set(0, 0, 0);
     for (let k = 0; k < 3; k++) c.add(tmp.fromBufferAttribute(position, i + k));
@@ -45,6 +58,7 @@ function facet(source: THREE.BufferGeometry, paint: (normal: THREE.Vector3, cent
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
   geometry.setAttribute('lava', new THREE.BufferAttribute(lava, 1));
+  geometry.setAttribute('sway', new THREE.BufferAttribute(sway, 1));
   return geometry;
 }
 
@@ -72,25 +86,30 @@ function rockChunk(seed: number, rx: number, ry: number, rz: number, island: boo
   });
 }
 
+const LEAF = [new THREE.Color(0x3f6a1e), new THREE.Color(0x6f9a2c), new THREE.Color(0xa8c04a)];
+
+/** A loose, windswept tree: a slim trunk and a scatter of soft, smooth-shaded leaf clumps that sway. */
 function tree(seed: number, scale: number) {
   const parts: THREE.BufferGeometry[] = [];
-  const trunk = new THREE.CylinderGeometry(0.22 * scale, 0.45 * scale, 4.2 * scale, 6, 1).translate(0, 2.1 * scale, 0);
-  parts.push(facet(trunk, () => ({ colour: BARK, lava: 0 })));
-  for (let k = 0; k < 4; k++) {
-    const blob = new THREE.IcosahedronGeometry(1, 1), p = blob.getAttribute('position'), v = new THREE.Vector3();
-    const ox = (hash(seed, k, 1) - 0.5) * 3.2 * scale, oz = (hash(seed, k, 2) - 0.5) * 3.2 * scale, oy = (4 + hash(seed, k, 3) * 1.4) * scale;
+  const trunk = new THREE.CylinderGeometry(0.16 * scale, 0.4 * scale, 4.4 * scale, 6, 1).translate(0, 2.2 * scale, 0);
+  parts.push(facet(trunk, () => ({ colour: BARK, lava: 0 }), { sway: (p) => Math.max(0, p.y) * 0.02 }));
+  for (let k = 0; k < 9; k++) {
+    const a = hash(seed, k, 1) * Math.PI * 2, d = Math.sqrt(hash(seed, k, 2)) * 2.4 * scale, oy = (4.2 + hash(seed, k, 3) * 2 + (1 - d / (2.4 * scale)) * 0.8) * scale;
+    const ox = Math.cos(a) * d, oz = Math.sin(a) * d, size = (0.9 + hash(seed, k, 4) * 0.8) * scale;
+    const blob = new THREE.IcosahedronGeometry(1, 5), p = blob.getAttribute('position'), v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
-      const j = 1 + (hash(v.x * 9 + seed, v.y * 9, v.z * 9 + k) - 0.5) * 0.45;
-      p.setXYZ(i, v.x * 2.4 * scale * j + ox, v.y * 1.5 * scale * j + oy, v.z * 2.4 * scale * j + oz);
+      const j = 1 + (noise(v.x * 2.2 + seed, v.y * 2.2 + k, v.z * 2.2) - 0.5) * 0.45;
+      p.setXYZ(i, v.x * size * 1.5 * j + ox, v.y * size * 0.95 * j + oy, v.z * size * 1.5 * j + oz);
     }
-    parts.push(facet(blob, (normal) => ({ colour: mixed(MOSS, 0.2 + normal.y * 0.6 + hash(seed, k, 5) * 0.3), lava: 0 })));
+    parts.push(facet(blob, (normal, at) => ({ colour: mixed(LEAF, 0.15 + Math.max(0, normal.y) * 0.55 + (at.y - oy) * 0.15 / scale + hash(seed, k, 5) * 0.25), lava: 0 }),
+      { smooth: true, sway: () => 1 }));
   }
   return mergeGeometries(parts)!;
 }
 
 function vine(length: number) {
-  return facet(new THREE.CylinderGeometry(0.09, 0.02, length, 4, 1).translate(0, -length / 2, 0), () => ({ colour: MOSS[0], lava: 0 }));
+  return facet(new THREE.CylinderGeometry(0.09, 0.02, length, 4, 1).translate(0, -length / 2, 0), () => ({ colour: MOSS[0], lava: 0 }), { sway: (p) => Math.min(1, -p.y / length) });
 }
 
 /**
@@ -129,6 +148,10 @@ export function createStormCanyon() {
   const rockMaterial = new THREE.MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
   const vein = mx_fractal_noise_float(positionLocal.mul(0.3), 3, 2, 0.5).abs().mul(16).oneMinus().max(0).pow(3);
   rockMaterial.emissiveNode = vec3(1, 0.3, 0.05).mul(attribute('lava', 'float')).mul(vein).mul(glow.mul(2.2).add(0.7)).mul(1.3);
+  // Leaves and vines sway in the wind; the `sway` attribute is 0 on solid rock.
+  const wind = attribute('sway', 'float').mul(0.3);
+  rockMaterial.positionNode = positionLocal.add(vec3(time.mul(1.7).add(positionLocal.y.mul(0.6)).add(positionLocal.x.mul(0.3)).sin().mul(wind),
+    float(0), time.mul(1.3).add(positionLocal.z.mul(0.4)).cos().mul(wind).mul(0.7)));
   const fallMaterial = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
   const streak = mx_fractal_noise_float(vec3(uv().x.mul(5), uv().y.mul(14).add(time.mul(-1.6)), 0), 3, 2, 0.5).mul(0.5).add(0.5);
   fallMaterial.colorNode = vec3(0.85, 0.92, 0.95);

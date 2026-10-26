@@ -193,6 +193,22 @@ export function createDragonMode(): VisualMode {
 
 // ---------------------------------------------------------------- High-polygon dragon (Wave 4.5)
 
+/** Camera angles around the high-polygon dragon: azimuth 0 is in front of it, 90° its left side; elevation in radians. */
+const DEG = Math.PI / 180;
+const SHOTS = [
+  { name: 'angled front top', az: 30, el: 35, distance: 15 },
+  { name: 'side', az: 90, el: 4, distance: 12 },
+  { name: 'top', az: 0, el: 80, distance: 14 },
+  { name: 'front', az: 0, el: 8, distance: 13 },
+  { name: 'angled side top', az: 120, el: 30, distance: 17 },
+  { name: 'behind', az: 180, el: 12, distance: 15 },
+  { name: 'low front', az: -25, el: -14, distance: 14 },
+  { name: 'angled side', az: -65, el: 18, distance: 16 },
+  { name: 'rear top', az: 150, el: 50, distance: 18 },
+].map((shot) => ({ az: shot.az * DEG, el: shot.el * DEG, distance: shot.distance }));
+const SHOT_SECONDS = 8;
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
 /**
  * The Wave 4.5 dragon: 34,784 tris, 77 joints. Its clips are authored as layers over a legs-only `flight_base`, so the
  * crossfading one-shot player would unfold the legs; instead `flight_base` holds the legs folded and the wings, neck,
@@ -234,6 +250,7 @@ export function createHighPolyDragonMode(): VisualMode {
   const roarGate = beatGate(10), breathGate = beatGate(9), bankGate = beatGate(8);
   const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
   const random = seededRandom(5), skyRandom = seededRandom(77);
+  const view = { ...SHOTS[0] };
   let stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
   return {
     scene, camera,
@@ -295,7 +312,13 @@ export function createHighPolyDragonMode(): VisualMode {
         if (eyes) eyes.emissiveIntensity = 0.6 + loudness * 2.4 + heat * 3;
       }
       fire.update(step); smoke.update(step);
-      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, dragon?.root.position.y ?? 0, -1), 14, 6);
+      // Camera: cut through a set of angles around the dragon, gliding between them, with a slow drift and a push-in on the bass.
+      const shot = SHOTS[Math.floor(frame.time / SHOT_SECONDS) % SHOTS.length], blend = step > 0 ? 1 - Math.exp(-step / 0.9) : 1;
+      view.az += wrapAngle(shot.az - view.az) * blend; view.el += (shot.el - view.el) * blend; view.distance += (shot.distance - view.distance) * blend;
+      const az = view.az + Math.sin(frame.time * 0.13) * 0.12 * motion, distance = view.distance - swell * 1.5 * motion;
+      centre.set(0, dragon?.root.position.y ?? 0, -0.5);
+      camera.position.set(centre.x + Math.sin(az) * Math.cos(view.el) * distance, centre.y + Math.sin(view.el) * distance, centre.z + Math.cos(az) * Math.cos(view.el) * distance);
+      camera.lookAt(centre.x, centre.y + 0.4, centre.z);
     },
     dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
   };
