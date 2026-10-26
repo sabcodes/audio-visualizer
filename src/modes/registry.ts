@@ -50,6 +50,7 @@ import { createInkDiscsMode } from './inkDiscsMode';
 import { createCrackedGlobeMode, createDotVortexMode } from './orbModes';
 import { createSkyShardsMode } from './skyShardsMode';
 import { createSparkPlumeMode } from './sparkPlumeMode';
+import { createClawHandsMode } from './clawHandsMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
@@ -180,6 +181,7 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('neonPortal', 'Neon Portal (FS)', createNeonPortalMode, 'fullscreen', FILM),
   waveFiveGpu('sparkPlume', 'Spark Plume', (budget) => createSparkPlumeMode(budget), 'scene', FILM),
   waveFive('dreamAlley', 'Dream Alley (FS)', createDreamAlleyMode, 'fullscreen', FILM),
+  waveFive('clawHands', 'Claw Hands (FS)', createClawHandsMode, 'fullscreen', FILM),
   waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.

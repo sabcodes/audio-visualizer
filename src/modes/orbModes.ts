@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { atan, cos, exp, float, fract, fwidth, log, mix, mx_fractal_noise_float, mx_noise_float, mx_worley_noise_vec2, sin, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { Fn, If, atan, cos, exp, float, fract, fwidth, log, mix, mx_fractal_noise_float, mx_noise_float, mx_worley_noise_vec2, sin, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import type { VisualMode } from './types';
 import { disposeScene, approach, settleStep } from './shared';
 import { fullscreen, palette } from './shaderModes';
@@ -153,7 +153,13 @@ export function createCrackedGlobeMode(): VisualMode {
   };
   const fresnel = qr.div(R).pow(6).mul(inside);
   const pole = exp(q.sub(vec2(0, R * 0.96)).length().div(0.035).negate()).mul(spot);
-  let globe: V3 = shell(back, 0.35).add(shell(front, 1)).mul(inside);
+  // The crack noise is the dear part: work it out only for pixels on the globe.
+  const surface = Fn(() => {
+    const lit = vec3(0).toVar();
+    If(qr.lessThan(R), () => { lit.assign(shell(back, 0.35).add(shell(front, 1))); });
+    return lit;
+  })().toVar();
+  let globe: V3 = surface.mul(inside);
   globe = globe.add(rgb(0x3a7bff).mul(fresnel.mul(cracks.mul(0.6).add(0.15))))
     .add(vec3(1).mul(pole.mul(3))).add(rgb(0x8cc4ff).mul(exp(q.sub(vec2(0, R)).length().div(0.12).negate()).mul(spot.mul(0.8))));
   // Glow around the globe: the ring's light and the cracks' haze.
