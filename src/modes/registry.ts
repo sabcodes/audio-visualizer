@@ -57,6 +57,7 @@ import { createLanternTreeMode } from './lanternTreeMode';
 import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 import { createWindowGridMode } from './windowGridMode';
+import { createNightParlourMode } from './nightParlourMode';
 import { createEyeStageMode } from './eyeStageMode';
 import { createGlowTideMode } from './glowTideMode';
 import { createGlassHandsMode } from './glassHandsMode';
@@ -231,6 +232,7 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('glassHands', 'Glass Hands', (budget) => createGlassHandsMode(budget), 'fullscreen', { grain: 0.05, halation: 0, vignette: 0.25, soften: 0.05, aberration: 0 }),
   waveSix('glowTide', 'Glow Tide', (budget) => createGlowTideMode(budget), 'fullscreen', { grain: 0.04, halation: 0, vignette: 0.45, soften: 0.1 }),
   waveSix('eyeStage', 'Eye Stage', createEyeStageMode, 'fullscreen'),
+  waveSix('nightParlour', 'Night Parlour', (budget) => createNightParlourMode(budget), 'scene', { grain: 0.04, halation: 0.35, vignette: 0.5, soften: 0.1 }),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
