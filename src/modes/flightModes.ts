@@ -7,6 +7,7 @@ import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, lo
 import { createHits } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
+import highPolyDragonUrl from '../assets/models/dragon_hd.glb?url';
 import phoenixUrl from '../assets/models/phoenix_webgpu.glb?url';
 import easternPhoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
 import spiresUrl from '../assets/models/sky_spires.glb?url';
@@ -184,6 +185,118 @@ export function createDragonMode(): VisualMode {
       }
       fire.update(step); smoke.update(step);
       chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, dragon?.root.position.y ?? 0, -1), 19, 8);
+    },
+    dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
+  };
+}
+
+// ---------------------------------------------------------------- High-polygon dragon (Wave 4.5)
+
+/**
+ * The Wave 4.5 dragon: 34,784 tris, 77 joints. Its clips are authored as layers over a legs-only `flight_base`, so the
+ * crossfading one-shot player would unfold the legs; instead `flight_base` holds the legs folded and the wings, neck,
+ * tail, jaw and head are all driven from the music with the same wing stroke as the low-poly dragon.
+ * Bone axes (probed): +X raises either wing and lifts neck and tail, +Z swings neck right and tail left, +X pitches the head down.
+ */
+export function createHighPolyDragonMode(): VisualMode {
+  const sky = flightScene({ zenith: new THREE.Color(0.012, 0.01, 0.035), horizon: new THREE.Color(0.16, 0.035, 0.03), sun: new THREE.Vector3(-0.6, 0.06, -1),
+    sunColour: new THREE.Color(0.9, 0.3, 0.1), clouds: new THREE.Color(0.055, 0.03, 0.04), fog: 0x0a0507 });
+  const { scene, camera } = sky;
+  const sunLight = new THREE.DirectionalLight(0xffa070, 2.2); sunLight.position.set(-30, 12, -40);
+  const fill = new THREE.HemisphereLight(0x6070a0, 0x200808, 0.9);
+  const front = new THREE.DirectionalLight(0xc0c8ff, 1.2); front.position.set(10, 8, 30);
+  const fireLight = new THREE.PointLight(0xff7020, 0, 30, 1.5);
+  scene.add(sunLight, fill, front, fireLight);
+  const fire = createParticles(loadTexture(emberUrl), 700, { drag: 1.2, gravity: -2 });
+  const smoke = createParticles(loadTexture(smokeUrl), 240, { drag: 0.8, gravity: -1.5, additive: false });
+  scene.add(fire.object, smoke.object);
+
+  let dragon: Figure | undefined, player: ClipPlayer | undefined;
+  const overlay = new BoneOverlay(), tempo = new TempoTracker(), bands = new Float32Array(10);
+  let wings: { root: THREE.Object3D; elbow: THREE.Object3D; hand: THREE.Object3D }[] = [], neck: THREE.Object3D[] = [], tail: THREE.Object3D[] = [];
+  let head: THREE.Object3D | undefined, jaw: THREE.Object3D | undefined, mouthSocket: THREE.Object3D | undefined, eyes: THREE.MeshStandardMaterial | undefined;
+  let pulseExpand: { mesh: THREE.Mesh; index: number }[] = [], pulseContract: { mesh: THREE.Mesh; index: number }[] = [];
+  const models = whenLoaded([highPolyDragonUrl], ([model]) => {
+    dragon = instantiate(model);
+    // COLOR_0 holds part ids and distances, not colour; three.js would paint the dragon with it.
+    dragon.root.traverse((object) => (object as THREE.Mesh).geometry?.deleteAttribute('color'));
+    for (const material of dragon.materials.values()) { material.vertexColors = false; material.needsUpdate = true; }
+    scene.add(dragon.root);
+    player = new ClipPlayer(dragon.root, dragon.clips);
+    player.loop('flight_base', 0);
+    wings = (['Left', 'Right'] as const).map((side) => ({
+      root: overlay.track(dragon!.node(`${side}WingRoot`)), elbow: overlay.track(dragon!.node(`${side}WingElbow`)), hand: overlay.track(dragon!.node(`${side}WingHand`)),
+    }));
+    neck = [1, 2, 3, 4, 5, 6].map((i) => overlay.track(dragon!.node(`Neck${i}`)));
+    tail = Array.from({ length: 10 }, (_, i) => overlay.track(dragon!.node(`Tail${i + 1}`)));
+    head = overlay.track(dragon.node('Head')); jaw = overlay.track(dragon.node('Jaw')); mouthSocket = dragon.node('socket_mouth');
+    eyes = dragon.materials.get('emissive_eye');
+    pulseExpand = dragon.morphs('pulse_expand'); pulseContract = dragon.morphs('pulse_contract');
+  });
+
+  const roarGate = beatGate(10), breathGate = beatGate(9), bankGate = beatGate(8);
+  const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
+  const random = seededRandom(5);
+  let stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
+  return {
+    scene, camera,
+    ready: models.ready,
+    update(frame) {
+      resizeCamera(camera as THREE.PerspectiveCamera, frame.aspect);
+      sky.time.value = frame.time;
+      const step = settleStep(frame), { bounce, bass, loudness, impact } = frame.response, motion = frame.reducedMotion ? 0 : 1;
+      const scale = tempo.update(frame.time, frame.audio.onset, frame.delta);
+      bandEnergies(frame, bands.length, bands);
+      sky.fly(frame.delta * (14 + bounce * 26));
+      sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
+      swell = approach(swell, bass, step, 0.08);
+      if (frame.audio.onset) { beats++; if (stroke >= 1 || stroke > 0.6) stroke = 0; }
+      stroke = Math.min(1, stroke + frame.delta * 1.6 * Math.max(1, scale));
+      if (dragon && player && head && jaw && mouthSocket) {
+        // Accents: fire when the music stays loud, a roar on a hard hit every so often, banks between phrases.
+        loudHold = loudness > 0.75 ? loudHold + frame.delta : 0;
+        if (loudHold > 0.8 && breathing < 0 && roaring < 0 && breathGate(frame.time, true)) breathing = 0;
+        else if (frame.audio.onset && impact > 0.8 && beats % 8 === 0 && breathing < 0 && roaring < 0 && roarGate(frame.time, true)) roaring = 0;
+        else if (frame.audio.onset && beats % 32 === 16 && bankGate(frame.time, true)) bankTarget = (beats % 64 === 16 ? 1 : -1) * 0.4;
+        bankTarget *= Math.exp(-step / 1.4); bank = approach(bank, bankTarget, step, 0.3);
+        overlay.reset();
+        player.update(frame.delta, scale);
+        const lift = wingStroke(stroke) * motion * (0.6 + bounce * 0.6), lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * (0.6 + bounce * 0.6);
+        for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.5); overlay.turn(wing.hand, lag * 0.3); }
+        wave += frame.delta * (2.5 + bounce * 3) * motion;
+        // A roar rears the neck up and opens the jaw; breathing fire does the same, a little longer.
+        const rearing = roaring >= 0 ? Math.sin(Math.min(1, roaring / 1.2) * Math.PI) : breathing >= 0 ? Math.sin(Math.min(1, breathing / 2.4) * Math.PI) : 0;
+        neck.forEach((bone, i) => overlay.turn(bone, (Math.sin(wave * 1.6 - i * 0.7) * swell * 0.07 + rearing * 0.07) * motion, 0, Math.sin(wave * 0.8 - i * 0.5) * 0.03 * motion));
+        overlay.turn(head, (swell * 0.12 - rearing * 0.2) * motion);
+        overlay.turn(jaw, rearing * 0.55 * motion);
+        tail.forEach((bone, i) => overlay.turn(bone, Math.sin(wave * 0.9 - i * 0.45) * 0.03 * motion, 0, Math.sin(wave * 1.2 - i * 0.55) * (0.03 + bands[i] * 0.09) * motion));
+        setMorph(pulseExpand, Math.min(1, swell) * motion); setMorph(pulseContract, Math.min(1, impact * 0.5) * (1 - swell) * motion);
+        dragon.root.position.set(Math.sin(frame.time * 0.31) * 2 * motion, Math.sin(frame.time * 0.5) * 1.2 * motion - lift * 0.8, 0);
+        dragon.root.rotation.set(-lift * 0.08, 0, (Math.sin(frame.time * 0.31) * 0.12 + bank) * motion);
+        if (roaring >= 0) { roaring += frame.delta * scale; if (roaring > 1.4) roaring = -1; }
+        if (breathing >= 0) {
+          breathing += frame.delta * scale;
+          const jet = breathing > 0.7 && breathing < 2.05;
+          if (jet) {
+            dragon.root.updateMatrixWorld(true);
+            mouthSocket.getWorldPosition(mouth); neck[5].getWorldPosition(throat);
+            aim.subVectors(mouth, throat).normalize();
+            for (let k = 0; k < 14; k++) {
+              const speed = 26 + random() * 14, spread = 0.18, hot = random();
+              fire.emit(mouth.x, mouth.y, mouth.z, (aim.x + (random() - 0.5) * spread) * speed, (aim.y + (random() - 0.5) * spread) * speed, (aim.z + (random() - 0.5) * spread) * speed,
+                0.6 + random() * 0.5, 1.4 + random() * 1.6, 2.2, 0.8 + hot * 0.9, 0.2 + hot * 0.4);
+            }
+            if (random() < 0.5) smoke.emit(mouth.x + aim.x * 12, mouth.y + aim.y * 12, mouth.z + aim.z * 12, aim.x * 6, aim.y * 6 + 2, aim.z * 6, 2.2, 5 + random() * 4, 0.12, 0.1, 0.1);
+          }
+          heat = approach(heat, jet ? 1 : 0, step, 0.12);
+          if (breathing > 2.6) breathing = -1;
+        } else heat = approach(heat, 0, step, 0.3);
+        fireLight.position.copy(dragon.root.position).add(centre.set(0, 1, 5));
+        fireLight.intensity = heat * 60;
+        if (eyes) eyes.emissiveIntensity = 0.6 + loudness * 2.4 + heat * 3;
+      }
+      fire.update(step); smoke.update(step);
+      chase(camera as THREE.PerspectiveCamera, frame, centre.set(0, dragon?.root.position.y ?? 0, -1), 14, 6);
     },
     dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
   };

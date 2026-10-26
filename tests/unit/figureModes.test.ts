@@ -91,10 +91,10 @@ describe('figure mode assets', () => {
 
 describe('figure modes', () => {
   it('register after wave three, labelled experimental, on both backends', () => {
-    expect(figureModeDefinitions.map((mode) => mode.id)).toEqual(['swampGiant', 'dragon', 'phoenix', 'lowPolyWesternPhoenix', 'westernPhoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob']);
-    expect(modeDefinitions.slice(50, 58)).toEqual(figureModeDefinitions);
+    expect(figureModeDefinitions.map((mode) => mode.id)).toEqual(['swampGiant', 'dragon', 'highPolyDragon', 'phoenix', 'lowPolyWesternPhoenix', 'westernPhoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob']);
+    expect(modeDefinitions.slice(50, 59)).toEqual(figureModeDefinitions);
     expect(modeDefinitions.slice(40, 50)).toEqual(waveThreeModeDefinitions);
-    for (const mode of figureModeDefinitions) { expect(mode.label.startsWith(['phoenix', 'lowPolyWesternPhoenix', 'westernPhoenix', 'skeletonBand'].includes(mode.id) ? '<experimental wave 4.5> ' : '<EXPERIMENTAL> '), mode.id).toBe(true); expect(mode.backends).toEqual(['webgpu', 'webgl2']); }
+    for (const mode of figureModeDefinitions) { expect(mode.label.startsWith(['highPolyDragon', 'phoenix', 'lowPolyWesternPhoenix', 'westernPhoenix', 'skeletonBand'].includes(mode.id) ? '<experimental wave 4.5> ' : '<EXPERIMENTAL> '), mode.id).toBe(true); expect(mode.backends).toEqual(['webgpu', 'webgl2']); }
   });
   it('build, update through loud beats and a frozen clock, and dispose before their models arrive', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

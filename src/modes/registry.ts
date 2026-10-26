@@ -24,7 +24,7 @@ import { createAttractorMode, createPhysarumMode, createSnowflakeMode } from './
 import { createAsciiMode, createLedAnalyzerMode, createTurntableMode } from './retroModes';
 import { createStormMode } from './stormMode';
 import { createGiantMode } from './giantMode';
-import { createDragonMode, createPhoenixMode } from './flightModes';
+import { createDragonMode, createHighPolyDragonMode, createPhoenixMode } from './flightModes';
 import { createCrowdMode } from './crowdMode';
 import { createBandMode } from './bandMode';
 import { createFirePhoenixMode } from './firePhoenixMode';
@@ -122,6 +122,7 @@ export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
 export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
+  definition('highPolyDragon', '<experimental wave 4.5> High Polygon Dragon', createHighPolyDragonMode),
   definition('phoenix', '<experimental wave 4.5> Eastern Phoenix', () => createPhoenixMode('eastern')),
   definition('lowPolyWesternPhoenix', '<experimental wave 4.5> Low Poly Western Phoenix', () => createPhoenixMode('western')),
   definition('westernPhoenix', '<experimental wave 4.5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
