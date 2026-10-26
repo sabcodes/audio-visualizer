@@ -123,9 +123,9 @@ export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
   definition('phoenix', '<EXPERIMENTAL> Eastern Phoenix', createPhoenixMode),
-  definition('westernPhoenix', '<experimental-wave5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
+  definition('westernPhoenix', '<experimental wave 4.5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
   definition('crowdMascot', '<EXPERIMENTAL> Crowd + Mascot', (budget) => createCrowdMode(budget)),
-  definition('skeletonBand', '<EXPERIMENTAL> Skeleton Band', createBandMode),
+  definition('skeletonBand', '<experimental wave 4.5> Skeleton Band', createBandMode),
   definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
 ];
 /** Wave 4 entries are labelled `<experimental-wave4> …` in the menu, at the user's request. */
