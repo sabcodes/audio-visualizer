@@ -31,7 +31,7 @@ const IDS = ['prismBowtie', 'blockBowtie', 'pongOrbs', 'candyOrb', 'moonPond', '
 describe('wave four modes', () => {
   it('registers all 29 spec modes after the figure modes, labelled experimental-wave4', () => {
     expect(waveFourModeDefinitions.map((mode) => mode.id).sort()).toEqual([...IDS].sort());
-    expect(modeDefinitions.slice(57, 86)).toEqual(waveFourModeDefinitions);
+    expect(modeDefinitions.slice(58, 87)).toEqual(waveFourModeDefinitions);
     for (const mode of waveFourModeDefinitions) {
       expect(mode.label.startsWith('<experimental-wave4> ')).toBe(true);
       expect(mode.backends).toEqual(['webgpu', 'webgl2']);

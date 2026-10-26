@@ -5,7 +5,7 @@ const allIds = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'liss
   'epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot', 'neonCity',
   'kraken', 'torusKnot', 'chladni', 'metaballs', 'ocean', 'eventHorizon', 'fireworks', 'abyss', 'disco', 'ferrofluid', 'arena',
   'reactionDiffusion', 'feedback', 'curlFlow', 'attractor', 'physarum', 'snowflake', 'turntable', 'ascii', 'ledAnalyzer', 'storm',
-  'swampGiant', 'dragon', 'phoenix', 'westernPhoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob',
+  'swampGiant', 'dragon', 'phoenix', 'lowPolyWesternPhoenix', 'westernPhoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob',
   'prismBowtie', 'blockBowtie', 'pongOrbs', 'candyOrb', 'moonPond', 'liquidChrome', 'mirrorPlasma', 'grainSmoke', 'anamorphicFlare', 'hairVortex',
   'windfield', 'blackMaze', 'starfallCanopy', 'silkThreads', 'chromeStreaks', 'signalNight', 'beaconRings', 'lightLeakFilm', 'warehouseHall', 'redStairwell',
   'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke',

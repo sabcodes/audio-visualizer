@@ -122,7 +122,8 @@ export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
 export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
-  definition('phoenix', '<experimental wave 4.5> Eastern Phoenix', createPhoenixMode),
+  definition('phoenix', '<experimental wave 4.5> Eastern Phoenix', () => createPhoenixMode('eastern')),
+  definition('lowPolyWesternPhoenix', '<experimental wave 4.5> Low Poly Western Phoenix', () => createPhoenixMode('western')),
   definition('westernPhoenix', '<experimental wave 4.5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
   definition('crowdMascot', '<EXPERIMENTAL> Crowd + Mascot', (budget) => createCrowdMode(budget)),
   definition('skeletonBand', '<experimental wave 4.5> Skeleton Band', createBandMode),

@@ -8,6 +8,7 @@ import { createHits } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
 import phoenixUrl from '../assets/models/phoenix_webgpu.glb?url';
+import easternPhoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
 import spiresUrl from '../assets/models/sky_spires.glb?url';
 import emberUrl from '../assets/fx/ember.png?url';
 import smokeUrl from '../assets/fx/smoke.png?url';
@@ -220,11 +221,13 @@ function bakePlumage(figure: Figure) {
   }
 }
 
-const FEATHERS = 4, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
+const STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
 /** Where each wingtip sits relative to its hand bone's world position at rest (this build has no sockets). */
 const WINGTIP_REACH = 1.55;
 
-export function createPhoenixMode(): VisualMode {
+/** The two builds differ in rig: the original Fenghuang has 6 primaries, 4-joint streamers and two-bone crests; the WebGPU build 4, 3 and one. */
+export function createPhoenixMode(build: 'western' | 'eastern' = 'western'): VisualMode {
+  const eastern = build === 'eastern', FEATHERS = eastern ? 6 : 4, TAIL_JOINTS = eastern ? [1, 2, 3, 4] : [1, 2, 3], FEATHER_MID = (FEATHERS - 1) / 2;
   const sky = flightScene({ zenith: new THREE.Color(0.005, 0.008, 0.03), horizon: new THREE.Color(0.08, 0.03, 0.12), sun: new THREE.Vector3(0.4, 0.25, -1),
     sunColour: new THREE.Color(0.6, 0.65, 1), clouds: new THREE.Color(0.06, 0.05, 0.12), fog: 0x08060f });
   const { scene, camera } = sky;
@@ -247,9 +250,9 @@ export function createPhoenixMode(): VisualMode {
   let wings: { upper: THREE.Object3D; fore: THREE.Object3D; feathers: THREE.Object3D[] }[] = [], tails: THREE.Object3D[][] = [], crest: THREE.Object3D[] = [];
   let tips: THREE.Object3D[] = [], chest: THREE.Object3D | undefined, glowing: { material: THREE.MeshStandardMaterial; base: number }[] = [];
   let neck: THREE.Object3D[] = [], squash: { mesh: THREE.Mesh; index: number }[] = [], stretch: { mesh: THREE.Mesh; index: number }[] = [];
-  const models = whenLoaded([phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
+  const models = whenLoaded([eastern ? easternPhoenixUrl : phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
     phoenix = instantiate(phoenixModel);
-    bakePlumage(phoenix);
+    if (!eastern) bakePlumage(phoenix);
     scene.add(phoenix.root);
     player = new ClipPlayer(phoenix.root, phoenix.clips);
     player.loop('glide', 0);
@@ -259,8 +262,8 @@ export function createPhoenixMode(): VisualMode {
       fore: overlay.track(phoenix!.node(`wing_${side}_fore`)),
       feathers: Array.from({ length: FEATHERS }, (_, k) => overlay.track(phoenix!.node(`wing_${side}_feather_0${k + 1}`))),
     }));
-    tails = STREAMERS.map((s) => [1, 2, 3].map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
-    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}`)));
+    tails = STREAMERS.map((s) => TAIL_JOINTS.map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
+    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(eastern ? `crest_0${k}_01` : `crest_0${k}`)));
     chest = phoenix.node('chest');
     neck = [overlay.track(phoenix.node('neck_01')), overlay.track(phoenix.node('neck_02'))];
     // The torso's own pulse shapes: squash on a kick, stretch on the rebound.
@@ -330,7 +333,7 @@ export function createPhoenixMode(): VisualMode {
         wings.forEach((wing, side) => {
           overlay.turn(wing.upper, wingStroke(stroke) * power + spread * 0.35);
           overlay.turn(wing.fore, wingStroke(Math.max(0, stroke - 0.06)) * power * 0.6);
-          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - 1.5) * open * (side ? -1 : 1), 0));
+          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - FEATHER_MID) * open * (side ? -1 : 1), 0));
         });
         // The long neck nods into each hit and the head comes back up; the crest flicks after it.
         const nod = (kick * 0.22 - rebound * 0.08) * motion;
