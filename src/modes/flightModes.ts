@@ -250,8 +250,8 @@ export function createHighPolyDragonMode(): VisualMode {
   const roarGate = beatGate(10), breathGate = beatGate(9), bankGate = beatGate(8);
   const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
   const random = seededRandom(5), skyRandom = seededRandom(77);
-  const view = { ...SHOTS[0] };
-  let stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
+  const view = { ...SHOTS[0] }, hits = createHits({ decay: 0.35, interval: 0.22 });
+  let strokePower = 0, stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
   return {
     scene, camera,
     ready: models.ready,
@@ -266,8 +266,13 @@ export function createHighPolyDragonMode(): VisualMode {
       sky.update(frame.delta, speed, loudness, frame.reducedFlash ? 0 : impact, skyRandom);
       sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
       swell = approach(swell, bass, step, 0.08);
-      if (frame.audio.onset) { beats++; if (stroke >= 1 || stroke > 0.6) stroke = 0; }
-      stroke = Math.min(1, stroke + frame.delta * 1.6 * Math.max(1, scale));
+      // Every hit starts a wing beat whose depth comes from how hard it hit and the bounce slider; between hits the
+      // dragon keeps beating at a pace set by the bounce, so the wings follow the music instead of waiting on onsets.
+      hits.update(frame, 0.2);
+      if (frame.audio.onset) beats++;
+      if (hits.fired) { stroke = 0; strokePower = Math.min(1, 0.4 + impact * 0.5 + bounce * 0.5); }
+      else if (stroke >= 1 && (bounce > 0.03 || loudness > 0.08)) { stroke = 0; strokePower = Math.min(1, 0.3 + bounce * 0.7); }
+      stroke = Math.min(1, stroke + frame.delta * (1.2 + bounce * 2.2) * Math.max(1, scale));
       if (dragon && player && head && jaw && mouthSocket) {
         // Accents: fire when the music stays loud, a roar on a hard hit every so often, banks between phrases.
         loudHold = loudness > 0.75 ? loudHold + frame.delta : 0;
@@ -277,8 +282,8 @@ export function createHighPolyDragonMode(): VisualMode {
         bankTarget *= Math.exp(-step / 1.4); bank = approach(bank, bankTarget, step, 0.3);
         overlay.reset();
         player.update(frame.delta, scale);
-        const lift = wingStroke(stroke) * motion * (0.6 + bounce * 0.6), lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * (0.6 + bounce * 0.6);
-        for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.5); overlay.turn(wing.hand, lag * 0.3); }
+        const depth = Math.min(1.5, 0.15 + bounce * 0.9 + strokePower * 0.7), lift = wingStroke(stroke) * motion * depth, lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * depth;
+        for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.6); overlay.turn(wing.hand, lag * 0.4); }
         wave += frame.delta * (2.5 + bounce * 3) * motion;
         // A roar rears the neck up and opens the jaw; breathing fire does the same, a little longer.
         const rearing = roaring >= 0 ? Math.sin(Math.min(1, roaring / 1.2) * Math.PI) : breathing >= 0 ? Math.sin(Math.min(1, breathing / 2.4) * Math.PI) : 0;
