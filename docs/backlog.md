@@ -55,3 +55,19 @@ Shared pieces: `hitPulse.ts` (the beat-gated hit envelope, non-repeating variant
 
 - Vein-shaped emissive cracks for the golem.
 - A listening pass per mode, then drop the `<experimental-wave4>` labels.
+
+## Wave 5 modes (built, experimental)
+
+Spec: `docs/superpowers/specs/2026-10-25-wave-five-modes-design.md`. The six code-only modes are built and labelled `<experimental-wave5> …`: CRT Spill, TV Wall, Ink Discs, Cracked Globe, Dot Vortex and Sky Shards.
+
+### Not built yet
+
+- **Need models:** Relic Glow (clip 7, all 12 objects) and Metro Car (clip 13, the car interior).
+- **Need figures, hands or a tree built first:** Neon Portal (3), Spark Plume (4), Dream Alley (5), Lantern Tree (9), Claw Hands (11, needs the claw variant of `handModel.ts`) and Slit Dancer (12).
+- **Warehouse Hall change (14):** the spec's three-state cut and blackout changes go into the existing mode, not a new one.
+
+### Deviations from the spec
+
+- **CRT Spill and TV Wall** show wet-floor reflections with a mirrored copy of the scene seen through a translucent floor, not screen-space reflections. The CRT shells are code-built (bevel box plus tapered housing); the optional CRT model (asset list B1) is not used.
+- **Sky Shards** draws the pole, wires and every panel in one fullscreen shader. Slab edges follow straight wire lines (no sag). Only the topmost panel's sky is shaded at each pixel, so 16 slots cost one sky evaluation.
+- **No reference contact sheets for wave 5** are on disk, so the modes were checked against the spec's frame descriptions only.
