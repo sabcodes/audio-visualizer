@@ -269,12 +269,12 @@ export function createHighPolyDragonMode(): VisualMode {
       // Every hit starts a wing beat whose depth comes from how hard it hit and the bounce slider; between hits the
       // dragon keeps beating at a pace set by the bounce, so the wings follow the music instead of waiting on onsets.
       // The slider scales the wing beat directly (the response values clamp, so loud music would otherwise hide it).
-      const gain = ((frame.sensitivity ?? 1.8) / 1.8) ** 1.3;
+      const gain = ((frame.sensitivity ?? 1.8) / 1.8) ** 0.8;
       hits.update(frame, 0.2);
       if (frame.audio.onset) beats++;
       if (hits.fired) { stroke = 0; strokePower = Math.min(1, 0.4 + impact * 0.5 + bounce * 0.5); }
       else if (stroke >= 1 && (bounce > 0.03 || loudness > 0.08)) { stroke = 0; strokePower = Math.min(1, 0.3 + bounce * 0.7); }
-      stroke = Math.min(1, stroke + frame.delta * (1 + bounce * 1.6 * Math.min(1.8, gain)) * Math.max(1, scale));
+      stroke = Math.min(1, stroke + frame.delta * (1 + bounce * 1.1 * Math.min(1.4, gain)) * Math.max(1, scale));
       if (dragon && player && head && jaw && mouthSocket) {
         // Accents: fire when the music stays loud, a roar on a hard hit every so often, banks between phrases.
         loudHold = loudness > 0.75 ? loudHold + frame.delta : 0;
@@ -284,7 +284,7 @@ export function createHighPolyDragonMode(): VisualMode {
         bankTarget *= Math.exp(-step / 1.4); bank = approach(bank, bankTarget, step, 0.3);
         overlay.reset();
         player.update(frame.delta, scale);
-        const depth = Math.min(1.8, (0.1 + bounce * 0.7 + strokePower * 0.5) * gain), lift = wingStroke(stroke) * motion * depth, lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * depth;
+        const depth = Math.min(1.2, (0.08 + bounce * 0.45 + strokePower * 0.35) * gain), lift = wingStroke(stroke) * motion * depth, lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * depth;
         for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.6); overlay.turn(wing.hand, lag * 0.4); }
         wave += frame.delta * (2.5 + bounce * 3) * motion;
         // A roar rears the neck up and opens the jaw; breathing fire does the same, a little longer.
