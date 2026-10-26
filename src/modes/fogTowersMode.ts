@@ -143,7 +143,7 @@ export function createFogTowersMode(budget: QualityBudget = presetBudget('balanc
   rainGeometry.setAttribute('position', new THREE.BufferAttribute(rain, 3)); rainGeometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
   const rainMaterial = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
   const eye = uniform(new THREE.Vector3());
-  const dropY = positionLocal.y.sub(rainFall).mod(120).sub(60);
+  const dropY = fract(positionLocal.y.sub(rainFall).div(120)).mul(120).sub(60);
   rainMaterial.positionNode = vec3(positionLocal.x.add(eye.x).add(dropY.mul(0.08)), dropY.add(eye.y).add(attribute<'float'>('tail').mul(2.2)), positionLocal.z.add(eye.z));
   rainMaterial.colorNode = fogColour.mul(0.5).add(0.03).mul(fract(positionLocal.x.mul(0.71)).lessThan(rainAmount).select(float(1), float(0)));
   const rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.frustumCulled = false; scene.add(rainLines);

@@ -221,7 +221,7 @@ export function createNeonOverlookMode(budget: QualityBudget = presetBudget('bal
   rainGeometry.setAttribute('position', new THREE.BufferAttribute(rain, 3)); rainGeometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
   const rainMaterial = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const fall = uniform(0), rainAmount = uniform(0.3), focus = uniform(new THREE.Vector3());
-  const dropY = positionLocal.y.sub(fall).mod(400);
+  const dropY = fract(positionLocal.y.sub(fall).div(400)).mul(400);
   rainMaterial.positionNode = vec3(positionLocal.x.add(focus.x), dropY.add(attribute<'float'>('tail').mul(3)), positionLocal.z.add(focus.z));
   rainMaterial.colorNode = vec3(0.25, 0.35, 0.45).mul(fract(positionLocal.x.mul(0.37)).lessThan(rainAmount).select(float(1), float(0)));
   const rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.frustumCulled = false; scene.add(rainLines);
