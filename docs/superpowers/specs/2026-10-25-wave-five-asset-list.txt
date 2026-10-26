@@ -1,0 +1,119 @@
+WAVE 5 ASSET LIST
+=================
+Companion to 2026-10-25-wave-five-modes-design.md. No specs here, only what is needed.
+Each line: [REQUIRED | OPTIONAL | NOT NEEDED] | kind (3D model, 3D animation, 2D image) | role (MAIN visual asset | PROP) | belongs to (mode id, clip number)
+
+The "code vs asset" note on each item is my check of whether Three.js / WebGPU (TSL) can do it alone,
+or whether a made asset would look closer to the reference clip. The user's standing preference (from wave 4)
+is to build shapes in code when a supplied model is weak, so OPTIONAL means "code first, asset only if it looks closer".
+
+-------------------------------------------------------------------------------
+A. REQUIRED (the mode cannot be built well without these)
+-------------------------------------------------------------------------------
+
+A1. OPTIONAL | 3D animation | MAIN | dreamAlley (clip 5)
+    Humanoid runner from behind with a flaring coat/skirt cloth (run cycle ~3 steps/s).
+    Decided: code only (a capsule-built figure plus a spring-rig coat). Only if that silhouette
+    does not look right beside the clip, commission this.
+
+A2. NOT NEEDED | 2D image | MAIN | dreamAlley (clip 5)
+    Street plates: decided code only (procedural night-facade shaders).
+
+A3. REQUIRED | 3D model (one file per object) | MAIN | relicGlow (clip 7)
+    CONFIRMED BY THE USER: 3D model route, all 12, follow this listing. No code stand-ins. Code check: the pixel/fringe/halo/dissolve look is code. Nine objects could
+    be approximated from primitives (the mode ships with those as stand-ins); controller, sneaker and hatchback
+    cannot, so those three are the true blockers.
+    The glowing retro objects. Each rendered at about 100 px, pixelated, so the models
+    need recognisable silhouettes more than detail. Low-poly is fine here (the pixel
+    pass hides it). Textures needed on the screens and logos.
+    List (in clip order). Mark which ones you want; "core" = needed for the mode to feel right.
+      core    Game Boy Advance SP (opens its flap), screen with a small coloured picture
+      core    Tamagotchi (shell, prism-rainbow screen, bead chain)
+      core    Nokia 3310 (green LCD, NOKIA text, keypad)
+      core    crushed cola can (dented, rotatable)
+      core    three dice (red, white pips)
+      core    cigarette butt on ash
+      MUST    PlayStation controller
+      MUST    sneaker with laces
+      MUST    damaged hatchback car
+      other   yellow-orange ball with a swoosh
+      other   red lighter (crumple morph or two states: intact and crushed)
+      other   ring-toss tower (rings on a pole; a drip/slide morph or animation)
+    Code vs asset: shapes this specific cannot be made well in code. Models are required.
+    The pixelation, chromatic fringe, halo and dissolve are all code (no asset).
+
+A4. REQUIRED | 3D model | MAIN | metroCar (clip 13)
+    Subway car interior, first-person scale: olive-green wall panels, steel grab poles,
+    blue-grey bench seats along both walls, overhead ad boards, windows on the left, door
+    at the far end with orange destination lights, end-door window. Floor with a worn
+    sheen. About 12 m long, 2.6 m wide. Should read without the lighting (the lighting is code).
+    Code vs asset: Kit A style procedural boxes could do the shell, but the benches, poles,
+    ad rail and door details are what make it read as a subway car. Asset will look closer.
+    (If Kit A can be extended instead, say so; this can drop to OPTIONAL.)
+
+A5. NOT NEEDED | 2D image | MAIN | skyShards (clip 15)
+    Sky plates: decided code only (eight sky shader looks). Revisit only if the shader clouds look too graphic.
+
+A6. NOT NEEDED | 2D image | PROP | skyShards (clip 15)
+    Pole and wires are drawn in code.
+
+-------------------------------------------------------------------------------
+B. OPTIONAL (code-built version first; an asset only if it looks closer)
+-------------------------------------------------------------------------------
+
+B1. OPTIONAL | 3D model | PROP | crtSpill (clip 1), tvWall (clip 2)
+    CRT television with a bevelled plastic shell, convex glass, rear housing.
+    Two sizes (small 14", large 27"). A box with a curved glass shader is built in code;
+    a real model adds the back taper, vents and knobs, which show in the clip's side view.
+    Code vs asset: code is enough for the wall in clip 2 (most TVs are seen from the front, dark).
+    Clip 1's hero TV is seen at a 35 degree angle, so a model helps there.
+
+B2. OPTIONAL (becomes REQUIRED if the code tree fails the check) | 3D model | MAIN | lanternTree (clip 9)
+    A large deciduous tree (full canopy, readable branch structure).
+    Code vs asset: a procedural tree can reach "game foliage". If we want it to look like the
+    clip's photographic canopy, a hand-built tree with leaf-card textures is closer.
+    Needs: trunk and branch mesh, leaf cards with alpha, separate "leaf cluster" nodes so lights
+    can be placed inside (names: leaf_cluster_01 ...).
+
+B3. OPTIONAL | 3D model | PROP | lanternTree (clip 9)
+    Ring-shaped overhead light fixture with cables (cylinder with a glowing underside).
+    Code vs asset: easily built in code. Asset not recommended.
+
+B4. OPTIONAL | 3D animation | MAIN | sparkPlume (clip 4), slitDancer (clip 12), neonPortal (clip 3)
+    Reuse dancer.glb, dancer_b.glb and dancer_c.glb. New clips only if the existing ones do not fit:
+      - hover / float pose with arms slightly out (sparkPlume), slow sway loop
+      - side-view dance set with big moves: arm swing, leg lift, squat, leap (slitDancer)
+      - a pair-dance for two figures (neonPortal)
+    Code vs asset: the silhouette and streak looks are code. The animation is what an asset adds.
+
+B5. OPTIONAL | 3D model | PROP | clawHands (clip 11)
+    Rigged hand with very long claws and forearm, as an alternative to the code hand.
+    Code vs asset: handModel.ts (raymarched capsules) is the user's preferred look. Claws are a
+    small extension in code. Asset NOT recommended unless the code claws look wrong.
+
+B6. OPTIONAL | 3D model | PROP | crackedGlobe (clip 8)
+    A few rock slabs for the ground strip under the globe.
+    Code vs asset: simple rocks in code are fine; they are only silhouettes.
+
+B7. OPTIONAL | 2D image | PROP | inkDiscs (clip 6)
+    A paper texture (cream, fibre, slight stain) as the background.
+    Code vs asset: a noise shader is enough.
+
+-------------------------------------------------------------------------------
+C. NOT NEEDED (code only)
+-------------------------------------------------------------------------------
+
+C1. NOT NEEDED | tvWall: the room, shelf silhouette and haze (procedural)
+C2. NOT NEEDED | neonPortal: nested frames, fog core, ground (procedural)
+C3. NOT NEEDED | inkDiscs: the whole mode (fullscreen shader)
+C4. NOT NEEDED | crackedGlobe: shell, cracks, ring, lightning (shader and geometry)
+C5. NOT NEEDED | dotVortex: the whole mode (fullscreen shader)
+C6. NOT NEEDED | sparkPlume: particles and flow field (compute / instanced)
+C7. NOT NEEDED | warehouseHall changes (clip 14): edits to the existing mode, uses Kit A already delivered
+
+-------------------------------------------------------------------------------
+BLOCKED MODES (no build spec until their REQUIRED assets exist)
+-------------------------------------------------------------------------------
+metroCar   (clip 13) needs A4 (the only mode fully blocked)
+relicGlow  (clip 7)  blocked until all 12 models arrive (user confirmed the model route)
+lanternTree (clip 9) starts with the code tree; B2 only if it fails the check
