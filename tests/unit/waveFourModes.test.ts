@@ -11,7 +11,7 @@ import { FILM_SHOTS } from '../../src/modes/filmMode';
 import { ORB_RADII, stepOrbs, stepBlobs, type Blob } from '../../src/modes/lensModes';
 import { BOWTIE_SHAPES, bowtieBlend } from '../../src/modes/bilateralModes';
 import { BLOOM_CYCLE, BLOOM_TIMING, GROWTH_FORMS, bloomPhase, growForm } from '../../src/modes/bloomTouchMode';
-import { WAREHOUSE_GRADES } from '../../src/modes/kitModes';
+import { WAREHOUSE_STATES, warehouseBlackout } from '../../src/modes/kitModes';
 import { STAIR_COLOURS, UNDERGROUND_ANGLES } from '../../src/modes/interiorModes';
 import { SCULPTURES } from '../../src/modes/creatureKitModes';
 import { seededRandom } from '../../src/rendering/diagnostics';
@@ -31,7 +31,7 @@ const IDS = ['prismBowtie', 'blockBowtie', 'pongOrbs', 'candyOrb', 'moonPond', '
 describe('wave four modes', () => {
   it('registers all 29 spec modes after the figure modes, labelled experimental-wave4', () => {
     expect(waveFourModeDefinitions.map((mode) => mode.id).sort()).toEqual([...IDS].sort());
-    expect(modeDefinitions.slice(56, 85)).toEqual(waveFourModeDefinitions);
+    expect(modeDefinitions.slice(59, 88)).toEqual(waveFourModeDefinitions);
     for (const mode of waveFourModeDefinitions) {
       expect(mode.label.startsWith('<experimental-wave4> ')).toBe(true);
       expect(mode.backends).toEqual(['webgpu', 'webgl2']);
@@ -162,7 +162,10 @@ describe('wave four helpers', () => {
     }
   });
   it('cycles colours the spec lists', () => {
-    expect(WAREHOUSE_GRADES).toHaveLength(3);
+    expect(WAREHOUSE_STATES).toEqual(['windows', 'strip', 'shafts']);
+    expect(warehouseBlackout(0, false)).toEqual({ seconds: 0.2, level: 0.05 });
+    expect(warehouseBlackout(1, true).seconds).toBeCloseTo(0.4);
+    expect(warehouseBlackout(0.5, true).level).toBe(0.4);
     expect(STAIR_COLOURS).toHaveLength(5);
     expect(UNDERGROUND_ANGLES.length).toBeGreaterThanOrEqual(3);
   });

@@ -158,6 +158,9 @@ async function start() {
     });
     if (shutdown || generation !== epoch) { await candidate.dispose(); return; }
     engine = candidate;
+    // WebGPU-only modes (compute passes) are greyed out on the WebGL2 fallback.
+    for (const option of mode.options) option.disabled = !modeDefinitions.find((definition) => definition.id === option.value)?.backends.includes(candidate.backend);
+    if (mode.selectedOptions[0]?.disabled) mode.value = modeDefinitions[0].id;
     await candidate.setQuality(budget());
     candidate.setOutput(outputSettings());
     applyModeBloom();
@@ -191,7 +194,7 @@ function draw(delta: number) {
   const source = motion.checked ? calm.update(raw, delta) : raw;
   const response = envelope.update(source, delta, Number(sensitivity.value), motion.checked);
   if (!frozen && !paused && !motion.checked) hueClock += delta / Number(colorSpeed.value);
-  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked, spectrumMapping: spectrum.value as SpectrumMapping, sampleRate: audio.sampleRate }, Number(exposure.value), Number(bloom.value));
+  engine?.render({ time: frozen ? fixedTime : clock, delta: frozen || paused || motion.checked ? 0 : delta, audio: source, response, hue: (hueClock * 0.12) % 1, reducedMotion: motion.checked, reducedFlash: reducedFlash.checked, spectrumMapping: spectrum.value as SpectrumMapping, sampleRate: audio.sampleRate, sensitivity: Number(sensitivity.value) }, Number(exposure.value), Number(bloom.value));
 }
 function frame(now: number) {
   if (shutdown || failed || document.hidden) { loop.stop(); return; }

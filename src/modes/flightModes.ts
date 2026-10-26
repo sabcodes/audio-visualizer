@@ -1,13 +1,16 @@
 import * as THREE from 'three/webgpu';
-import { dot, mix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, uniform, vec2, vec3 } from 'three/tsl';
+import { dot, mix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, uniform, vec2, vec3, vertexColor } from 'three/tsl';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import type { ModeFrame, VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleStep, bandEnergies } from './shared';
 import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, setMorph, whenLoaded, type Figure } from './figures';
 import { createHits } from './hitPulse';
+import { createStormCanyon } from './stormCanyon';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
-import phoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
+import highPolyDragonUrl from '../assets/models/dragon_hd.glb?url';
+import phoenixUrl from '../assets/models/phoenix_webgpu.glb?url';
+import easternPhoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
 import spiresUrl from '../assets/models/sky_spires.glb?url';
 import emberUrl from '../assets/fx/ember.png?url';
 import smokeUrl from '../assets/fx/smoke.png?url';
@@ -188,13 +191,185 @@ export function createDragonMode(): VisualMode {
   };
 }
 
-// ---------------------------------------------------------------- Phoenix
+// ---------------------------------------------------------------- High-polygon dragon (Wave 4.5)
 
-const FEATHERS = 6, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
-/** Where each wingtip sits relative to its hand bone's world position at rest (the Fenghuang build has no sockets). */
+/** Camera angles around the high-polygon dragon: azimuth 0 is in front of it, 90° its left side; elevation in radians. */
+const DEG = Math.PI / 180;
+const SHOTS = [
+  { name: 'angled front top', az: 30, el: 35, distance: 15 },
+  { name: 'side', az: 90, el: 4, distance: 12 },
+  { name: 'top', az: 0, el: 80, distance: 14 },
+  { name: 'front', az: 0, el: 8, distance: 13 },
+  { name: 'angled side top', az: 120, el: 30, distance: 17 },
+  { name: 'behind', az: 180, el: 12, distance: 15 },
+  { name: 'low front', az: -25, el: -14, distance: 14 },
+  { name: 'angled side', az: -65, el: 18, distance: 16 },
+  { name: 'rear top', az: 150, el: 50, distance: 18 },
+].map((shot) => ({ az: shot.az * DEG, el: shot.el * DEG, distance: shot.distance }));
+const SHOT_SECONDS = 8;
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * The Wave 4.5 dragon: 34,784 tris, 77 joints. Its clips are authored as layers over a legs-only `flight_base`, so the
+ * crossfading one-shot player would unfold the legs; instead `flight_base` holds the legs folded and the wings, neck,
+ * tail, jaw and head are all driven from the music with the same wing stroke as the low-poly dragon.
+ * Bone axes (probed): +X raises either wing and lifts neck and tail, +Z swings neck right and tail left, +X pitches the head down.
+ */
+export function createHighPolyDragonMode(): VisualMode {
+  const sky = createStormCanyon();
+  const { scene, camera } = sky;
+  const fireLight = new THREE.PointLight(0xff7020, 0, 30, 1.5);
+  scene.add(fireLight);
+  const fire = createParticles(loadTexture(emberUrl), 700, { drag: 1.2, gravity: -2 });
+  const smoke = createParticles(loadTexture(smokeUrl), 240, { drag: 0.8, gravity: -1.5, additive: false });
+  scene.add(fire.object, smoke.object);
+
+  let dragon: Figure | undefined, player: ClipPlayer | undefined;
+  const overlay = new BoneOverlay(), tempo = new TempoTracker(), bands = new Float32Array(10);
+  let wings: { root: THREE.Object3D; elbow: THREE.Object3D; hand: THREE.Object3D }[] = [], neck: THREE.Object3D[] = [], tail: THREE.Object3D[] = [];
+  let head: THREE.Object3D | undefined, jaw: THREE.Object3D | undefined, mouthSocket: THREE.Object3D | undefined, eyes: THREE.MeshStandardMaterial | undefined;
+  let pulseExpand: { mesh: THREE.Mesh; index: number }[] = [], pulseContract: { mesh: THREE.Mesh; index: number }[] = [];
+  const models = whenLoaded([highPolyDragonUrl], ([model]) => {
+    dragon = instantiate(model);
+    // COLOR_0 holds part ids and distances, not colour; three.js would paint the dragon with it.
+    dragon.root.traverse((object) => (object as THREE.Mesh).geometry?.deleteAttribute('color'));
+    for (const material of dragon.materials.values()) { material.vertexColors = false; material.needsUpdate = true; }
+    scene.add(dragon.root);
+    player = new ClipPlayer(dragon.root, dragon.clips);
+    player.loop('flight_base', 0);
+    wings = (['Left', 'Right'] as const).map((side) => ({
+      root: overlay.track(dragon!.node(`${side}WingRoot`)), elbow: overlay.track(dragon!.node(`${side}WingElbow`)), hand: overlay.track(dragon!.node(`${side}WingHand`)),
+    }));
+    neck = [1, 2, 3, 4, 5, 6].map((i) => overlay.track(dragon!.node(`Neck${i}`)));
+    tail = Array.from({ length: 10 }, (_, i) => overlay.track(dragon!.node(`Tail${i + 1}`)));
+    head = overlay.track(dragon.node('Head')); jaw = overlay.track(dragon.node('Jaw')); mouthSocket = dragon.node('socket_mouth');
+    eyes = dragon.materials.get('emissive_eye');
+    pulseExpand = dragon.morphs('pulse_expand'); pulseContract = dragon.morphs('pulse_contract');
+  });
+
+  const roarGate = beatGate(10), breathGate = beatGate(9), bankGate = beatGate(8);
+  const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
+  const random = seededRandom(5), skyRandom = seededRandom(77);
+  const view = { ...SHOTS[0] }, hits = createHits({ decay: 0.35, interval: 0.22 });
+  let strokePower = 0, stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
+  return {
+    scene, camera,
+    ready: models.ready,
+    update(frame) {
+      resizeCamera(camera as THREE.PerspectiveCamera, frame.aspect);
+      sky.time.value = frame.time;
+      const step = settleStep(frame), { bounce, bass, loudness, impact } = frame.response, motion = frame.reducedMotion ? 0 : 1;
+      const scale = tempo.update(frame.time, frame.audio.onset, frame.delta);
+      bandEnergies(frame, bands.length, bands);
+      const speed = 14 + bounce * 26;
+      sky.fly(frame.delta * speed);
+      sky.update(frame.delta, speed, loudness, frame.reducedFlash ? 0 : impact, skyRandom);
+      sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
+      swell = approach(swell, bass, step, 0.08);
+      // Every hit starts a wing beat whose depth comes from how hard it hit and the bounce slider; between hits the
+      // dragon keeps beating at a pace set by the bounce, so the wings follow the music instead of waiting on onsets.
+      // The slider scales the wing beat directly (the response values clamp, so loud music would otherwise hide it).
+      const gain = ((frame.sensitivity ?? 1.8) / 1.8) ** 0.8;
+      hits.update(frame, 0.2);
+      if (frame.audio.onset) beats++;
+      if (hits.fired) { stroke = 0; strokePower = Math.min(1, 0.4 + impact * 0.5 + bounce * 0.5); }
+      else if (stroke >= 1 && (bounce > 0.03 || loudness > 0.08)) { stroke = 0; strokePower = Math.min(1, 0.3 + bounce * 0.7); }
+      stroke = Math.min(1, stroke + frame.delta * (1 + bounce * 1.1 * Math.min(1.4, gain)) * Math.max(1, scale));
+      if (dragon && player && head && jaw && mouthSocket) {
+        // Accents: fire when the music stays loud, a roar on a hard hit every so often, banks between phrases.
+        loudHold = loudness > 0.75 ? loudHold + frame.delta : 0;
+        if (loudHold > 0.8 && breathing < 0 && roaring < 0 && breathGate(frame.time, true)) breathing = 0;
+        else if (frame.audio.onset && impact > 0.8 && beats % 8 === 0 && breathing < 0 && roaring < 0 && roarGate(frame.time, true)) roaring = 0;
+        else if (frame.audio.onset && beats % 32 === 16 && bankGate(frame.time, true)) bankTarget = (beats % 64 === 16 ? 1 : -1) * 0.4;
+        bankTarget *= Math.exp(-step / 1.4); bank = approach(bank, bankTarget, step, 0.3);
+        overlay.reset();
+        player.update(frame.delta, scale);
+        const depth = Math.min(1.2, (0.08 + bounce * 0.45 + strokePower * 0.35) * gain), lift = wingStroke(stroke) * motion * depth, lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * depth;
+        for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.6); overlay.turn(wing.hand, lag * 0.4); }
+        wave += frame.delta * (2.5 + bounce * 3) * motion;
+        // A roar rears the neck up and opens the jaw; breathing fire does the same, a little longer.
+        const rearing = roaring >= 0 ? Math.sin(Math.min(1, roaring / 1.2) * Math.PI) : breathing >= 0 ? Math.sin(Math.min(1, breathing / 2.4) * Math.PI) : 0;
+        neck.forEach((bone, i) => overlay.turn(bone, (Math.sin(wave * 1.6 - i * 0.7) * swell * 0.07 + rearing * 0.07) * motion, 0, Math.sin(wave * 0.8 - i * 0.5) * 0.03 * motion));
+        overlay.turn(head, (swell * 0.12 - rearing * 0.2) * motion);
+        overlay.turn(jaw, rearing * 0.55 * motion);
+        tail.forEach((bone, i) => overlay.turn(bone, Math.sin(wave * 0.9 - i * 0.45) * 0.03 * motion, 0, Math.sin(wave * 1.2 - i * 0.55) * (0.03 + bands[i] * 0.09) * motion));
+        setMorph(pulseExpand, Math.min(1, swell) * motion); setMorph(pulseContract, Math.min(1, impact * 0.5) * (1 - swell) * motion);
+        dragon.root.position.set(Math.sin(frame.time * 0.31) * 2 * motion, Math.sin(frame.time * 0.5) * 1.2 * motion - lift * 0.8, 0);
+        dragon.root.rotation.set(-lift * 0.08, 0, (Math.sin(frame.time * 0.31) * 0.12 + bank) * motion);
+        if (roaring >= 0) { roaring += frame.delta * scale; if (roaring > 1.4) roaring = -1; }
+        if (breathing >= 0) {
+          breathing += frame.delta * scale;
+          const jet = breathing > 0.7 && breathing < 2.05;
+          if (jet) {
+            dragon.root.updateMatrixWorld(true);
+            mouthSocket.getWorldPosition(mouth); neck[5].getWorldPosition(throat);
+            aim.subVectors(mouth, throat).normalize();
+            for (let k = 0; k < 14; k++) {
+              const speed = 26 + random() * 14, spread = 0.18, hot = random();
+              fire.emit(mouth.x, mouth.y, mouth.z, (aim.x + (random() - 0.5) * spread) * speed, (aim.y + (random() - 0.5) * spread) * speed, (aim.z + (random() - 0.5) * spread) * speed,
+                0.6 + random() * 0.5, 1.4 + random() * 1.6, 2.2, 0.8 + hot * 0.9, 0.2 + hot * 0.4);
+            }
+            if (random() < 0.5) smoke.emit(mouth.x + aim.x * 12, mouth.y + aim.y * 12, mouth.z + aim.z * 12, aim.x * 6, aim.y * 6 + 2, aim.z * 6, 2.2, 5 + random() * 4, 0.12, 0.1, 0.1);
+          }
+          heat = approach(heat, jet ? 1 : 0, step, 0.12);
+          if (breathing > 2.6) breathing = -1;
+        } else heat = approach(heat, 0, step, 0.3);
+        fireLight.position.copy(dragon.root.position).add(centre.set(0, 1, 5));
+        fireLight.intensity = heat * 60;
+        if (eyes) eyes.emissiveIntensity = 0.6 + loudness * 2.4 + heat * 3;
+      }
+      fire.update(step); smoke.update(step);
+      // Camera: cut through a set of angles around the dragon, gliding between them, with a slow drift and a push-in on the bass.
+      const shot = SHOTS[Math.floor(frame.time / SHOT_SECONDS) % SHOTS.length], blend = step > 0 ? 1 - Math.exp(-step / 0.9) : 1;
+      view.az += wrapAngle(shot.az - view.az) * blend; view.el += (shot.el - view.el) * blend; view.distance += (shot.distance - view.distance) * blend;
+      const az = view.az + Math.sin(frame.time * 0.13) * 0.12 * motion, distance = view.distance - swell * 1.5 * motion;
+      centre.set(0, dragon?.root.position.y ?? 0, -0.5);
+      camera.position.set(centre.x + Math.sin(az) * Math.cos(view.el) * distance, centre.y + Math.sin(view.el) * distance, centre.z + Math.cos(az) * Math.cos(view.el) * distance);
+      camera.lookAt(centre.x, centre.y + 0.4, centre.z);
+    },
+    dispose() { models.dispose(); player?.dispose(); disposeScene(scene); },
+  };
+}
+
+// ---------------------------------------------------------------- Eastern Phoenix (Wave 4.5 WebGPU build)
+
+const PLUMAGE_STOPS = [new THREE.Color(0xffe27a), new THREE.Color(0xff8a2a), new THREE.Color(0xc81e1e)];
+
+/**
+ * The WebGPU Phoenix stores shader data in COLOR_0 (r: part, g: distance from the heart, b: span position,
+ * a: plumage gradient position), so three.js would render it as colour. Swap it for the gradient the alpha
+ * channel describes (core gold, mid orange, tip red) on the plumage, and drop it from the beak and eyes.
+ */
+function bakePlumage(figure: Figure) {
+  const colour = new THREE.Color();
+  figure.root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    const data = mesh.geometry?.getAttribute('color');
+    if (!data) return;
+    const plumage = (mesh.material as THREE.Material).name === 'emissive_plumage';
+    if (!plumage) { mesh.geometry.deleteAttribute('color'); return; }
+    const baked = new Float32Array(data.count * 3);
+    for (let i = 0; i < data.count; i++) {
+      const t = Math.min(1, Math.max(0, data.getW(i))) * 2, k = Math.min(1, Math.floor(t));
+      colour.copy(PLUMAGE_STOPS[k]).lerp(PLUMAGE_STOPS[k + 1], t - k).toArray(baked, i * 3);
+    }
+    mesh.geometry.setAttribute('color', new THREE.BufferAttribute(baked, 3));
+  });
+  for (const [name, material] of figure.materials) {
+    const lit = material as THREE.MeshStandardMaterial & { emissiveNode: unknown };
+    lit.vertexColors = name === 'emissive_plumage';
+    if (name === 'emissive_plumage') { lit.color.set(0xffffff); lit.emissiveNode = vertexColor().mul(0.6); }
+    lit.needsUpdate = true;
+  }
+}
+
+const STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
+/** Where each wingtip sits relative to its hand bone's world position at rest (this build has no sockets). */
 const WINGTIP_REACH = 1.55;
 
-export function createPhoenixMode(): VisualMode {
+/** The two builds differ in rig: the original Fenghuang has 6 primaries, 4-joint streamers and two-bone crests; the WebGPU build 4, 3 and one. */
+export function createPhoenixMode(build: 'western' | 'eastern' = 'western'): VisualMode {
+  const eastern = build === 'eastern', FEATHERS = eastern ? 6 : 4, TAIL_JOINTS = eastern ? [1, 2, 3, 4] : [1, 2, 3], FEATHER_MID = (FEATHERS - 1) / 2;
   const sky = flightScene({ zenith: new THREE.Color(0.005, 0.008, 0.03), horizon: new THREE.Color(0.08, 0.03, 0.12), sun: new THREE.Vector3(0.4, 0.25, -1),
     sunColour: new THREE.Color(0.6, 0.65, 1), clouds: new THREE.Color(0.06, 0.05, 0.12), fog: 0x08060f });
   const { scene, camera } = sky;
@@ -217,8 +392,9 @@ export function createPhoenixMode(): VisualMode {
   let wings: { upper: THREE.Object3D; fore: THREE.Object3D; feathers: THREE.Object3D[] }[] = [], tails: THREE.Object3D[][] = [], crest: THREE.Object3D[] = [];
   let tips: THREE.Object3D[] = [], chest: THREE.Object3D | undefined, glowing: { material: THREE.MeshStandardMaterial; base: number }[] = [];
   let neck: THREE.Object3D[] = [], squash: { mesh: THREE.Mesh; index: number }[] = [], stretch: { mesh: THREE.Mesh; index: number }[] = [];
-  const models = whenLoaded([phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
+  const models = whenLoaded([eastern ? easternPhoenixUrl : phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
     phoenix = instantiate(phoenixModel);
+    if (!eastern) bakePlumage(phoenix);
     scene.add(phoenix.root);
     player = new ClipPlayer(phoenix.root, phoenix.clips);
     player.loop('glide', 0);
@@ -228,9 +404,8 @@ export function createPhoenixMode(): VisualMode {
       fore: overlay.track(phoenix!.node(`wing_${side}_fore`)),
       feathers: Array.from({ length: FEATHERS }, (_, k) => overlay.track(phoenix!.node(`wing_${side}_feather_0${k + 1}`))),
     }));
-    tails = STREAMERS.map((s) => [1, 2, 3, 4].map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
-    // Each crest plume has two bones; the base one swings the whole plume (`crest_0k` alone names the mesh).
-    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}_01`)));
+    tails = STREAMERS.map((s) => TAIL_JOINTS.map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
+    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(eastern ? `crest_0${k}_01` : `crest_0${k}`)));
     chest = phoenix.node('chest');
     neck = [overlay.track(phoenix.node('neck_01')), overlay.track(phoenix.node('neck_02'))];
     // The torso's own pulse shapes: squash on a kick, stretch on the rebound.
@@ -300,7 +475,7 @@ export function createPhoenixMode(): VisualMode {
         wings.forEach((wing, side) => {
           overlay.turn(wing.upper, wingStroke(stroke) * power + spread * 0.35);
           overlay.turn(wing.fore, wingStroke(Math.max(0, stroke - 0.06)) * power * 0.6);
-          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - 2.5) * open * (side ? -1 : 1), 0));
+          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - FEATHER_MID) * open * (side ? -1 : 1), 0));
         });
         // The long neck nods into each hit and the head comes back up; the crest flicks after it.
         const nod = (kick * 0.22 - rebound * 0.08) * motion;

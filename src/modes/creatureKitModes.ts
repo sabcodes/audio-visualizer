@@ -26,7 +26,7 @@ export function smoothNormals(geometry: THREE.BufferGeometry) {
   normal.needsUpdate = true;
 }
 
-const tier = (budget: QualityBudget, high: number, balanced: number, low: number) => budget.particleScale >= 2 ? high : budget.particleScale >= 1 ? balanced : low;
+export const tier = (budget: QualityBudget, high: number, balanced: number, low: number) => budget.particleScale >= 2 ? high : budget.particleScale >= 1 ? balanced : low;
 
 /** A rough rock surface for caves and floors: dark stone with ridged noise in the colour and roughness. */
 function rockMaterial(base: THREE.ColorRepresentation, side: THREE.Side = THREE.FrontSide) {

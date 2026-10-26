@@ -24,9 +24,10 @@ import { createAttractorMode, createPhysarumMode, createSnowflakeMode } from './
 import { createAsciiMode, createLedAnalyzerMode, createTurntableMode } from './retroModes';
 import { createStormMode } from './stormMode';
 import { createGiantMode } from './giantMode';
-import { createDragonMode, createPhoenixMode } from './flightModes';
+import { createDragonMode, createHighPolyDragonMode, createPhoenixMode } from './flightModes';
 import { createCrowdMode } from './crowdMode';
 import { createBandMode } from './bandMode';
+import { createFirePhoenixMode } from './firePhoenixMode';
 import { createJellyMode } from './jellyMode';
 import { createBlockBowtieMode, createPrismBowtieMode } from './bilateralModes';
 import { createAnamorphicFlareMode, createEmberSmokeMode, createGrainSmokeMode, createHairVortexMode, createMirrorPlasmaMode } from './plasmaModes';
@@ -49,6 +50,12 @@ import { createCrtSpillMode, createTvWallMode } from './crtModes';
 import { createInkDiscsMode } from './inkDiscsMode';
 import { createCrackedGlobeMode, createDotVortexMode } from './orbModes';
 import { createSkyShardsMode } from './skyShardsMode';
+import { createSparkPlumeMode } from './sparkPlumeMode';
+import { createClawHandsMode } from './clawHandsMode';
+import { createRelicGlowMode } from './relicGlowMode';
+import { createLanternTreeMode } from './lanternTreeMode';
+import { createMetroCarMode } from './metroCarMode';
+import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -115,9 +122,12 @@ export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
 export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
-  definition('phoenix', '<EXPERIMENTAL> Phoenix', createPhoenixMode),
+  definition('highPolyDragon', '<experimental wave 4.5> High Polygon Dragon', createHighPolyDragonMode),
+  definition('phoenix', '<experimental wave 4.5> Eastern Phoenix', () => createPhoenixMode('eastern')),
+  definition('lowPolyWesternPhoenix', '<experimental wave 4.5> Low Poly Western Phoenix', () => createPhoenixMode('western')),
+  definition('westernPhoenix', '<experimental wave 4.5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
   definition('crowdMascot', '<EXPERIMENTAL> Crowd + Mascot', (budget) => createCrowdMode(budget)),
-  definition('skeletonBand', '<EXPERIMENTAL> Skeleton Band', createBandMode),
+  definition('skeletonBand', '<experimental wave 4.5> Skeleton Band', createBandMode),
   definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
 ];
 /** Wave 4 entries are labelled `<experimental-wave4> …` in the menu, at the user's request. */
@@ -161,6 +171,8 @@ export const waveFourModeDefinitions: readonly ModeDefinition[] = [
 const waveFive = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions) =>
   definition(id, `<experimental-wave5> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output);
 /** Paper stays cream: no halation tinting its bright areas orange. */
+/** A wave 5 mode that needs compute passes, so it is offered on native WebGPU only. */
+const waveFiveGpu = (...args: Parameters<typeof waveFive>): ModeDefinition => ({ ...waveFive(...args), backends: ['webgpu'] });
 const PAPER = { grain: 0.025, halation: 0, vignette: 0.15, soften: 0.03 };
 /**
  * Wave 5 (docs/superpowers/specs/2026-10-25-wave-five-modes-design.md): the code-only modes. The figure, hand,
@@ -173,6 +185,14 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('crackedGlobe', 'Cracked Globe (FS)', createCrackedGlobeMode, 'fullscreen', CLEAN),
   waveFive('dotVortex', 'Dot Vortex (FS)', createDotVortexMode, 'fullscreen', CLEAN),
   waveFive('skyShards', 'Sky Shards (FS)', createSkyShardsMode, 'fullscreen', FILM),
+  waveFive('neonPortal', 'Neon Portal (FS)', createNeonPortalMode, 'fullscreen', FILM),
+  waveFiveGpu('sparkPlume', 'Spark Plume', (budget) => createSparkPlumeMode(budget), 'scene', FILM),
+  waveFive('dreamAlley', 'Dream Alley (FS)', createDreamAlleyMode, 'fullscreen', FILM),
+  waveFive('clawHands', 'Claw Hands (FS)', createClawHandsMode, 'fullscreen', FILM),
+  waveFive('relicGlow', 'Relic Glow', createRelicGlowMode),
+  waveFive('lanternTree', 'Lantern Tree', (budget) => createLanternTreeMode(budget)),
+  waveFive('metroCar', 'Metro Car', createMetroCarMode),
+  waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
