@@ -123,7 +123,7 @@ export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
   definition('phoenix', '<EXPERIMENTAL> Eastern Phoenix', createPhoenixMode),
-  definition('westernPhoenix', '<EXPERIMENTAL> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
+  definition('westernPhoenix', '<experimental-wave5> Western Phoenix', (budget) => createFirePhoenixMode(budget)),
   definition('crowdMascot', '<EXPERIMENTAL> Crowd + Mascot', (budget) => createCrowdMode(budget)),
   definition('skeletonBand', '<EXPERIMENTAL> Skeleton Band', createBandMode),
   definition('jellyBlob', '<EXPERIMENTAL> Jelly Blob', createJellyMode),
