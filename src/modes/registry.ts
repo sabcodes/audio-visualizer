@@ -49,6 +49,8 @@ import { createCrtSpillMode, createTvWallMode } from './crtModes';
 import { createInkDiscsMode } from './inkDiscsMode';
 import { createCrackedGlobeMode, createDotVortexMode } from './orbModes';
 import { createSkyShardsMode } from './skyShardsMode';
+import { createSparkPlumeMode } from './sparkPlumeMode';
+import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -161,6 +163,8 @@ export const waveFourModeDefinitions: readonly ModeDefinition[] = [
 const waveFive = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions) =>
   definition(id, `<experimental-wave5> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output);
 /** Paper stays cream: no halation tinting its bright areas orange. */
+/** A wave 5 mode that needs compute passes, so it is offered on native WebGPU only. */
+const waveFiveGpu = (...args: Parameters<typeof waveFive>): ModeDefinition => ({ ...waveFive(...args), backends: ['webgpu'] });
 const PAPER = { grain: 0.025, halation: 0, vignette: 0.15, soften: 0.03 };
 /**
  * Wave 5 (docs/superpowers/specs/2026-10-25-wave-five-modes-design.md): the code-only modes. The figure, hand,
@@ -173,6 +177,10 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('crackedGlobe', 'Cracked Globe (FS)', createCrackedGlobeMode, 'fullscreen', CLEAN),
   waveFive('dotVortex', 'Dot Vortex (FS)', createDotVortexMode, 'fullscreen', CLEAN),
   waveFive('skyShards', 'Sky Shards (FS)', createSkyShardsMode, 'fullscreen', FILM),
+  waveFive('neonPortal', 'Neon Portal (FS)', createNeonPortalMode, 'fullscreen', FILM),
+  waveFiveGpu('sparkPlume', 'Spark Plume', (budget) => createSparkPlumeMode(budget), 'scene', FILM),
+  waveFive('dreamAlley', 'Dream Alley (FS)', createDreamAlleyMode, 'fullscreen', FILM),
+  waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {

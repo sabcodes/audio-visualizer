@@ -158,6 +158,9 @@ async function start() {
     });
     if (shutdown || generation !== epoch) { await candidate.dispose(); return; }
     engine = candidate;
+    // WebGPU-only modes (compute passes) are greyed out on the WebGL2 fallback.
+    for (const option of mode.options) option.disabled = !modeDefinitions.find((definition) => definition.id === option.value)?.backends.includes(candidate.backend);
+    if (mode.selectedOptions[0]?.disabled) mode.value = modeDefinitions[0].id;
     await candidate.setQuality(budget());
     candidate.setOutput(outputSettings());
     applyModeBloom();
