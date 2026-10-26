@@ -48,6 +48,8 @@ export function growSprout(count: number, random: () => number) {
       set.add(p.x, p.y, p.z, dir.x * 0.3, 1, dir.z * 0.3, base, birth);
     }
   }
+  // The rounding remainder goes to the stem.
+  while (!set.full) { const t = random(), y = t * height, [x, , z] = stemAt(y); set.add(x, y, z, 0, 1, 0, [x, y - 0.25, z], t * 0.88); }
   return set;
 }
 

@@ -10,13 +10,15 @@ const allIds = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'liss
   'windfield', 'blackMaze', 'starfallCanopy', 'silkThreads', 'chromeStreaks', 'signalNight', 'beaconRings', 'lightLeakFilm', 'warehouseHall', 'redStairwell',
   'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke',
   'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards', 'neonPortal', 'sparkPlume', 'dreamAlley', 'clawHands',
-  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer'];
+  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer',
+  'windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze',
+  'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack'];
 // Compute-shader modes are disabled in the picker on WebGL2.
 const gpuOnly = ['sparkPlume'];
 
-test('all 100 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 115 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(900000); // 100 modes twice under software rendering
+  test.setTimeout(900000); // 115 modes twice under software rendering
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
