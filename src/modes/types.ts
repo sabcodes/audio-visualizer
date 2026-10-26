@@ -22,6 +22,8 @@ export interface ModeFrame {
   /** How modes that read the spectrum as a frequency axis pick bins. */
   spectrumMapping: SpectrumMapping;
   sampleRate: number;
+  /** The bounce-sensitivity slider (0.25–4, default 1.8), for modes whose motion should scale with it directly. */
+  sensitivity?: number;
 }
 export interface VisualMode {
   scene: Scene;
