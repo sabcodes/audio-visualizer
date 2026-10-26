@@ -28,7 +28,7 @@ const GPU_ONLY = ['sparkPlume'];
 describe('wave five modes', () => {
   it('registers the spec modes after wave 4, labelled experimental-wave5', () => {
     expect(waveFiveModeDefinitions.map((mode) => mode.id)).toEqual(IDS);
-    expect(modeDefinitions.slice(85, 85 + IDS.length)).toEqual(waveFiveModeDefinitions);
+    expect(modeDefinitions.slice(86, 86 + IDS.length)).toEqual(waveFiveModeDefinitions);
     for (const mode of waveFiveModeDefinitions) {
       expect(mode.label.startsWith('<experimental-wave5> ')).toBe(true);
       expect(mode.backends, mode.id).toEqual(GPU_ONLY.includes(mode.id) ? ['webgpu'] : ['webgpu', 'webgl2']);

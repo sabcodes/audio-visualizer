@@ -91,8 +91,8 @@ describe('figure mode assets', () => {
 
 describe('figure modes', () => {
   it('register after wave three, labelled experimental, on both backends', () => {
-    expect(figureModeDefinitions.map((mode) => mode.id)).toEqual(['swampGiant', 'dragon', 'phoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob']);
-    expect(modeDefinitions.slice(50, 56)).toEqual(figureModeDefinitions);
+    expect(figureModeDefinitions.map((mode) => mode.id)).toEqual(['swampGiant', 'dragon', 'phoenix', 'westernPhoenix', 'crowdMascot', 'skeletonBand', 'jellyBlob']);
+    expect(modeDefinitions.slice(50, 57)).toEqual(figureModeDefinitions);
     expect(modeDefinitions.slice(40, 50)).toEqual(waveThreeModeDefinitions);
     for (const mode of figureModeDefinitions) { expect(mode.label.startsWith('<EXPERIMENTAL> ')).toBe(true); expect(mode.backends).toEqual(['webgpu', 'webgl2']); }
   });
