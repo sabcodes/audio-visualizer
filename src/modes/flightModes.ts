@@ -5,6 +5,7 @@ import type { ModeFrame, VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleStep, bandEnergies } from './shared';
 import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, setMorph, whenLoaded, type Figure } from './figures';
 import { createHits } from './hitPulse';
+import { createStormCanyon } from './stormCanyon';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
 import highPolyDragonUrl from '../assets/models/dragon_hd.glb?url';
@@ -199,14 +200,10 @@ export function createDragonMode(): VisualMode {
  * Bone axes (probed): +X raises either wing and lifts neck and tail, +Z swings neck right and tail left, +X pitches the head down.
  */
 export function createHighPolyDragonMode(): VisualMode {
-  const sky = flightScene({ zenith: new THREE.Color(0.012, 0.01, 0.035), horizon: new THREE.Color(0.16, 0.035, 0.03), sun: new THREE.Vector3(-0.6, 0.06, -1),
-    sunColour: new THREE.Color(0.9, 0.3, 0.1), clouds: new THREE.Color(0.055, 0.03, 0.04), fog: 0x0a0507 });
+  const sky = createStormCanyon();
   const { scene, camera } = sky;
-  const sunLight = new THREE.DirectionalLight(0xffa070, 2.2); sunLight.position.set(-30, 12, -40);
-  const fill = new THREE.HemisphereLight(0x6070a0, 0x200808, 0.9);
-  const front = new THREE.DirectionalLight(0xc0c8ff, 1.2); front.position.set(10, 8, 30);
   const fireLight = new THREE.PointLight(0xff7020, 0, 30, 1.5);
-  scene.add(sunLight, fill, front, fireLight);
+  scene.add(fireLight);
   const fire = createParticles(loadTexture(emberUrl), 700, { drag: 1.2, gravity: -2 });
   const smoke = createParticles(loadTexture(smokeUrl), 240, { drag: 0.8, gravity: -1.5, additive: false });
   scene.add(fire.object, smoke.object);
@@ -236,7 +233,7 @@ export function createHighPolyDragonMode(): VisualMode {
 
   const roarGate = beatGate(10), breathGate = beatGate(9), bankGate = beatGate(8);
   const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
-  const random = seededRandom(5);
+  const random = seededRandom(5), skyRandom = seededRandom(77);
   let stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
   return {
     scene, camera,
@@ -247,7 +244,9 @@ export function createHighPolyDragonMode(): VisualMode {
       const step = settleStep(frame), { bounce, bass, loudness, impact } = frame.response, motion = frame.reducedMotion ? 0 : 1;
       const scale = tempo.update(frame.time, frame.audio.onset, frame.delta);
       bandEnergies(frame, bands.length, bands);
-      sky.fly(frame.delta * (14 + bounce * 26));
+      const speed = 14 + bounce * 26;
+      sky.fly(frame.delta * speed);
+      sky.update(frame.delta, speed, loudness, frame.reducedFlash ? 0 : impact, skyRandom);
       sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
       swell = approach(swell, bass, step, 0.08);
       if (frame.audio.onset) { beats++; if (stroke >= 1 || stroke > 0.6) stroke = 0; }
