@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { dot, mix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, uniform, vec2, vec3 } from 'three/tsl';
+import { dot, mix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, uniform, vec2, vec3, vertexColor } from 'three/tsl';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import type { ModeFrame, VisualMode } from './types';
 import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleStep, bandEnergies } from './shared';
@@ -7,7 +7,7 @@ import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, lo
 import { createHits } from './hitPulse';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
-import phoenixUrl from '../assets/models/phoenix_fenghuang.glb?url';
+import phoenixUrl from '../assets/models/phoenix_webgpu.glb?url';
 import spiresUrl from '../assets/models/sky_spires.glb?url';
 import emberUrl from '../assets/fx/ember.png?url';
 import smokeUrl from '../assets/fx/smoke.png?url';
@@ -188,10 +188,40 @@ export function createDragonMode(): VisualMode {
   };
 }
 
-// ---------------------------------------------------------------- Eastern Phoenix (Fenghuang)
+// ---------------------------------------------------------------- Eastern Phoenix (Wave 4.5 WebGPU build)
 
-const FEATHERS = 6, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
-/** Where each wingtip sits relative to its hand bone's world position at rest (the Fenghuang build has no sockets). */
+const PLUMAGE_STOPS = [new THREE.Color(0xffe27a), new THREE.Color(0xff8a2a), new THREE.Color(0xc81e1e)];
+
+/**
+ * The WebGPU Phoenix stores shader data in COLOR_0 (r: part, g: distance from the heart, b: span position,
+ * a: plumage gradient position), so three.js would render it as colour. Swap it for the gradient the alpha
+ * channel describes (core gold, mid orange, tip red) on the plumage, and drop it from the beak and eyes.
+ */
+function bakePlumage(figure: Figure) {
+  const colour = new THREE.Color();
+  figure.root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    const data = mesh.geometry?.getAttribute('color');
+    if (!data) return;
+    const plumage = (mesh.material as THREE.Material).name === 'emissive_plumage';
+    if (!plumage) { mesh.geometry.deleteAttribute('color'); return; }
+    const baked = new Float32Array(data.count * 3);
+    for (let i = 0; i < data.count; i++) {
+      const t = Math.min(1, Math.max(0, data.getW(i))) * 2, k = Math.min(1, Math.floor(t));
+      colour.copy(PLUMAGE_STOPS[k]).lerp(PLUMAGE_STOPS[k + 1], t - k).toArray(baked, i * 3);
+    }
+    mesh.geometry.setAttribute('color', new THREE.BufferAttribute(baked, 3));
+  });
+  for (const [name, material] of figure.materials) {
+    const lit = material as THREE.MeshStandardMaterial & { emissiveNode: unknown };
+    lit.vertexColors = name === 'emissive_plumage';
+    if (name === 'emissive_plumage') { lit.color.set(0xffffff); lit.emissiveNode = vertexColor().mul(0.6); }
+    lit.needsUpdate = true;
+  }
+}
+
+const FEATHERS = 4, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
+/** Where each wingtip sits relative to its hand bone's world position at rest (this build has no sockets). */
 const WINGTIP_REACH = 1.55;
 
 export function createPhoenixMode(): VisualMode {
@@ -219,6 +249,7 @@ export function createPhoenixMode(): VisualMode {
   let neck: THREE.Object3D[] = [], squash: { mesh: THREE.Mesh; index: number }[] = [], stretch: { mesh: THREE.Mesh; index: number }[] = [];
   const models = whenLoaded([phoenixUrl, spiresUrl], ([phoenixModel, spires]) => {
     phoenix = instantiate(phoenixModel);
+    bakePlumage(phoenix);
     scene.add(phoenix.root);
     player = new ClipPlayer(phoenix.root, phoenix.clips);
     player.loop('glide', 0);
@@ -228,9 +259,8 @@ export function createPhoenixMode(): VisualMode {
       fore: overlay.track(phoenix!.node(`wing_${side}_fore`)),
       feathers: Array.from({ length: FEATHERS }, (_, k) => overlay.track(phoenix!.node(`wing_${side}_feather_0${k + 1}`))),
     }));
-    tails = STREAMERS.map((s) => [1, 2, 3, 4].map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
-    // Each crest plume has two bones; the base one swings the whole plume (`crest_0k` alone names the mesh).
-    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}_01`)));
+    tails = STREAMERS.map((s) => [1, 2, 3].map((j) => overlay.track(phoenix!.node(`tail_${s}_0${j}`))));
+    crest = [1, 2, 3].map((k) => overlay.track(phoenix!.node(`crest_0${k}`)));
     chest = phoenix.node('chest');
     neck = [overlay.track(phoenix.node('neck_01')), overlay.track(phoenix.node('neck_02'))];
     // The torso's own pulse shapes: squash on a kick, stretch on the rebound.
@@ -300,7 +330,7 @@ export function createPhoenixMode(): VisualMode {
         wings.forEach((wing, side) => {
           overlay.turn(wing.upper, wingStroke(stroke) * power + spread * 0.35);
           overlay.turn(wing.fore, wingStroke(Math.max(0, stroke - 0.06)) * power * 0.6);
-          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - 2.5) * open * (side ? -1 : 1), 0));
+          wing.feathers.forEach((feather, k) => overlay.turn(feather, wingStroke(Math.max(0, stroke - 0.1 - k * 0.025)) * power * 0.4, (k - 1.5) * open * (side ? -1 : 1), 0));
         });
         // The long neck nods into each hit and the head comes back up; the crest flicks after it.
         const nod = (kick * 0.22 - rebound * 0.08) * motion;
