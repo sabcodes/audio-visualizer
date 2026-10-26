@@ -56,7 +56,8 @@ test('all 115 modes render silently then during Ghost playback and seeking @hard
       await page.waitForTimeout(400);
       await expect(page.locator('#status'), `playback: ${id}`).toHaveAttribute('data-state', 'ready');
     }
-    await page.locator('#play-btn').click();
+    // With 115 modes the playback pass can outlast the rest of the track, so pause only if it is still playing.
+    if (await page.locator('#audio-status').getAttribute('data-state') === 'playing') await page.locator('#play-btn').click();
     await page.locator('#seek-slider').fill('120');
     await page.locator('#play-btn').click();
     await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'playing');
