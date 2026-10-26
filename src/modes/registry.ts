@@ -56,6 +56,7 @@ import { createRelicGlowMode } from './relicGlowMode';
 import { createLanternTreeMode } from './lanternTreeMode';
 import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
+import { createWindowGridMode } from './windowGridMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -194,12 +195,24 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('metroCar', 'Metro Car', createMetroCarMode),
   waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
+/** Wave 6 entries are labelled `<experimental-wave6> …` in the menu; `bloom` sets the slider for modes with their own glow rules. */
+const waveSix = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions, bloom?: number): ModeDefinition =>
+  ({ ...definition(id, `<experimental-wave6> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output), ...(bloom === undefined ? {} : { bloom }) });
+/** Soft focus for the facade: the clip is a long-lens phone shot. */
+const SOFT = { grain: 0.05, halation: 0, vignette: 0.4, soften: 0.28 };
+/**
+ * Wave 6 (docs/superpowers/specs/2026-10-26-wave-six-modes-design.md): code-only modes. Night Rider (#7) waits on
+ * supplied assets and Blob Track (#13) is a separate task.
+ */
+export const waveSixModeDefinitions: readonly ModeDefinition[] = [
+  waveSix('windowGrid', 'Window Grid', createWindowGridMode, 'fullscreen', SOFT),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...waveFourModeDefinitions, ...waveFiveModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...waveFourModeDefinitions, ...waveFiveModeDefinitions, ...waveSixModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();
