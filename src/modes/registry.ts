@@ -53,6 +53,7 @@ import { createSparkPlumeMode } from './sparkPlumeMode';
 import { createClawHandsMode } from './clawHandsMode';
 import { createRelicGlowMode } from './relicGlowMode';
 import { createLanternTreeMode } from './lanternTreeMode';
+import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
@@ -186,6 +187,7 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('clawHands', 'Claw Hands (FS)', createClawHandsMode, 'fullscreen', FILM),
   waveFive('relicGlow', 'Relic Glow', createRelicGlowMode),
   waveFive('lanternTree', 'Lantern Tree', (budget) => createLanternTreeMode(budget)),
+  waveFive('metroCar', 'Metro Car', createMetroCarMode),
   waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
