@@ -57,6 +57,7 @@ import { createLanternTreeMode } from './lanternTreeMode';
 import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
 import { createWindowGridMode } from './windowGridMode';
+import { createToonBlazeMode } from './toonBlazeMode';
 import { createSlotHallMode } from './slotHallMode';
 import { createHeatShoalMode } from './heatShoalMode';
 import { createScanSproutMode } from './scanSproutMode';
@@ -222,6 +223,8 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('scanSprout', 'Scan Sprout', (budget) => createScanSproutMode(budget), 'scene', CLEAN),
   waveSix('heatShoal', 'Heat Shoal', (budget) => createHeatShoalMode(budget)),
   waveSix('slotHall', 'Slot Hall', createSlotHallMode),
+  // Cel shading stays crisp: the bloom slider drops to zero for it.
+  waveSix('toonBlaze', 'Toon Blaze', (budget) => createToonBlazeMode(budget), 'scene', { grain: 0.03, halation: 0, vignette: 0.3, soften: 0, aberration: 0 }, 0),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
