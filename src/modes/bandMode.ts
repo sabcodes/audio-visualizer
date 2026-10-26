@@ -90,19 +90,22 @@ export function createBandMode(): VisualMode {
       scene.add(figure.root);
       const eyes = figure.materials.get('emissive_eye');
       eyes?.emissive.setHex(tint);
-      // Instruments ride on the bones that hold them (the file's hand sockets are offset, so the bones are used).
+      // Instruments ride on the bones that hold them; the clips were solved against these holds (skeleton v4.4 README).
       if (role === 'guitar' || role === 'bass') {
         const axe = instrument(instruments, role === 'guitar' ? 'guitar' : 'bass_guitar');
-        // Slung across the hips, neck up toward the player's left (+X), body in front of the pelvis.
-        const sling = new THREE.Matrix4().compose(new THREE.Vector3(0.12, 1.05, 0.2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -1.05)), new THREE.Vector3(1, 1, 1))
-          .multiply(new THREE.Matrix4().makeTranslation(0, 0.45, 0));
+        // The instrument's origin is its fretting grip: at (0.12, 1.08, 0.26), neck 36.5° up toward the player's left (+X).
+        const sling = new THREE.Matrix4().compose(new THREE.Vector3(0.12, 1.08, 0.26), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -(Math.PI / 2 - THREE.MathUtils.degToRad(36.5)))), new THREE.Vector3(1, 1, 1));
         holdOn(figure.root, figure.node('Spine'), axe, sling);
         axe.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.isMesh && (mesh.material as THREE.Material).name === 'emissive_strings') glow.strings.push(mesh.material as THREE.MeshStandardMaterial); });
       }
       if (role === 'drums') {
-        for (const [side, hand] of [['L', 'LeftHand'], ['R', 'RightHand']] as const) {
-          const stick = instrument(instruments, `drumstick_${side}`), sx = side === 'L' ? 0.62 : -0.62;
-          holdOn(figure.root, figure.node(hand), stick, new THREE.Matrix4().compose(new THREE.Vector3(sx, 0.6, 0.05), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, side === 'L' ? -0.4 : 0.4, 0)), new THREE.Vector3(1, 1, 1)));
+        // Sticks grip at the hand sockets. The drum clips pitch the hands down, so the stick's axis is set in the
+        // socket's frame: forward, slightly down and in toward the snare at each hand's snare hit.
+        for (const side of ['L', 'R'] as const) {
+          const stick = instrument(instruments, `drumstick_${side}`);
+          stick.position.set(0, 0, 0);
+          stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(side === 'L' ? 0.39 : -0.39, -0.785, -0.48).normalize());
+          figure.node(`socket_hand_${side}`).add(stick);
         }
       }
       const player = new ClipPlayer(figure.root, figure.clips);

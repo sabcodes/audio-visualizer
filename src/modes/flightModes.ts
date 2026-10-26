@@ -188,7 +188,7 @@ export function createDragonMode(): VisualMode {
   };
 }
 
-// ---------------------------------------------------------------- Phoenix
+// ---------------------------------------------------------------- Eastern Phoenix (Fenghuang)
 
 const FEATHERS = 6, STREAMERS = ['A', 'B', 'C', 'D', 'E'] as const;
 /** Where each wingtip sits relative to its hand bone's world position at rest (the Fenghuang build has no sockets). */
