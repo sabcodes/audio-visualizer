@@ -8,6 +8,26 @@ or whether a made asset would look closer to the reference clip. The user's stan
 is to build shapes in code when a supplied model is weak, so OPTIONAL means "code first, asset only if it looks closer".
 
 -------------------------------------------------------------------------------
+STATUS 2026-10-26: NOTHING IS REQUIRED. Every wave 5 mode is built in code.
+-------------------------------------------------------------------------------
+On 2026-10-26 the user said "Instead of relying on models/assets", so the modes this list
+marked REQUIRED or BLOCKED were built in code too (branch feat/wave-5-figures):
+  relicGlow   all 12 objects built from primitives (this replaces the earlier "3D model route, no code stand-ins")
+  metroCar    a detailed code-built endless train (doors, benches, poles, straps, posters, gangway)
+  lanternTree a procedurally grown tree; dreamAlley, sparkPlume, slitDancer, neonPortal use the code body in bodyModel.ts
+  clawHands   the raymarched code hand with claws; warehouseHall is now code-built too (Kit A no longer used)
+
+Only OPTIONAL upgrades remain: commission one only if the code version looks wrong beside its clip.
+In order of likely payoff:
+  1. relicGlow (A3): the three hardest silhouettes in code are the PlayStation controller, the sneaker
+     and the damaged hatchback. Low-poly, one .glb per object; screens and logos textured.
+  2. lanternTree (B2): a hand-built deciduous tree with leaf cards, leaf_cluster_NN nodes for lights.
+  3. crtSpill (B1): a CRT model (14" and 27") for the hero TV seen at 35 degrees (back taper, vents, knobs).
+  4. Dancer animations (B4) and dreamAlley runner (A1): only if the code silhouettes read too stiff.
+Not worth an asset: metroCar (A4), clawHands (B5), crackedGlobe rocks (B6), inkDiscs paper (B7), ring fixture (B3).
+The sections below are the original 2026-10-25 list, kept for reference.
+
+-------------------------------------------------------------------------------
 A. REQUIRED (the mode cannot be built well without these)
 -------------------------------------------------------------------------------
 
