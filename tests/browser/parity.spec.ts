@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajous', 'boids', 'fftTunnel', 'kaleidoPlane', 'city', 'glitchRing', 'vjRings', 'neonKaleido', 'starTunnel', 'bloomTunnel', 'glitchFX', 'godrays',
+const allIds = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajous', 'boids', 'fftTunnel', 'kaleidoPlane', 'city', 'glitchRing', 'vjRings', 'neonKaleido', 'starTunnel', 'bloomTunnel', 'glitchFX', 'godrays',
   'epicycles', 'polyhedra', 'pendulumWave', 'voronoi', 'inkMarble', 'aurora', 'ridgeline', 'synthwave', 'galaxy', 'robot', 'neonCity',
   'kraken', 'torusKnot', 'chladni', 'metaballs', 'ocean', 'eventHorizon', 'fireworks', 'abyss', 'disco', 'ferrofluid', 'arena',
   'reactionDiffusion', 'feedback', 'curlFlow', 'attractor', 'physarum', 'snowflake', 'turntable', 'ascii', 'ledAnalyzer', 'storm',
@@ -9,11 +9,14 @@ const ids = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'lissajo
   'prismBowtie', 'blockBowtie', 'pongOrbs', 'candyOrb', 'moonPond', 'liquidChrome', 'mirrorPlasma', 'grainSmoke', 'anamorphicFlare', 'hairVortex',
   'windfield', 'blackMaze', 'starfallCanopy', 'silkThreads', 'chromeStreaks', 'signalNight', 'beaconRings', 'lightLeakFilm', 'warehouseHall', 'redStairwell',
   'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke',
-  'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards'];
+  'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards', 'neonPortal', 'sparkPlume', 'dreamAlley', 'clawHands',
+  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer'];
+// Compute-shader modes are disabled in the picker on WebGL2.
+const gpuOnly = ['sparkPlume'];
 
-test('all 91 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 99 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(900000); // 91 modes twice under software rendering
+  test.setTimeout(900000); // 99 modes twice under software rendering
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
@@ -24,6 +27,8 @@ test('all 91 modes render silently then during Ghost playback and seeking @hardw
   await expect(page.locator('#status')).toContainText(backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility');
   await expect(page.locator('#reduced-flash')).toBeChecked();
   await page.locator('#hide').click();
+  const ids = backend === 'webgpu' ? allIds : allIds.filter((id) => !gpuOnly.includes(id));
+  if (backend === 'webgl2') for (const id of gpuOnly) await expect(page.locator(`#mode option[value="${id}"]`)).toHaveJSProperty('disabled', true);
   // WebGL2 must say timestamps are unavailable rather than report zeros.
   await expect(page.locator('#diagnostics')).toHaveText(backend === 'webgpu' ? /gpu (\d+\.\d+ ms|n\/a)/ : /gpu n\/a/);
   for (const id of ids) {

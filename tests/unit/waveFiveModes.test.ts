@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { uniform } from 'three/tsl';
 import { modeDefinitions, waveFiveModeDefinitions } from '../../src/modes/registry';
 import { tvWallLayout } from '../../src/modes/crtModes';
 import { INK_DISCS, INK_LAYOUTS } from '../../src/modes/inkDiscsMode';
 import { GLOBE_CYCLE, globePhase } from '../../src/modes/orbModes';
 import { SKY_LOOKS } from '../../src/modes/skyShardsMode';
+import { BODY_SEGMENTS, DANCE_MOVES, poseBody, runPose } from '../../src/modes/bodyModel';
+import { ALLEY_SLABS, alleyLayout } from '../../src/modes/figureShaderModes';
+import { CLAW_GESTURES, CLAW_LAYOUTS } from '../../src/modes/clawHandsMode';
+import { RELICS } from '../../src/modes/relicGlowMode';
+import { growTree } from '../../src/modes/lanternTreeMode';
+import { METRO, metroShot } from '../../src/modes/metroCarMode';
 import { presetBudget } from '../../src/rendering/quality';
 import type { ModeFrame } from '../../src/modes/types';
 
@@ -13,15 +20,18 @@ const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectr
   audio: { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 2 },
 });
 
-const IDS = ['crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards'];
+const IDS = ['crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards', 'neonPortal', 'sparkPlume', 'dreamAlley', 'clawHands',
+  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer'];
+// Compute-shader modes need native WebGPU; everything else also runs on WebGL2.
+const GPU_ONLY = ['sparkPlume'];
 
 describe('wave five modes', () => {
-  it('registers the code-only spec modes after wave 4, labelled experimental-wave5', () => {
+  it('registers the spec modes after wave 4, labelled experimental-wave5', () => {
     expect(waveFiveModeDefinitions.map((mode) => mode.id)).toEqual(IDS);
-    expect(modeDefinitions.slice(85, 91)).toEqual(waveFiveModeDefinitions);
+    expect(modeDefinitions.slice(85, 85 + IDS.length)).toEqual(waveFiveModeDefinitions);
     for (const mode of waveFiveModeDefinitions) {
       expect(mode.label.startsWith('<experimental-wave5> ')).toBe(true);
-      expect(mode.backends).toEqual(['webgpu', 'webgl2']);
+      expect(mode.backends, mode.id).toEqual(GPU_ONLY.includes(mode.id) ? ['webgpu'] : ['webgpu', 'webgl2']);
     }
   });
   it('each mode builds, survives silence, a 130 BPM kick pattern, loud onsets and a stalled frame, then disposes', () => {
@@ -81,5 +91,51 @@ describe('wave five helpers', () => {
   it('offers eight panel skies plus the base dusk', () => {
     expect(SKY_LOOKS).toHaveLength(9);
     expect(SKY_LOOKS.at(-1)!.name).toBe('base dusk');
+  });
+  it('poses every body segment finitely for each dance move and the run cycle', () => {
+    for (const pose of [...Object.values(DANCE_MOVES), runPose(0.3, 1)]) {
+      const posed = poseBody(pose, { skirt: true, hair: true }, 0.4, 2);
+      expect(posed.segments).toHaveLength(BODY_SEGMENTS);
+      for (const [a, r1, b, r2] of posed.segments) for (const v of [a.x, a.y, a.z, b.x, b.y, b.z, r1, r2]) expect(Number.isFinite(v)).toBe(true);
+      expect(posed.head.y).toBeGreaterThan(1.2);
+    }
+  });
+  it('builds seven alley slabs per layout with the tower last', () => {
+    for (let v = 0; v < 4; v++) {
+      const slabs = alleyLayout(v);
+      expect(slabs).toHaveLength(ALLEY_SLABS);
+      expect(slabs.at(-1)!.away).toEqual([0, 0, 0]);
+    }
+  });
+  it('gives the claw hands at least six gestures and four layouts, X-cross first', () => {
+    expect(CLAW_GESTURES.length).toBeGreaterThanOrEqual(6);
+    expect(CLAW_LAYOUTS).toHaveLength(4);
+    expect(Math.sign(CLAW_LAYOUTS[0][0][2])).toBe(-Math.sign(CLAW_LAYOUTS[0][1][2]));
+  });
+  it('builds twelve distinct relics in code', () => {
+    expect(RELICS).toHaveLength(12);
+    expect(new Set(RELICS.map((relic) => relic.name)).size).toBe(12);
+    for (const relic of RELICS) {
+      const { object, act } = relic.make(uniform(0));
+      let meshes = 0; object.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) meshes++; });
+      expect(meshes, relic.name).toBeGreaterThan(0);
+      act(1.5, 0.8);
+    }
+  });
+  it('grows a branching tree whose twigs spread wider than the trunk', () => {
+    const { branches, tips } = growTree(5, 3);
+    expect(branches[0].depth).toBe(0);
+    expect(tips.length).toBeGreaterThan(20);
+    expect(Math.max(...tips.map((t) => Math.hypot(t.x, t.z)))).toBeGreaterThan(3);
+  });
+  it('glides the metro camera one car per loop and rolls a full turn, so the loop is seamless', () => {
+    const start = metroShot(0), end = metroShot(METRO.loop - 1e-6);
+    expect(start.z - end.z).toBeCloseTo(METRO.pitch, 3);
+    expect(end.roll).toBeCloseTo(Math.PI * 2, 3);
+    expect(start.roll).toBe(0);
+    expect(metroShot(METRO.loop / 2).roll).toBeCloseTo(Math.PI);
+    expect(METRO.sections.length * 2).toBe(METRO.length);
+    expect(METRO.pitch).toBeCloseTo(METRO.length + METRO.gangway);
+    expect(metroShot(METRO.loop + 1).z).toBeCloseTo(metroShot(1).z);
   });
 });
