@@ -10,7 +10,7 @@ const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectr
   audio: { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 2 },
 });
 
-const IDS = ['windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze', 'glassHands', 'glowTide', 'eyeStage', 'nightParlour'];
+const IDS = ['windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze', 'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack'];
 // Compute-shader modes need native WebGPU; everything else also runs on WebGL2.
 const GPU_ONLY: string[] = [];
 
