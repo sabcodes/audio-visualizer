@@ -71,6 +71,7 @@ import { createGlyphBloomMode } from './glyphBloomMode';
 import { createFogTowersMode } from './fogTowersMode';
 import { createNeonOverlookMode } from './neonOverlookMode';
 import { createCloudTracerMode } from './cloudTracerMode';
+import { createGoldenGateMode } from './goldenGateMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -235,6 +236,8 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('eyeStage', 'Eye Stage', createEyeStageMode, 'fullscreen'),
   waveSix('nightParlour', 'Night Parlour', (budget) => createNightParlourMode(budget), 'scene', { grain: 0.04, halation: 0.35, vignette: 0.5, soften: 0.1 }),
   waveSix('blobTrack', 'Blob Track', createBlobTrackMode, 'fullscreen'),
+  // The user's real-scale bridge model at night; a light film finish so it reads as footage.
+  waveSix('goldenGate', 'Golden Gate Bridge', (budget) => createGoldenGateMode(budget), 'scene', { grain: 0.04, halation: 0.3, vignette: 0.45, soften: 0.05 }),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {

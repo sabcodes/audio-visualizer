@@ -12,7 +12,7 @@ const allIds = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'liss
   'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards', 'neonPortal', 'sparkPlume', 'dreamAlley', 'clawHands',
   'relicGlow', 'lanternTree', 'metroCar', 'slitDancer',
   'windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze',
-  'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack'];
+  'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack', 'goldenGate'];
 // Compute-shader modes are disabled in the picker on WebGL2.
 const gpuOnly = ['sparkPlume'];
 
