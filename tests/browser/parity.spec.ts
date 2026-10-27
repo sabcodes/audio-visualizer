@@ -10,13 +10,15 @@ const allIds = ['circle', 'spiral', 'star', 'cube', 'particles', 'errors', 'liss
   'windfield', 'blackMaze', 'starfallCanopy', 'silkThreads', 'chromeStreaks', 'signalNight', 'beaconRings', 'lightLeakFilm', 'warehouseHall', 'redStairwell',
   'underground', 'endlessStairs', 'templeDescent', 'lavaGolem', 'lightForest', 'redCrystalHall', 'poleSparks', 'bloomTouch', 'emberSmoke',
   'crtSpill', 'tvWall', 'inkDiscs', 'crackedGlobe', 'dotVortex', 'skyShards', 'neonPortal', 'sparkPlume', 'dreamAlley', 'clawHands',
-  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer'];
+  'relicGlow', 'lanternTree', 'metroCar', 'slitDancer',
+  'windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze',
+  'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack'];
 // Compute-shader modes are disabled in the picker on WebGL2.
 const gpuOnly = ['sparkPlume'];
 
-test('all 100 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
+test('all 115 modes render silently then during Ghost playback and seeking @hardware', async ({ page }, info) => {
   test.skip(!['compatibility', 'hardware-webgpu'].includes(info.project.name));
-  test.setTimeout(900000); // 100 modes twice under software rendering
+  test.setTimeout(1800000); // 115 modes twice under software rendering; the point-cloud modes are slow there
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
@@ -54,7 +56,8 @@ test('all 100 modes render silently then during Ghost playback and seeking @hard
       await page.waitForTimeout(400);
       await expect(page.locator('#status'), `playback: ${id}`).toHaveAttribute('data-state', 'ready');
     }
-    await page.locator('#play-btn').click();
+    // With 115 modes the playback pass can outlast the rest of the track, so pause only if it is still playing.
+    if (await page.locator('#audio-status').getAttribute('data-state') === 'playing') await page.locator('#play-btn').click();
     await page.locator('#seek-slider').fill('120');
     await page.locator('#play-btn').click();
     await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'playing');

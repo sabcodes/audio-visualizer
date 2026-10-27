@@ -9,9 +9,9 @@ import { presetBudget, type QualityBudget } from '../rendering/quality';
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 const hash = (p: V2) => fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453));
-const HAZE = vec3(0.02, 0.07, 0.12);
+export const HAZE = vec3(0.02, 0.07, 0.12);
 // Sign palette in scene-linear: magenta, cyan, acid green, amber, violet, red.
-const SIGN_COLOURS = [[2.6, 0.25, 1.4], [0.2, 2.2, 2.6], [0.6, 2.6, 0.5], [2.8, 1.2, 0.2], [1.3, 0.4, 2.8], [2.8, 0.2, 0.25]];
+export const SIGN_COLOURS = [[2.6, 0.25, 1.4], [0.2, 2.2, 2.6], [0.6, 2.6, 0.5], [2.8, 1.2, 0.2], [1.3, 0.4, 2.8], [2.8, 0.2, 0.25]];
 const LAYERS = [
   { count: 22, near: 90, far: 190, spread: 340, width: [16, 32], height: [90, 240] },
   { count: 70, near: 220, far: 420, spread: 640, width: [12, 28], height: [60, 300] },

@@ -1,0 +1,75 @@
+WAVE 6 ASSET LIST
+=================
+Companion to 2026-10-26-wave-six-modes-design.md. No specs here, only what is needed.
+Each line: [REQUIRED | OPTIONAL | NOT NEEDED] | kind (3D model, 3D animation, 2D image) | role (MAIN visual asset | PROP) | belongs to (mode id, wave 6 #)
+
+-------------------------------------------------------------------------------
+BATCH 1 (2026-10-26): NOTHING IS REQUIRED. All three modes can be built in code with WebGPU/TSL.
+-------------------------------------------------------------------------------
+
+OPTIONAL | 3D model | PROP | nightParlour (wave 6 #1)
+  Upholstered armchairs: a squat leather club chair and a tall wingback with a round footstool.
+  Why optional: soft, sagging fabric shapes are the hardest part of the room to make look right in code.
+  Code version uses rounded boxes and bent planes; commission only if it looks stiff beside the reference.
+
+OPTIONAL | 3D model | PROP | nightParlour (wave 6 #1)
+  Gramophone with petal horn, and a stained-glass table lamp.
+  Why optional: both are lathe shapes code handles well; only worth it if the detail looks thin.
+
+OPTIONAL | 2D image | PROP | nightParlour (wave 6 #1)
+  Fabric/wallpaper tile set (floral needlepoint, braided rug, faded damask wallpaper), seamless, 512-1024 px.
+  Why optional: procedural patterns are planned; a painted tile set would read warmer.
+
+NOT NEEDED | 3D model | MAIN | slotHall (wave 6 #2)
+  Slot machines, stools, stanchions: low-poly by design, code is enough.
+
+OPTIONAL | 2D image | PROP | slotHall (wave 6 #2)
+  Low-res pixel textures (64-128 px): carpet starburst, wallpaper diamonds, reel symbols, "7" emblem.
+  Why optional: procedural versions sampled with nearest filtering get close; hand-pixelled ones
+  would be more authentic to the retro look.
+
+NOT NEEDED | any | MAIN | windowGrid (wave 6 #3)
+  Facade and windows are a grid of instanced quads plus a concrete shader.
+
+-------------------------------------------------------------------------------
+BATCH 2 (2026-10-26): nightRider #7 waits on assets the USER WILL SUPPLY; blobTrack #13 needs 2D images (we find them).
+Everything else can be built in code; the rest are OPTIONAL upgrades.
+-------------------------------------------------------------------------------
+
+REQUIRED | 3D model + 3D animation | MAIN | nightRider (wave 6 #7)  ** user is getting these; no build until they arrive **
+  Original anime-style rider (helmet, jacket) and a 90s sport bike, toon-shaded, rigged together.
+  Clips: ride loop, lean left/right, wheelie/accelerate, idle sitting, dismount and stand.
+  Our own character design; do not copy the reference artist's rider or bike livery.
+
+REQUIRED | 2D image | MAIN | nightRider (wave 6 #7)
+  4-6 painted anime-style background plates: neon street, overpass, shop front, dusk city overlook.
+  Alternative: reuse Neon Megacity in 3D for backgrounds (less faithful to the 2D painted look).
+
+REQUIRED | 2D image | MAIN | blobTrack (wave 6 #13)  ** we source these (user, 2026-10-26) **
+  2-4 free-licence photos the boxes are drawn over, plus a webcam option in the mode.
+  DONE 2026-10-26: 4 photos (Unsplash License) in src/assets/blob-track/, 1920 px long side, credits and
+  licence terms in src/assets/blob-track/LICENSE.md: butterfly-blue, butterfly-orange, blossom-branch, blossom-bee.
+  (The second blue-butterfly candidate was Unsplash+ (paid), so it was swapped for the orange Gulf Fritillary.)
+  The blossom photos are full-frame, not cut-outs: the mode darkens/masks the background in code for the bouquet look.
+  Reference frames from the clips: wave-six-blob-track/*.png (reference only, never shipped).
+
+OPTIONAL | 3D model | PROP | toonBlaze (wave 6 #8)
+  Low-poly sedan/taxi, burnt look. Code-built car (Relic Glow hatchback approach) is the plan.
+
+OPTIONAL | 3D point cloud (.ply / .glb points) | MAIN | lidarTrail (wave 6 #10)
+  A real or synthetic LIDAR scan of a forest path, 1-3 M points. Code-generated forest points are the plan;
+  a real scan would look more organic.
+
+OPTIONAL | 3D point cloud or model | MAIN | scanSprout (wave 6 #12)
+  A scanned leafy plant (weed/sunflower), ideally with growth stages. Code L-system plant is the plan.
+
+OPTIONAL | 3D model | MAIN | glyphBloom (wave 6 #11)
+  One ruffled flower (peony/hibiscus) with leaves. Code petals are the plan; the glyph pass hides most detail.
+
+OPTIONAL | 3D model + swim animation | MAIN | heatShoal (wave 6 #14)
+  Koi/carp. Code fish with a vertex swim wave is the plan; the thermal smear hides most detail.
+
+OPTIONAL | 2D image | PROP | eyeStage (wave 6 #6)
+  Set of black-and-white eye artworks for the screens. Code-drawn SDF eyes are the plan.
+
+NOT NEEDED | any | MAIN | cloudTracer (#4), glowTide (#5), neonOverlook (#9), glassHands (#15, reuses handModel.ts), fogTowers (#16)

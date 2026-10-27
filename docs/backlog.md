@@ -97,3 +97,35 @@ Spec: `docs/superpowers/specs/2026-10-25-wave-five-modes-design.md`. The six cod
 - **Relic Glow** builds all 12 objects from primitives, seen through the pixel filter. **Lantern Tree** grows its tree procedurally, and **Metro Car** builds the car interior from boxes.
 - **Warehouse Hall** is now a wide code-built hall (window wall, columns, rubble, a wet floor that mirrors the hall) with the spec's three looks picked on hits and hard blackouts between them. The old Kit A corridor and colour cycle are gone.
 - **No reference contact sheets for wave 5** are on disk, so the modes were checked against the spec's frame descriptions only.
+
+## Wave 6 modes (built, experimental)
+
+Spec: `docs/superpowers/specs/2026-10-26-wave-six-modes-design.md`. Fifteen modes are built in code and labelled `<experimental-wave6> …`: Window Grid, Cloud Tracer, Neon Overlook, Fog Towers, Glyph Bloom, LIDAR Trail, Scan Sprout, Heat Shoal, Slot Hall, Toon Blaze, Glass Hands, Glow Tide, Eye Stage, Night Parlour and Blob Track. All run on WebGPU and WebGL2.
+
+### Not built yet
+
+- **Night Rider (#7):** waits on the rider, bike and background assets the user is supplying.
+
+### Deviations from the spec
+
+- **Window Grid** draws the whole facade per pixel in one fullscreen shader rather than instanced window quads (no per-window CPU work either way). About 18 floors are in view rather than 45, so the windows read at landscape size.
+- **Cloud Tracer** builds its clouds as 2D domain-warped fractal noise with cellular "cauliflower" puffs, rendered at half resolution, not a raymarched volume. The storm mode's clouds are noise planes too, so nothing was reused directly.
+- **Neon Overlook** borrows Neon Megacity's window grid, sign glyphs and palette, but builds its own top-down city on a street grid. Its windows are larger than Megacity's and fade to an average with distance, to stop aliasing from high up.
+- **Fog Towers:** one tower and seven camera set-ups. The lit room is a few emissive panes with a point light, not a modelled interior.
+- **Glyph Bloom** samples the flower once per glyph cell (the ASCII mode's 5×7 atlas). Its leaves sit behind the bloom and are hard to see from most angles.
+- **LIDAR Trail and Scan Sprout** share `pointCloud.ts` (instanced point sprites with growth, scatter and jitter in the vertex shader). The LIDAR forest repeats every 48 m so the walk never ends. It has 450k points at Balanced and 900k at High (lowered so the software-rendered parity run stays in budget); the spec asked for 1–2M at full tier. There is no feedback motion smear: the cinematic grain and soften stand in for it.
+- **Scan Sprout's** plexus lines join random nearby points chosen once on the CPU, not a live nearest-neighbour search.
+- **Heat Shoal's** smear is a 16-tap horizontal blur of the heat buffer, not an accumulated feedback trail.
+- **Slot Hall** uses procedural nearest-sampled textures, vertex snapping in clip space, a 240-row frame and 15-bit colour with a 4×4 ordered dither (full PS1 look, open question 2 of the spec). The jackpot sign's text is hard to read at 240 rows.
+- **Toon Blaze:** the bloom slider drops to 0 when the mode is picked. Puffs are instanced spheres with a three-band toon ramp and inverted-hull outlines, not metaballs.
+- **Glass Hands** draws `handModel.ts` hands as 2D silhouettes (no raymarch), so 21 hands cost one capsule loop per pixel. The "two hands" pose is not in the pose table. Every tile holds one hand.
+- **Glow Tide** simulates foam in 2D on the beach plane (curl-noise advection plus wave fronts). Its water has no height field: the swells are shaded noise.
+- **Eye Stage** draws its eyes as signed-distance art rather than photos, so the look is cleaner than the reference's photocopied eye. The RGB-split glitch is a filter on the finished frame.
+- **Night Parlour** builds its armchairs from rounded boxes, so they look stiffer than upholstered furniture. The optional chair models in the asset list would fix this. The pane shadows on the rug come from one shadow-casting spotlight (off on the Compatibility tier).
+- **Blob Track** detection uses a CPU edge map of a 96×54 copy of the picture (or of the webcam every 0.2 s), not a GPU saliency pass. The picture-change timer is a "Blob Track picture change" slider (10–90 s) in the controls. **The webcam path was not tested on a live camera here:** it is opt-in through the "Webcam source (Blob Track)" checkbox, asks for permission only when ticked, and unticks itself if access fails.
+
+### Possible follow-ups
+
+- A listening pass per mode with real tracks, then drop the `<experimental-wave6>` labels.
+- Upholstered chair models for Night Parlour, if the code-built ones look stiff.
+- A 2M-point LIDAR tier, and a feedback smear pass, if the GPU budget allows.

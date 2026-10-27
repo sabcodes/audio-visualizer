@@ -56,6 +56,21 @@ import { createRelicGlowMode } from './relicGlowMode';
 import { createLanternTreeMode } from './lanternTreeMode';
 import { createMetroCarMode } from './metroCarMode';
 import { createDreamAlleyMode, createNeonPortalMode, createSlitDancerMode } from './figureShaderModes';
+import { createWindowGridMode } from './windowGridMode';
+import { createBlobTrackMode } from './blobTrackMode';
+import { createNightParlourMode } from './nightParlourMode';
+import { createEyeStageMode } from './eyeStageMode';
+import { createGlowTideMode } from './glowTideMode';
+import { createGlassHandsMode } from './glassHandsMode';
+import { createToonBlazeMode } from './toonBlazeMode';
+import { createSlotHallMode } from './slotHallMode';
+import { createHeatShoalMode } from './heatShoalMode';
+import { createScanSproutMode } from './scanSproutMode';
+import { createLidarTrailMode } from './lidarTrailMode';
+import { createGlyphBloomMode } from './glyphBloomMode';
+import { createFogTowersMode } from './fogTowersMode';
+import { createNeonOverlookMode } from './neonOverlookMode';
+import { createCloudTracerMode } from './cloudTracerMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -194,12 +209,39 @@ export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
   waveFive('metroCar', 'Metro Car', createMetroCarMode),
   waveFive('slitDancer', 'Slit Dancer (FS)', createSlitDancerMode, 'fullscreen', CLEAN),
 ];
+/** Wave 6 entries are labelled `<experimental-wave6> …` in the menu; `bloom` sets the slider for modes with their own glow rules. */
+const waveSix = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene', finish?: CinematicOptions, bloom?: number): ModeDefinition =>
+  ({ ...definition(id, `<experimental-wave6> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output), ...(bloom === undefined ? {} : { bloom }) });
+/** Soft focus for the facade: the clip is a long-lens phone shot. */
+const SOFT = { grain: 0.05, halation: 0, vignette: 0.4, soften: 0.28 };
+/**
+ * Wave 6 (docs/superpowers/specs/2026-10-26-wave-six-modes-design.md): code-only modes. Night Rider (#7) waits on
+ * supplied assets and Blob Track (#13) is a separate task.
+ */
+export const waveSixModeDefinitions: readonly ModeDefinition[] = [
+  waveSix('windowGrid', 'Window Grid', createWindowGridMode, 'fullscreen', SOFT),
+  waveSix('cloudTracer', 'Cloud Tracer', createCloudTracerMode, 'fullscreen', { grain: 0.04, halation: 0, vignette: 0.7, soften: 0.05 }),
+  waveSix('neonOverlook', 'Neon Overlook', (budget) => createNeonOverlookMode(budget), 'scene', CLEAN),
+  waveSix('fogTowers', 'Fog Towers', (budget) => createFogTowersMode(budget), 'scene', { grain: 0.1, halation: 0.25, vignette: 0.55, soften: 0.12 }),
+  waveSix('glyphBloom', 'Glyph Bloom', createGlyphBloomMode),
+  waveSix('lidarTrail', 'LIDAR Trail', (budget) => createLidarTrailMode(budget), 'scene', { grain: 0.12, halation: 0, vignette: 0.5, soften: 0.15 }),
+  waveSix('scanSprout', 'Scan Sprout', (budget) => createScanSproutMode(budget), 'scene', CLEAN),
+  waveSix('heatShoal', 'Heat Shoal', (budget) => createHeatShoalMode(budget)),
+  waveSix('slotHall', 'Slot Hall', createSlotHallMode),
+  // Cel shading stays crisp: the bloom slider drops to zero for it.
+  waveSix('toonBlaze', 'Toon Blaze', (budget) => createToonBlazeMode(budget), 'scene', { grain: 0.03, halation: 0, vignette: 0.3, soften: 0, aberration: 0 }, 0),
+  waveSix('glassHands', 'Glass Hands', (budget) => createGlassHandsMode(budget), 'fullscreen', { grain: 0.05, halation: 0, vignette: 0.25, soften: 0.05, aberration: 0 }),
+  waveSix('glowTide', 'Glow Tide', (budget) => createGlowTideMode(budget), 'fullscreen', { grain: 0.04, halation: 0, vignette: 0.45, soften: 0.1 }),
+  waveSix('eyeStage', 'Eye Stage', createEyeStageMode, 'fullscreen'),
+  waveSix('nightParlour', 'Night Parlour', (budget) => createNightParlourMode(budget), 'scene', { grain: 0.04, halation: 0.35, vignette: 0.5, soften: 0.1 }),
+  waveSix('blobTrack', 'Blob Track', createBlobTrackMode, 'fullscreen'),
+];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
   const probe = createSpikeScene(id);
   return { ...probe, update: (frame) => probe.update(frame.time, frame.response.bounce, frame.aspect) };
 }, id === 'rings' ? 'fullscreen' : 'scene'));
-export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...waveFourModeDefinitions, ...waveFiveModeDefinitions, ...probes];
+export const modeDefinitions: readonly ModeDefinition[] = [...legacyModeDefinitions, ...waveOneModeDefinitions, ...waveTwoModeDefinitions, ...waveThreeModeDefinitions, ...figureModeDefinitions, ...waveFourModeDefinitions, ...waveFiveModeDefinitions, ...waveSixModeDefinitions, ...probes];
 
 export class ModeRegistry {
   private readonly definitions = new Map<string, ModeDefinition>();
