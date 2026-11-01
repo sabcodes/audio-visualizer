@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Evil Pumpkin render check</title>
+<link rel="icon" href="data:,">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<script type="module">
+  import * as THREE from 'three/webgpu';
+  import { createEvilPumpkinMode } from '../../../src/modes/evilPumpkinMode.ts';
+  import { presetBudget } from '../../../src/rendering/quality.ts';
+  import { createOutputPipeline } from '../../../src/rendering/OutputPipeline.ts';
+  const backend = new URLSearchParams(location.search).get('backend') ?? 'webgl2';
+  const renderer = new THREE.WebGPURenderer({forceWebGL:backend === 'webgl2',antialias:false});
+  await renderer.init(); renderer.setSize(960,540);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const mode = createEvilPumpkinMode(presetBudget('compatibility')); await mode.ready;
+  const frame = {time:0,delta:1/60,aspect:16/9,spectrumMapping:'linear',sampleRate:48000,hue:0,reducedMotion:false,reducedFlash:false,sensitivity:1.8,
+    response:{bass:0,loudness:0,impact:0,bounce:0},
+    audio:{waveform:new Float32Array(1024),spectrum:new Uint8Array(512),bass:0,mid:0,highs:0,rms:0,onset:false,time:0}};
+  mode.update(frame);
+  const pipeline = createOutputPipeline(renderer,mode.scene,mode.camera);
+  document.body.append(renderer.domElement);
+  const state = () => {
+    const actor=mode.scene.getObjectByName('evil pumpkin');
+    const jaw=mode.scene.getObjectByName('mouth_jaw'), lid=mode.scene.getObjectByName('eye_left_lid');
+    return {...mode.scene.userData,time:frame.time,y:actor.position.y,z:actor.position.z,scale:actor.scale.x,jaw:jaw.rotation.x,lid:lid.position.y,
+      camera:mode.camera.position.toArray(),forest:!!mode.scene.getObjectByName('dead forest'),
+      brows:!!mode.scene.getObjectByName('left angry brow'),smoke:mode.scene.getObjectByName('cursed smoke').count,
+      eye:mode.scene.getObjectByName('left eye laser').visible,mouth:mode.scene.getObjectByName('mouth laser').visible};
+  };
+  let tick=0;
+  const step = (music,beats,bounce,hit=false) => {
+    const onset=hit || (beats && tick%30===0); tick++;
+    frame.response=music ? {bass:1,loudness:0.8,impact:onset ? 1 : 0,bounce} : {bass:0,loudness:0,impact:0,bounce:0};
+    frame.time+=frame.delta; frame.audio.time=frame.time; frame.audio.onset=onset; mode.update(frame);
+  };
+  window.pumpkinReview = {
+    backend:renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2',
+    advance(seconds,{music=false,hit=false,beats=false,bounce=1,reducedMotion=false,reducedFlash=false,aspect=16/9}={}) {
+      Object.assign(frame,{reducedMotion,reducedFlash,aspect}); renderer.setSize(960,Math.round(960/aspect));
+      for(let i=0;i<Math.round(seconds*60);i++) step(music,beats,bounce,hit && i===0);
+      pipeline.render(0.45); return state();
+    },
+    peak(close=false) {
+      const count=mode.scene.userData.laserCount;
+      Object.assign(frame,{reducedMotion:false,reducedFlash:false});
+      for(let i=0;i<3600;i++) {
+        step(true,true,1);
+        if(mode.scene.userData.laserCount>count && mode.scene.userData.firing>.95 && !!mode.scene.userData.closeAttack===close) {
+          pipeline.render(0.45); return state();
+        }
+      }
+      throw new Error('No laser peak within 60 seconds');
+    },
+    shot(name,phase=.6) {
+      Object.assign(frame,{reducedMotion:false,reducedFlash:false});
+      for(let i=0;i<3600;i++) {
+        step(false,false,0);
+        if(mode.scene.userData.shot===name && mode.scene.userData.shotPhase>=phase && mode.scene.userData.firing===0 && mode.scene.userData.lunge===0) {
+          pipeline.render(0.45); return state();
+        }
+      }
+      throw new Error('Camera shot not reached');
+    },
+    dispose(){renderer.setAnimationLoop(null);pipeline.dispose();mode.dispose();renderer.dispose();return mode.scene.children.length;},
+  };
+  renderer.setAnimationLoop(() => pipeline.render(0.45)); document.body.dataset.ready='true';
+</script>

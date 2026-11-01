@@ -24,7 +24,7 @@ const frame = (): ModeFrame => ({ time: 2, delta: 1 / 60, aspect: 16 / 9, spectr
   audio: { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 2 },
 });
 
-const IDS = ['windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze', 'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack', 'goldenGate'];
+const IDS = ['windowGrid', 'cloudTracer', 'neonOverlook', 'fogTowers', 'glyphBloom', 'lidarTrail', 'scanSprout', 'heatShoal', 'slotHall', 'toonBlaze', 'glassHands', 'glowTide', 'eyeStage', 'nightParlour', 'blobTrack', 'goldenGate', 'lasNoches', 'evilPumpkin', 'nightRider', 'nightRiderV2', 'spaceShip'];
 // Compute-shader modes need native WebGPU; everything else also runs on WebGL2.
 const GPU_ONLY: string[] = [];
 
@@ -34,7 +34,9 @@ describe('wave six modes', () => {
     const start = 88 + waveFiveModeDefinitions.length;
     expect(modeDefinitions.slice(start, start + IDS.length)).toEqual(waveSixModeDefinitions);
     for (const mode of waveSixModeDefinitions) {
-      expect(mode.label.startsWith('<experimental-wave6> ')).toBe(true);
+      if (mode.id === 'nightRider') expect(mode.label).toBe('<Experimental Wave6> Night Rider');
+      else if (mode.id === 'nightRiderV2') expect(mode.label).toBe('<Experimental Wave6> Night Rider V2');
+      else expect(mode.label.startsWith(mode.id === 'evilPumpkin' ? '<experimental wave6> ' : '<experimental-wave6> ')).toBe(true);
       expect(mode.backends, mode.id).toEqual(GPU_ONLY.includes(mode.id) ? ['webgpu'] : ['webgpu', 'webgl2']);
     }
   });

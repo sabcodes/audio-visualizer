@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Space Ship isolated render check</title>
+<link rel="icon" href="data:,">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<script type="module">
+  import * as THREE from 'three/webgpu';
+  import { modeDefinitions } from '../../../src/modes/registry.ts';
+  import { SPACE_SHIP_SHOTS } from '../../../src/modes/spaceShipMode.ts';
+  import { presetBudget } from '../../../src/rendering/quality.ts';
+  import { createOutputPipeline } from '../../../src/rendering/OutputPipeline.ts';
+  const backend = new URLSearchParams(location.search).get('backend') ?? 'webgl2';
+  const renderer = new THREE.WebGPURenderer({forceWebGL:backend === 'webgl2',antialias:false});
+  await renderer.init(); renderer.setSize(960,540); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const mode = modeDefinitions.find((m) => m.id === 'spaceShip').create(presetBudget('compatibility'));
+  await mode.ready;
+  const frame = {time:0,delta:0,aspect:16/9,spectrumMapping:'linear',sampleRate:48000,hue:0,reducedMotion:false,reducedFlash:false,sensitivity:1.8,
+    response:{bass:0,loudness:0,impact:0,bounce:0},audio:{waveform:new Float32Array(1024),spectrum:new Uint8Array(512),bass:0,mid:0,highs:0,rms:0,onset:false,time:0}};
+  mode.update(frame);
+  const pipeline = createOutputPipeline(renderer,mode.scene,mode.camera,mode.filter);
+  document.body.append(renderer.domElement);
+  const state = () => ({...mode.scene.userData,ship:!!mode.scene.getObjectByName('supplied Arwing'),
+    camera:mode.camera.position.toArray(),actor:mode.scene.getObjectByName('Arwing flight rig').position.toArray(),
+    planet:mode.scene.getObjectByName('Aurelia ringed giant').scale.x,
+    exhaustLength:mode.scene.getObjectByName('ion exhaust').scale.z});
+  // Three.js caches scene and bloom passes per animation frame. Render each manual
+  // update on the next frame so rapid test calls cannot capture a stale pass.
+  const renderFrame = () => new Promise(resolve => requestAnimationFrame(() => { pipeline.render(0.45); resolve(state()); }));
+  window.spaceShipReview = {
+    backend:renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2', shots:SPACE_SHIP_SHOTS, state,
+    advance(seconds,bounce=0,reducedMotion=false,reducedFlash=false){
+      frame.response={bass:0,loudness:0,impact:0,bounce}; frame.reducedMotion=reducedMotion; frame.reducedFlash=reducedFlash;
+      const rate=reducedMotion?60:10;
+      for(let i=0;i<Math.round(seconds*rate);i++){
+        frame.delta=1/rate;const previous=frame.time;frame.time+=frame.delta;
+        frame.audio.onset=bounce>0 && Math.floor(frame.time/0.47)>Math.floor(previous/0.47);
+        frame.response.impact=frame.audio.onset?0.85:0;mode.update(frame);
+      }
+      return renderFrame();
+    },
+    step(onset,impact=0){
+      frame.delta=1/60;frame.time+=frame.delta;frame.reducedMotion=false;frame.reducedFlash=false;
+      frame.audio.onset=onset;frame.response={bass:0,loudness:0,impact,bounce:0};mode.update(frame);
+      return renderFrame();
+    },
+    portrait(){renderer.setSize(540,960);frame.aspect=540/960;frame.delta=0;mode.update(frame);return renderFrame();},
+    dispose(){pipeline.dispose();mode.dispose();renderer.dispose();return mode.scene.children.length;},
+  };
+  await renderFrame();document.body.dataset.ready='true';
+</script>

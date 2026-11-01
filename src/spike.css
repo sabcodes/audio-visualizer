@@ -17,7 +17,16 @@ input[type=checkbox] { width: 22px; height: 22px; }
 :focus-visible { outline: 3px solid #8bfaff; outline-offset: 3px; }
 pre { font-size: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 #status[data-state=error] { color: #ffb8ad; }
-#show { position: fixed; z-index: 20; top: 12px; left: 12px; }
+#favorite[aria-pressed=true], #quick-favorite[aria-pressed=true] { color: #ffe19a; border-color: #b69a60; }
+#quick-controls { position: fixed; z-index: 20; top: 12px; left: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; box-sizing: border-box; max-width: calc(100vw - 24px); padding: 8px 10px; border: 1px solid rgb(180 205 235 / 15%); border-radius: 10px; background: rgb(8 10 20 / 35%); backdrop-filter: blur(8px); opacity: 0; transition: opacity 240ms ease; }
+#quick-controls:hover, #quick-controls:has(:focus-visible), #quick-controls:has(select:open) { opacity: .8; }
+#quick-controls button, #quick-controls select { min-height: 32px; padding: 4px 8px; font-size: .75rem; background: rgb(19 28 48 / 35%); border-color: rgb(180 205 235 / 25%); }
+#favorite-modes { width: 190px; min-width: 0; text-overflow: ellipsis; }
+#favorite-modes option { background: #131c30; color: #eee; }
+#quick-controls label { gap: 6px; font-size: .75rem; }
+#quick-controls input[type=range] { width: 76px; min-height: 32px; accent-color: #a1e8f0; }
+@media (hover: none) { #quick-controls { opacity: .65; } }
+@media (prefers-reduced-motion: reduce) { #quick-controls { transition: none; } }
 .vintage-overlay { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
 .win95-window { position: absolute; pointer-events: auto; width: min(320px, calc(100vw - 12px)); box-sizing: border-box; background: #c0c0c0; color: #000; border: 3px outset #eee; padding: 3px; box-shadow: 3px 3px #0008; font: 13px Tahoma, sans-serif; }
 .win95-window p { padding: 8px; }

@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Las Noches isolated render check</title>
+<link rel="icon" href="data:,">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<script type="module">
+  import * as THREE from 'three/webgpu';
+  import { modeDefinitions } from '../../../src/modes/registry.ts';
+  import { LAS_NOCHES_SHOTS } from '../../../src/modes/lasNochesMode.ts';
+  import { presetBudget } from '../../../src/rendering/quality.ts';
+  import { createOutputPipeline } from '../../../src/rendering/OutputPipeline.ts';
+
+  const backend = new URLSearchParams(location.search).get('backend') ?? 'webgl2';
+  const renderer = new THREE.WebGPURenderer({forceWebGL: backend === 'webgl2', antialias:false});
+  await renderer.init();
+  renderer.setSize(960,540); renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const mode = modeDefinitions.find((m) => m.id === 'lasNoches').create(presetBudget('compatibility'));
+  await mode.ready;
+  const frame = {time:0,delta:0,aspect:16/9,spectrumMapping:'linear',sampleRate:48000,hue:0,reducedMotion:false,reducedFlash:true,
+    response:{bass:0,loudness:0,impact:0,bounce:0},
+    audio:{waveform:new Float32Array(1024),spectrum:new Uint8Array(512),bass:0,mid:0,highs:0,rms:0,onset:false,time:0}};
+  mode.update(frame);
+  const pipeline = createOutputPipeline(renderer,mode.scene,mode.camera,mode.filter);
+  document.body.append(renderer.domElement);
+  const state = () => ({shot:mode.scene.userData.shot,weather:mode.scene.userData.weather,
+    gas:mode.scene.getObjectByName('cylinder gas').visible,fire:mode.scene.getObjectByName('spiritual flames').visible,
+    rain:mode.scene.getObjectByName('falling rain').visible,
+    grove:mode.scene.getObjectByName('quartz grove')?.count,
+    houses:mode.scene.getObjectByName('outer settlement')?.children.length});
+  window.lasNochesReview = {
+    backend:renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2',
+    shots:LAS_NOCHES_SHOTS.map((s) => s.name),
+    state,
+    advance(seconds,music=true){
+      frame.response = music ? {bass:1,loudness:1,impact:1,bounce:1} : {bass:0,loudness:0,impact:0,bounce:0};
+      frame.audio.highs = music ? 1 : 0;
+      for(let i=0;i<Math.round(seconds*10);i++){
+        frame.delta=0.1; frame.time+=0.1; frame.audio.time=frame.time; mode.update(frame);
+      }
+      pipeline.render(0.35);
+      return state();
+    },
+  };
+  pipeline.render(0.35);
+  document.body.dataset.ready='true';
+</script>

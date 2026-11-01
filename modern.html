@@ -24,6 +24,7 @@
     <div class="row">
       <label>Backend <select id="backend"><option value="auto">Automatic</option><option value="webgpu">WebGPU only</option><option value="webgl2">Force WebGL2</option></select></label>
       <label>Scene <select id="mode"><option value="scene">Basic neon scene</option><option value="rings">TSL fullscreen rings</option><option value="particles">8,000 analytic GPU sprites</option></select></label>
+      <button id="favorite" type="button" aria-pressed="false" title="Save this visualization to favorites">☆ Favorite</button>
       <button id="restart" type="button">Restart renderer</button>
     </div>
     <div class="row">
@@ -57,7 +58,13 @@
     <p id="benchmark-status" role="status"></p>
     <p>All 18 legacy mode ports are available for visual review, plus two labeled probes. God Rays uses stylized additive cones, not volumetric scattering. Flash modulation is opt-in: keep Reduced flash enabled for steady brightness.</p>
   </section>
-  <button id="show" type="button" hidden>Show controls</button>
+  <nav id="quick-controls" aria-label="Quick visualization controls" hidden>
+    <button id="show" type="button">Show controls</button>
+    <select id="favorite-modes" aria-label="Favorite visualizations"></select>
+    <button id="quick-favorite" type="button" aria-label="Favorite current visualization" aria-pressed="false">☆</button>
+    <label>Bloom <input id="quick-bloom" type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
+    <label>Exposure <input id="quick-exposure" type="range" min="0.25" max="2" value="1" step="0.05"></label>
+  </nav>
   <noscript>This visualizer requires JavaScript and a usable WebGPU or WebGL2 backend.</noscript>
   <script type="module" src="/src/main.ts"></script>
 </body>

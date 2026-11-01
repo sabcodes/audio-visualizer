@@ -48,6 +48,18 @@ const benchmark = element<HTMLButtonElement>('benchmark');
 const benchmarkStatus = element('benchmark-status');
 const controls = element('controls');
 const show = element('show');
+const quickControls = element('quick-controls');
+const favoriteButton = element<HTMLButtonElement>('favorite');
+const quickFavorite = element<HTMLButtonElement>('quick-favorite');
+const favoriteModes = element<HTMLSelectElement>('favorite-modes');
+const quickBloom = element<HTMLInputElement>('quick-bloom');
+const quickExposure = element<HTMLInputElement>('quick-exposure');
+const favoritesKey = 'visualizer.favoriteModes';
+let favorites = new Set<string>();
+try {
+  const saved: unknown = JSON.parse(localStorage.getItem(favoritesKey) ?? '[]');
+  if (Array.isArray(saved)) favorites = new Set(saved.filter((id): id is string => typeof id === 'string' && modeDefinitions.some((definition) => definition.id === id)));
+} catch { /* Favorites remain available for this session if storage is unavailable. */ }
 const params = new URLSearchParams(location.search);
 mode.replaceChildren(...modeDefinitions.map((definition) => new Option(definition.label, definition.id)));
 if (['auto', 'webgpu', 'webgl2'].includes(params.get('backend') ?? '')) backend.value = params.get('backend')!;
@@ -58,7 +70,48 @@ if (['linear', 'log'].includes(params.get('spectrum') ?? '')) spectrum.value = p
 const initialOutput = parseOutputSettings(params);
 toneMapping.value = initialOutput.toneMapping; antialiasing.value = initialOutput.aa;
 const outputSettings = () => ({ toneMapping: toneMapping.value as ToneMappingName, aa: antialiasing.value as AntialiasingName });
-const applyModeBloom = () => { const strength = modeDefinitions.find((definition) => definition.id === mode.value)?.bloom; if (strength !== undefined) bloom.value = String(strength); };
+const applyModeBloom = () => { const strength = modeDefinitions.find((definition) => definition.id === mode.value)?.bloom; if (strength !== undefined) bloom.value = String(strength); syncQuickControls(); };
+function syncQuickControls() {
+  const selected = favorites.has(mode.value);
+  favoriteButton.textContent = selected ? '★ Favorited' : '☆ Favorite';
+  quickFavorite.textContent = selected ? '★' : '☆';
+  for (const button of [favoriteButton, quickFavorite]) {
+    button.setAttribute('aria-pressed', String(selected));
+    button.setAttribute('aria-label', `${selected ? 'Unfavorite' : 'Favorite'} current visualization`);
+    button.title = `${selected ? 'Remove' : 'Save'} this visualization ${selected ? 'from' : 'to'} favorites`;
+    button.disabled = mode.disabled;
+  }
+  const options = Array.from(mode.options).filter((option) => favorites.has(option.value)).map((option) => {
+    const favorite = new Option(option.text, option.value);
+    favorite.disabled = option.disabled;
+    return favorite;
+  });
+  const placeholder = new Option(options.length ? `Favorites · ${options.length}` : '☆ Star scenes to add favorites', '');
+  placeholder.disabled = true;
+  favoriteModes.replaceChildren(placeholder, ...options);
+  favoriteModes.value = selected ? mode.value : '';
+  favoriteModes.disabled = mode.disabled || !options.some((option) => !option.disabled);
+  quickBloom.value = bloom.value;
+  quickExposure.value = exposure.value;
+}
+for (const button of [favoriteButton, quickFavorite]) button.addEventListener('click', () => {
+  if (favorites.has(mode.value)) favorites.delete(mode.value); else favorites.add(mode.value);
+  try { localStorage.setItem(favoritesKey, JSON.stringify([...favorites])); } catch { /* Keep session favorites when browser storage is unavailable. */ }
+  syncQuickControls();
+});
+favoriteModes.addEventListener('change', () => {
+  if (!favoriteModes.value || favoriteModes.selectedOptions[0]?.disabled || mode.disabled) return;
+  mode.value = favoriteModes.value;
+  mode.dispatchEvent(new Event('change'));
+});
+for (const [compact, full] of [[quickBloom, bloom], [quickExposure, exposure]]) {
+  compact.addEventListener('input', () => {
+    full.value = compact.value;
+    full.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  full.addEventListener('input', () => { compact.value = full.value; });
+}
+syncQuickControls();
 const requestedTime = Number(params.get('time'));
 const validTime = params.has('time') && Number.isFinite(requestedTime) && requestedTime >= 0;
 const fixedTime = validTime ? requestedTime : 2;
@@ -147,6 +200,7 @@ async function start() {
   failed = false;
   loop.stop();
   restart.disabled = backend.disabled = mode.disabled = compatibility.disabled = true;
+  syncQuickControls();
   status.textContent = 'Initializing graphics backend…';
   status.dataset.state = 'loading';
   compatibility.hidden = true;
@@ -179,6 +233,7 @@ async function start() {
     if (generation === epoch) {
       starting = false;
       restart.disabled = backend.disabled = mode.disabled = compatibility.disabled = false;
+      syncQuickControls();
     }
   }
 }
@@ -247,6 +302,7 @@ restart.addEventListener('click', () => void start());
 backend.addEventListener('change', () => void start());
 compatibility.addEventListener('click', () => { backend.value = 'webgl2'; void start(); });
 mode.addEventListener('change', () => {
+  syncQuickControls();
   if (!engine || failed || starting) return;
   // Hold adaptive scaling through the compile: a one-time shader compile must not lower quality.
   adaptive.reset(performance.now());
@@ -281,7 +337,7 @@ element('export').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 function toggleControls() {
-  controls.hidden = !controls.hidden; show.hidden = !controls.hidden;
+  controls.hidden = !controls.hidden; quickControls.hidden = !controls.hidden;
   (controls.hidden ? show : element('hide')).focus();
 }
 element('hide').addEventListener('click', toggleControls);

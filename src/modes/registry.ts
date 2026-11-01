@@ -72,6 +72,10 @@ import { createFogTowersMode } from './fogTowersMode';
 import { createNeonOverlookMode } from './neonOverlookMode';
 import { createCloudTracerMode } from './cloudTracerMode';
 import { createGoldenGateMode } from './goldenGateMode';
+import { createLasNochesMode } from './lasNochesMode';
+import { createEvilPumpkinMode } from './evilPumpkinMode';
+import { createNightRiderMode } from './nightRiderMode';
+import { createSpaceShipMode } from './spaceShipMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
 const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
@@ -216,8 +220,8 @@ const waveSix = (id: string, label: string, create: (budget: QualityBudget) => V
 /** Soft focus for the facade: the clip is a long-lens phone shot. */
 const SOFT = { grain: 0.05, halation: 0, vignette: 0.4, soften: 0.28 };
 /**
- * Wave 6 (docs/superpowers/specs/2026-10-26-wave-six-modes-design.md): code-only modes. Night Rider (#7) waits on
- * supplied assets and Blob Track (#13) is a separate task.
+ * Wave 6 (docs/superpowers/specs/2026-10-26-wave-six-modes-design.md), followed by the supplied
+ * Golden Gate, Las Noches and Night Rider models supplied by the user.
  */
 export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('windowGrid', 'Window Grid', createWindowGridMode, 'fullscreen', SOFT),
@@ -238,6 +242,11 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   waveSix('blobTrack', 'Blob Track', createBlobTrackMode, 'fullscreen'),
   // The user's real-scale bridge model at night; a light film finish so it reads as footage.
   waveSix('goldenGate', 'Golden Gate Bridge', (budget) => createGoldenGateMode(budget), 'scene', { grain: 0.04, halation: 0.3, vignette: 0.45, soften: 0.05 }),
+  waveSix('lasNoches', 'Las Noches', (budget) => createLasNochesMode(budget), 'scene', { grain: 0.025, halation: 0, vignette: 0.3, soften: 0.025, aberration: 0, shadows: [0.001, 0.002, 0.0015] }, 0.35),
+  { ...waveSix('evilPumpkin', 'Evil Pumpkin', (budget) => createEvilPumpkinMode(budget), 'scene', undefined, 0.45), label: '<experimental wave6> evil pumpkin' },
+  { ...waveSix('nightRider', 'Night Rider', (budget) => createNightRiderMode(budget), 'scene', undefined, 0.35), label: '<Experimental Wave6> Night Rider' },
+  { ...waveSix('nightRiderV2', 'Night Rider V2', (budget) => createNightRiderMode(budget, true), 'scene', undefined, 0.35), label: '<Experimental Wave6> Night Rider V2' },
+  waveSix('spaceShip', 'Space Ship', createSpaceShipMode, 'scene', undefined, 0.45),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.
 const probes = (['scene', 'rings'] as const).map((id) => definition(id, id === 'scene' ? 'Probe · basic neon scene' : 'Probe · fullscreen rings', () => {
