@@ -75,6 +75,9 @@ import { createGoldenGateMode } from './goldenGateMode';
 import { createLasNochesMode } from './lasNochesMode';
 import { createEvilPumpkinMode } from './evilPumpkinMode';
 import { createNightRiderMode } from './nightRiderMode';
+import { createAkiraMode } from './akiraMode';
+import { createWater7Mode } from './water7Mode';
+import { createIchirakuMode } from './ichirakuMode';
 import { createSpaceShipMode } from './spaceShipMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
@@ -246,6 +249,9 @@ export const waveSixModeDefinitions: readonly ModeDefinition[] = [
   { ...waveSix('evilPumpkin', 'Evil Pumpkin', (budget) => createEvilPumpkinMode(budget), 'scene', undefined, 0.45), label: '<experimental wave6> evil pumpkin' },
   { ...waveSix('nightRider', 'Night Rider', (budget) => createNightRiderMode(budget), 'scene', undefined, 0.35), label: '<Experimental Wave6> Night Rider' },
   { ...waveSix('nightRiderV2', 'Night Rider V2', (budget) => createNightRiderMode(budget, true), 'scene', undefined, 0.35), label: '<Experimental Wave6> Night Rider V2' },
+  waveSix('akira', 'Akira / Neo Tokyo', createAkiraMode, 'scene', undefined, 0.45),
+  waveSix('water7', 'Water 7 / City of Water', createWater7Mode, 'scene', undefined, 0.2),
+  waveSix('ichiraku', 'Ichiraku Ramen / Neon Nights', createIchirakuMode, 'scene', undefined, 0.4),
   waveSix('spaceShip', 'Space Ship', createSpaceShipMode, 'scene', undefined, 0.45),
 ];
 // Preserve deep links to the capability probes without confusing them with legacy parity.

@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Akira / Neo Tokyo render review</title>
+<link rel="icon" href="data:,">
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+<script type="module">
+  import * as THREE from 'three/webgpu';
+  import { createAkiraMode, AKIRA_SHOTS } from '../../../src/modes/akiraMode.ts';
+  import { presetBudget } from '../../../src/rendering/quality.ts';
+  import { createOutputPipeline } from '../../../src/rendering/OutputPipeline.ts';
+  const renderer = new THREE.WebGPURenderer({forceWebGL:true,antialias:false});
+  await renderer.init(); renderer.setSize(960,540);
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace;
+  const mode=createAkiraMode(presetBudget('compatibility'));await mode.ready;
+  const frame={time:0,delta:0,aspect:16/9,spectrumMapping:'linear',sampleRate:48000,hue:0,reducedMotion:false,reducedFlash:true,
+    response:{bass:0.7,loudness:0.7,impact:0,bounce:0},
+    audio:{waveform:new Float32Array(1024),spectrum:new Uint8Array(512),bass:0.7,mid:0.5,highs:0.5,rms:0.5,onset:false,time:0}};
+  mode.update(frame);
+  const pipeline=createOutputPipeline(renderer,mode.scene,mode.camera,mode.filter);document.body.append(renderer.domElement);
+  const at=name=>mode.scene.getObjectByName(name)?.getWorldPosition(new THREE.Vector3()).toArray();
+  const state=()=>({...mode.scene.userData,frontWheel:at('front_wheel'),rearWheel:at('rear_wheel'),outlet:at('Akira exhaust outlet'),
+    bikePosition:at('Akira / bike only'),camera:mode.camera.position.toArray(),riderPresent:!!mode.scene.getObjectByName('Head'),calls:renderer.info.render.drawCalls,
+    wheelRotation:mode.scene.getObjectByName('front_wheel')?.quaternion.toArray()});
+  const render=()=>new Promise(resolve=>requestAnimationFrame(()=>{pipeline.render(0.45);resolve(state());}));
+  window.akiraReview={shots:AKIRA_SHOTS,state,
+    view(index,phase=0.55){
+      let guard=0;frame.reducedMotion=false;
+      while(mode.scene.userData.shotIndex!==index&&guard++<2000){frame.delta=0.1;frame.time+=0.1;mode.update(frame);}
+      const target=AKIRA_SHOTS[index].seconds*phase;
+      while(mode.scene.userData.elapsed+0.00001<target){frame.delta=Math.min(0.1,target-mode.scene.userData.elapsed);frame.time+=frame.delta;mode.update(frame);}
+      mode.scene.updateMatrixWorld(true);return render();
+    },
+    beat(limited=false){
+      frame.reducedMotion=false;frame.reducedFlash=limited;frame.audio.onset=false;frame.response={bass:0.2,loudness:0.5,impact:0,bounce:0};
+      for(let i=0;i<5;i++){frame.delta=0.1;frame.time+=frame.delta;mode.update(frame);}
+      frame.audio.onset=true;frame.response={bass:1,loudness:1,impact:1,bounce:1};frame.delta=0.016;frame.time+=frame.delta;mode.update(frame);return render();
+    },
+    frozen(){frame.reducedMotion=true;frame.delta=30;for(let i=0;i<30;i++)mode.update(frame);return render();},
+    portrait(){frame.aspect=9/16;renderer.setSize(540,960);frame.delta=0;mode.update(frame);return render();},
+    async pixels(effect){
+      const canvas=document.createElement('canvas');canvas.width=960;canvas.height=540;const ctx=canvas.getContext('2d');
+      const capture=()=>new Promise(resolve=>requestAnimationFrame(()=>{pipeline.render(0.45);ctx.drawImage(renderer.domElement,0,0);resolve(ctx.getImageData(0,0,960,540).data);}));
+      const objects=effect==='trail'?['Akira / persistent exhaust afterglow','Akira / exhaust hue ribbon']:['beat exhaust flame'];
+      const shown=await capture();objects.forEach(n=>mode.scene.getObjectByName(n).visible=false);const hidden=await capture();objects.forEach(n=>mode.scene.getObjectByName(n).visible=true);await render();
+      let changed=0,lit=0;for(let i=0;i<shown.length;i+=4){if(Math.abs(shown[i]-hidden[i])+Math.abs(shown[i+1]-hidden[i+1])+Math.abs(shown[i+2]-hidden[i+2])>6)changed++;if(shown[i]+shown[i+1]+shown[i+2]>80)lit++;}
+      return {changed,lit};
+    },
+    release(){mode.dispose();pipeline.dispose();return mode.scene.children.length;}
+  };
+  await render();document.body.dataset.ready='true';
+</script>
