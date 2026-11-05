@@ -4,14 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>EDM Visuals — Modern foundation</title>
+  <title>EDM Visuals — Advanced visuals</title>
   <link rel="stylesheet" href="/src/spike.css">
 </head>
 <body>
   <main id="viewport" aria-label="Experimental visualizer canvas"></main>
   <section id="controls" aria-labelledby="title">
-    <h1 id="title">EDM Visuals <small>Stage 3 · GPU scaling and quality tuning</small></h1>
-    <p>The original 18-mode visualizer is unchanged. <a href="./index.html">Open legacy entry</a> (development server).</p>
+    <header class="panel-header"><h1 id="title">EDM Visuals <small>Stage 4 · Advanced visuals</small></h1><div class="row"><button id="fullscreen" type="button">Fullscreen</button><button id="hide" type="button">Hide controls</button></div></header>
+    <div class="scene-browser">
+      <label for="scene-search">Find a scene</label>
+      <input id="scene-search" type="search" placeholder="Search names or waves…" autocomplete="off" aria-controls="mode">
+      <span id="scene-count" role="status"></span>
+    </div>
+    <div class="row scene-picker">
+      <button id="previous-mode" type="button" aria-label="Previous scene">←</button>
+      <label>Scene <select id="mode"><option value="scene">Basic neon scene</option></select></label>
+      <button id="next-mode" type="button" aria-label="Next scene">→</button>
+      <button id="favorite" type="button" aria-pressed="false" title="Save this visualization to favorites">☆ Favorite</button>
+    </div>
+    <p id="scene-detail" role="status">Preparing scene…</p>
+    <details open><summary>Audio</summary>
     <fieldset id="player">
       <legend>Local audio · stays on this device</legend>
       <label>Load track <input id="audio-upload" type="file" accept="audio/*"></label>
@@ -21,42 +33,44 @@
       <div class="row" id="live-controls" hidden><span>Listening to system audio ·</span><button id="stop-listen-btn" type="button">Stop</button></div>
       <p id="audio-status" role="status" aria-live="polite">Silent startup · load a local audio file to begin.</p>
     </fieldset>
+    </details>
+    <details open><summary>Picture and motion</summary>
     <div class="row">
-      <label>Backend <select id="backend"><option value="auto">Automatic</option><option value="webgpu">WebGPU only</option><option value="webgl2">Force WebGL2</option></select></label>
-      <label>Scene <select id="mode"><option value="scene">Basic neon scene</option><option value="rings">TSL fullscreen rings</option><option value="particles">8,000 analytic GPU sprites</option></select></label>
-      <button id="favorite" type="button" aria-pressed="false" title="Save this visualization to favorites">☆ Favorite</button>
-      <button id="restart" type="button">Restart renderer</button>
+      <label>Quality <select id="quality" data-persist><option value="compatibility">Compatibility (1080p, stylized rays)</option><option value="balanced" selected>Balanced (1080p, 24 ray samples)</option><option value="high">High (1440p, 40 ray samples)</option><option value="ultra">Ultra (native, 64 ray samples)</option></select></label>
+      <label>Transition <select id="transition" data-persist><option value="0">Cut</option><option value="0.35" selected>Short fade · 0.35s</option><option value="0.7">Soft fade · 0.7s</option></select></label>
+      <label>Exposure <input id="exposure" data-persist type="range" min="0.25" max="2" value="1" step="0.05"></label>
+      <label>Bloom <input id="bloom" data-persist type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
     </div>
     <div class="row">
-      <label>Quality <select id="quality"><option value="compatibility">Compatibility (1080p, half particles)</option><option value="balanced" selected>Balanced (1080p)</option><option value="high">High (1440p)</option><option value="ultra">Ultra (native)</option></select></label>
-      <label>Render scale <select id="scale"><option value="auto" selected>Auto</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
-      <label>Target <select id="target-hz"><option value="60" selected>60 Hz</option><option value="120">120 Hz</option></select></label>
-      <label>Exposure <input id="exposure" type="range" min="0.25" max="2" value="1" step="0.05"></label>
-      <label>Tone mapping <select id="tone-mapping"><option value="aces" selected>ACES</option><option value="agx">AgX</option></select></label>
-      <label>Antialiasing <select id="aa"><option value="fxaa" selected>FXAA</option><option value="smaa">SMAA</option><option value="none">Off</option></select></label>
-      <label>Bloom <input id="bloom" type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
+      <label>Bounce sensitivity <input id="sensitivity" data-persist type="range" min="0.25" max="4" step="0.05" value="1.8"></label>
+      <label>Color change (sec) <input id="color-speed-slider" data-persist type="range" min="0.1" max="5" step="0.1" value="0.5"></label>
+      <label><input id="reduced-flash" data-persist type="checkbox" checked> Reduced flash</label>
+      <label><input id="motion" data-persist type="checkbox"> Reduced motion</label>
     </div>
     <div class="row">
-      <label>Bounce sensitivity <input id="sensitivity" type="range" min="0.25" max="4" step="0.05" value="1.8"></label>
-      <label>Color change (sec) <input id="color-speed-slider" type="range" min="0.1" max="5" step="0.1" value="0.5"></label>
-      <label>Spectrum <select id="spectrum"><option value="linear" selected>Linear bins</option><option value="log">Log frequency</option></select></label>
-      <label><input id="reduced-flash" type="checkbox" checked> Reduced flash</label>
-    </div>
-    <div class="row">
-      <label><input id="motion" type="checkbox"> Reduced motion</label>
-      <label><input id="synthetic" type="checkbox"> Synthetic bass fixture (testing)</label>
       <label title="Asked only when ticked; frames stay in this browser"><input id="blob-webcam" type="checkbox"> Webcam source (Blob Track)</label>
       <label>Blob Track picture change (sec) <input id="blob-timer" type="range" min="10" max="90" step="5" value="30"></label>
-      <button id="freeze" type="button" aria-pressed="false">Freeze at 2s</button>
-      <button id="fullscreen" type="button">Fullscreen</button>
-      <button id="hide" type="button">Hide controls</button>
     </div>
-    <p>Audio is played and analyzed locally; no upload or analytics. The synthetic fixture is optional and overrides track analysis for tests. Space plays/pauses a loaded track (otherwise pauses motion); H hides controls; F enters fullscreen outside native controls. No strobe effects.</p>
+    <p class="hint">Reduced motion holds animation and uses cuts. Reduced flash keeps brightness steady. Space plays/pauses · H hides controls · F enters fullscreen (outside native controls).</p>
+    </details>
     <p id="status" role="status" aria-live="polite">Initializing renderer…</p>
+    <details open><summary>Rendering and diagnostics</summary>
+    <div class="row">
+      <label>Backend <select id="backend"><option value="auto">Automatic</option><option value="webgpu">WebGPU only</option><option value="webgl2">Force WebGL2</option></select></label>
+      <button id="restart" type="button">Restart renderer</button>
+      <label>Render scale <select id="scale" data-persist><option value="auto" selected>Auto</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+      <label>Target <select id="target-hz" data-persist><option value="30">30 Hz · quality priority</option><option value="60" selected>60 Hz</option><option value="120">120 Hz</option></select></label>
+      <label>Tone mapping <select id="tone-mapping" data-persist><option value="aces" selected>ACES</option><option value="agx">AgX</option></select></label>
+      <label>Antialiasing <select id="aa" data-persist><option value="fxaa" selected>FXAA</option><option value="smaa">SMAA</option><option value="none">Off</option></select></label>
+      <label>Spectrum <select id="spectrum" data-persist><option value="linear" selected>Linear bins</option><option value="log">Log frequency</option></select></label>
+      <label><input id="synthetic" type="checkbox"> Synthetic bass fixture (testing)</label>
+      <button id="freeze" type="button" aria-pressed="false">Freeze at 2s</button>
+    </div>
     <pre id="diagnostics" aria-label="Rendering diagnostics">Waiting for first frame.</pre>
     <div class="row"><button id="benchmark" type="button">Benchmark this scene (60s)</button><button id="export" type="button">Export diagnostics JSON</button><button id="compatibility" type="button" hidden>Restart in WebGL2</button></div>
     <p id="benchmark-status" role="status"></p>
-    <p>All 18 legacy mode ports are available for visual review, plus two labeled probes. God Rays uses stylized additive cones, not volumetric scattering. Flash modulation is opt-in: keep Reduced flash enabled for steady brightness.</p>
+    <p class="hint">God Rays uses raymarched scattering on WebGPU; WebGL2 and Compatibility use stylized cones. Visual preferences stay in this browser. <a href="./index.html">Open legacy entry</a> (development server).</p>
+    </details>
   </section>
   <nav id="quick-controls" aria-label="Quick visualization controls" hidden>
     <button id="show" type="button">Show controls</button>

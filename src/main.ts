@@ -12,6 +12,9 @@ import { AdaptiveResolution } from './rendering/AdaptiveResolution';
 import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
 import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
 import { loadFavorites, saveFavorite } from './settings';
+import { bindSceneBrowser, bindRangeValues, visualPreferences } from './ui/VisualControls';
+import { volumetricBudget } from './modes/volumetricMode';
+import { flockBudget } from './modes/gpuFlockMode';
 
 const element = <T extends HTMLElement>(id: string) => {
   const found = document.getElementById(id);
@@ -56,6 +59,11 @@ const favoriteModes = element<HTMLSelectElement>('favorite-modes');
 const quickBloom = element<HTMLInputElement>('quick-bloom');
 const quickExposure = element<HTMLInputElement>('quick-exposure');
 const settingsStatus = element('settings-status');
+const transition = element<HTMLSelectElement>('transition');
+const sceneDetail = element('scene-detail');
+const savedPreferences = visualPreferences(controls);
+const syncRangeValues = bindRangeValues(document.body);
+adaptive.budgetMs = 1000 / refreshHz();
 const validFavoriteIds = new Set(modeDefinitions.map(definition => definition.id));
 let favorites = new Set<string>();
 let favoritesReady = false, favoritesSaving = false;
@@ -67,7 +75,9 @@ if (qualityPresets.includes(params.get('quality') as QualityPreset)) quality.val
 const budget = () => presetBudget(quality.value as QualityPreset);
 if (['linear', 'log'].includes(params.get('spectrum') ?? '')) spectrum.value = params.get('spectrum')!;
 const initialOutput = parseOutputSettings(params);
-toneMapping.value = initialOutput.toneMapping; antialiasing.value = initialOutput.aa;
+if (params.has('tone')) toneMapping.value = initialOutput.toneMapping;
+if (params.has('aa')) antialiasing.value = initialOutput.aa;
+const sceneBrowser = bindSceneBrowser(mode, element<HTMLInputElement>('scene-search'), element<HTMLButtonElement>('previous-mode'), element<HTMLButtonElement>('next-mode'), element('scene-count'));
 const outputSettings = () => ({ toneMapping: toneMapping.value as ToneMappingName, aa: antialiasing.value as AntialiasingName });
 const applyModeBloom = () => { const strength = modeDefinitions.find((definition) => definition.id === mode.value)?.bloom; if (strength !== undefined) bloom.value = String(strength); syncQuickControls(); };
 function syncQuickControls() {
@@ -92,6 +102,7 @@ function syncQuickControls() {
   favoriteModes.disabled = mode.disabled || !options.some((option) => !option.disabled);
   quickBloom.value = bloom.value;
   quickExposure.value = exposure.value;
+  syncRangeValues();
 }
 for (const button of [favoriteButton, quickFavorite]) button.addEventListener('click', async () => {
   favoritesSaving = true;
@@ -112,8 +123,9 @@ for (const [compact, full] of [[quickBloom, bloom], [quickExposure, exposure]]) 
   compact.addEventListener('input', () => {
     full.value = compact.value;
     full.dispatchEvent(new Event('input', { bubbles: true }));
+    savedPreferences.save();
   });
-  full.addEventListener('input', () => { compact.value = full.value; });
+  full.addEventListener('input', () => { compact.value = full.value; syncRangeValues(); });
 }
 syncQuickControls();
 void loadFavorites(validFavoriteIds).then(saved => {
@@ -127,7 +139,11 @@ const validTime = params.has('time') && Number.isFinite(requestedTime) && reques
 const fixedTime = validTime ? requestedTime : 2;
 let frozen = validTime;
 let paused = false;
-motion.checked = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+if (motionPreference.matches) motion.checked = true;
+motionPreference.addEventListener('change', event => {
+  if (event.matches) { motion.checked = true; motion.dispatchEvent(new Event('input')); }
+});
 
 let engine: VisualEngine | undefined;
 let starting = false;
@@ -144,7 +160,7 @@ let intervals: number[] = [];
 let benchmarkRun: { start: number; samples: number[] } | undefined;
 const reports: unknown[] = [];
 export interface BenchResult { raf: FrameTimingStats; cpu: FrameTimingStats; gpu: FrameTimingStats | null; drawingBuffer: { width: number; height: number } }
-let benchHook: { until: number; raf: number[]; cpu: number[]; gpu: number[]; lastGpu: number | null; done: (result: BenchResult) => void } | undefined;
+let benchHook: { until: number; raf: number[]; cpu: number[]; gpu: number[]; lastGpuSample: number; done: (result: BenchResult) => void } | undefined;
 const audio = new AudioEngine();
 const player = new ControlPanel(audio, resetTiming);
 const fixture: AudioFrame = { waveform: new Float32Array(1024), spectrum: new Uint8Array(512), bass: 0, mid: 0, highs: 0, rms: 0, onset: false, time: 0 };
@@ -160,7 +176,7 @@ function fail(error: unknown) {
 function metadata() {
   const state = audio.state;
   return {
-    schemaVersion: 1, stage: 'Stage 3 GPU scaling — in progress',
+    schemaVersion: 2, stage: 'Stage 4 advanced visuals',
     timestamp: new Date().toISOString(),
     secureContext: isSecureContext, backendRequested: backend.value, backendActual: engine?.backend ?? 'unavailable',
     startupFailures: engine?.startupFailures ?? [], gpu: 'Record physical GPU and OS in the hardware review.',
@@ -171,9 +187,12 @@ function metadata() {
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     drawingBuffer: { width: engine?.dimensions.x, height: engine?.dimensions.y },
     quality: quality.value, spectrumMapping: spectrum.value, output: { toneMapping: toneMapping.value, antialiasing: `${antialiasing.value} after single display transform`, exposure: Number(exposure.value), bloom: Number(bloom.value), scale: renderScale(), scaleMode: scale.value === 'auto' ? 'auto' : 'locked', targetHz: refreshHz() },
-    simulation: mode.value === 'particles' ? '8,000 analytic instanced sprites; no compute/storage required on either backend' : 'TSL/scene; no compute required',
+    transition: { seconds: motion.checked ? 0 : Number(transition.value), strategy: 'bounded outgoing-frame snapshot; one live scene; two targets capped at 1920 × 1080' },
+    volumetrics: mode.value === 'godrays' && engine?.backend === 'webgpu' && quality.value !== 'compatibility' ? volumetricBudget(budget()) : null,
+    simulation: mode.value === 'boids' && engine?.backend === 'webgpu' && quality.value !== 'compatibility' ? { ...flockBudget(budget()), method: 'double-buffered GPU state; rotating bounded neighbor samples; 120 Hz' } : mode.value === 'particles' ? `${Math.round(8000 * budget().particleScale)} analytic curl sprites; no compute/storage required on either backend` : 'TSL/scene',
     metric: 'requestAnimationFrame intervals, NOT GPU execution time; 60 Hz reference',
-    timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'WebGPU timestamp query' : 'unavailable' },
+    timingSources: { raf: 'requestAnimationFrame interval', cpu: 'mode.update + simulation + pipeline submit (performance.now)', gpu: engine?.gpuTimingAvailable ? 'submission-start to GPU queue completion; upper bound including callback overhead' : 'unavailable', gpuPassSum: 'raw timestamp sum; overlapping pass intervals are not elapsed frame time' },
+    gpuPassSumMs: engine?.lastFrame.gpuPassMs ?? null,
   };
 }
 /** Re-applies the Render scale select's Auto/locked choice, e.g. after a benchmark held the scale. */
@@ -210,6 +229,7 @@ async function start() {
   failed = false;
   loop.stop();
   restart.disabled = backend.disabled = mode.disabled = compatibility.disabled = true;
+  sceneBrowser.refresh();
   syncQuickControls();
   status.textContent = 'Initializing graphics backend…';
   status.dataset.state = 'loading';
@@ -227,6 +247,7 @@ async function start() {
     if (mode.selectedOptions[0]?.disabled) mode.value = modeDefinitions[0].id;
     await candidate.setQuality(budget());
     candidate.setOutput(outputSettings());
+    candidate.setTransition(Number(transition.value), motion.checked);
     applyModeBloom();
     viewport.replaceChildren(candidate.renderer.domElement);
     resize();
@@ -234,7 +255,8 @@ async function start() {
     if (shutdown || generation !== epoch) return;
     draw(0);
     if (failed) throw new Error('Graphics validation failed during the first frame.');
-    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 3`;
+    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 4`;
+    updateSceneDetail();
     status.dataset.state = 'ready';
     if (!document.hidden) loop.start(frame);
   } catch (error) {
@@ -243,11 +265,13 @@ async function start() {
     if (generation === epoch) {
       starting = false;
       restart.disabled = backend.disabled = mode.disabled = compatibility.disabled = false;
+      sceneBrowser.refresh();
       syncQuickControls();
     }
   }
 }
 function draw(delta: number) {
+  engine?.setTransition(Number(transition.value), motion.checked);
   const snapshot = audio.sample(delta);
   if (!synthetic.checked && audio.state.source === 'file' && audio.state.trackName && !frozen && !paused && !motion.checked) clock = snapshot.time;
   if (synthetic.checked) {
@@ -281,7 +305,7 @@ function frame(now: number) {
     if (benchHook && engine && deltaMs > 0) {
       benchHook.raf.push(deltaMs); benchHook.cpu.push(engine.lastFrame.cpuUpdateMs);
       const gpu = engine.lastFrame.gpuMs;
-      if (gpu !== null && gpu !== benchHook.lastGpu) { benchHook.gpu.push(gpu); benchHook.lastGpu = gpu; }
+      if (gpu !== null && engine.lastFrame.gpuSample !== benchHook.lastGpuSample) { benchHook.gpu.push(gpu); benchHook.lastGpuSample = engine.lastFrame.gpuSample; }
       if (now >= benchHook.until) {
         const { raf, cpu, gpu: gpuSamples, done } = benchHook; benchHook = undefined;
         done({ raf: summarizeIntervals(raf, refreshHz()), cpu: summarizeIntervals(cpu, refreshHz()), gpu: gpuSamples.length ? summarizeIntervals(gpuSamples, refreshHz()) : null, drawingBuffer: { width: engine.dimensions.x, height: engine.dimensions.y } });
@@ -289,7 +313,7 @@ function frame(now: number) {
     }
     // Automatic steps keep the benchmark window: only explicit setting changes reset timing.
     const gpuMs = engine?.lastFrame.gpuMs;
-    const frameCost = engine && gpuMs != null ? engine.lastFrame.cpuUpdateMs + gpuMs : null;
+    const frameCost = engine && gpuMs != null ? Math.max(engine.lastFrame.cpuUpdateMs, gpuMs) : null;
     const nextScale = deltaMs > 0 ? adaptive.sample(deltaMs, now, frameCost) : null;
     if (nextScale !== null) engine?.resize(innerWidth, innerHeight, nextScale);
     if (benchmarkRun && now - benchmarkRun.start >= 60000) {
@@ -303,7 +327,7 @@ function frame(now: number) {
     if (now >= nextDiagnostics) {
       nextDiagnostics = now + 500;
       const stats = summarizeIntervals(intervals, refreshHz());
-      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over ${(1100 / refreshHz()).toFixed(2)} ms (${refreshHz()} Hz target) · render scale ${renderScale()} (${scale.value === 'auto' ? 'auto' : 'locked'})\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
+      diagnostics.textContent = `${engine?.backend} · ${engine?.dimensions.x} × ${engine?.dimensions.y} pixels\n${stats.count} steady-state samples · median ${stats.medianMs.toFixed(2)} ms · p95 ${stats.p95Ms.toFixed(2)} ms · p99 ${stats.p99Ms.toFixed(2)} ms\n${stats.missedFrames} intervals over ${(1100 / refreshHz()).toFixed(2)} ms (${refreshHz()} Hz target) · render scale ${renderScale()} (${scale.value === 'auto' ? 'auto' : 'locked'})\ncpu ${engine?.lastFrame.cpuUpdateMs.toFixed(2)} ms · gpu ${engine?.lastFrame.gpuMs == null ? 'n/a' : `${engine.lastFrame.gpuMs.toFixed(2)} ms (submit → complete, upper bound)`}${now < warmUntil ? '\nWarming up — excluded from measurements.' : ''}`;
     }
   } catch (error) { fail(error); }
 }
@@ -316,13 +340,14 @@ mode.addEventListener('change', () => {
   if (!engine || failed || starting) return;
   // Hold adaptive scaling through the compile: a one-time shader compile must not lower quality.
   adaptive.reset(performance.now());
-  engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); resetTiming(); } }).catch(fail);
+  sceneDetail.textContent = 'Preparing scene…';
+  engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); updateSceneDetail(); resetTiming(); } }).catch(fail);
 });
 scale.addEventListener('change', resize);
 quality.addEventListener('change', () => {
   if (!engine || failed || starting) return;
   adaptive.reset(performance.now());
-  engine.setQuality(budget()).then(resetTiming).catch(fail);
+  engine.setQuality(budget()).then(() => { updateSceneDetail(); resetTiming(); }).catch(fail);
 });
 for (const control of [toneMapping, antialiasing]) control.addEventListener('change', () => {
   if (!engine || failed || starting) return;
@@ -330,6 +355,18 @@ for (const control of [toneMapping, antialiasing]) control.addEventListener('cha
 });
 targetHz.addEventListener('change', () => { adaptive.budgetMs = 1000 / refreshHz(); resetTiming(); });
 for (const control of [spectrum, exposure, bloom, synthetic, motion, sensitivity, colorSpeed, reducedFlash]) control.addEventListener('input', resetTiming);
+for (const control of [transition, motion]) control.addEventListener('change', () => {
+  engine?.setTransition(Number(transition.value), motion.checked); resetTiming();
+});
+function updateSceneDetail() {
+  if (mode.value === 'godrays') {
+    const volume = engine?.backend === 'webgpu' && quality.value !== 'compatibility';
+    const settings = volumetricBudget(budget());
+    sceneDetail.textContent = volume ? `Raymarched fog · ${settings.samples} samples · ${Math.round(settings.scale * 100)}% scene resolution · unshadowed light shafts` : 'Stylized additive cones · compatibility treatment';
+  } else if (mode.value === 'particles') sceneDetail.textContent = `${Math.round(8000 * budget().particleScale).toLocaleString()} GPU particles · layered curl motion and depth colour`;
+  else if (mode.value === 'boids') sceneDetail.textContent = engine?.backend === 'webgpu' && quality.value !== 'compatibility' ? `${flockBudget(budget()).count.toLocaleString()} GPU boids · ${flockBudget(budget()).neighbors} sampled neighbors · double-buffered 120 Hz simulation` : `${Math.round(220 * budget().particleScale)} CPU boids · bounded compatibility simulation`;
+  else sceneDetail.textContent = modeDefinitions.find(definition => definition.id === mode.value)?.label ?? '';
+}
 freeze.setAttribute('aria-pressed', String(frozen));
 freeze.addEventListener('click', () => { frozen = !frozen; freeze.setAttribute('aria-pressed', String(frozen)); resetTiming(); });
 benchmark.addEventListener('click', () => {
@@ -390,11 +427,14 @@ if (import.meta.env.DEV) {
   Object.assign(window, { __visualizerDebug: {
     get activeMode() { return engine?.activeMode; },
     get activeScene() { return engine?.activeScene; },
+    get renderer() { return engine?.renderer; },
+    get frameTiming() { return engine ? { ...engine.lastFrame } : undefined; },
     get pipelineAa() { return engine?.pipelineAa; },
+    get transitioning() { return engine?.transitioning; },
     get adaptiveHolding() { return adaptive.isHolding(performance.now()); },
     get adaptiveLocked() { return adaptive.isLocked; },
     setCompileDelay(ms: number) { if (engine) engine.compileDelayMs = ms; },
-    bench: (seconds: number) => new Promise<BenchResult>((done) => { benchHook = { until: performance.now() + seconds * 1000, raf: [], cpu: [], gpu: [], lastGpu: null, done }; }),
+    bench: (seconds: number) => new Promise<BenchResult>((done) => { benchHook = { until: performance.now() + seconds * 1000, raf: [], cpu: [], gpu: [], lastGpuSample: engine?.lastFrame.gpuSample ?? 0, done }; }),
   } });
 }
 void start();

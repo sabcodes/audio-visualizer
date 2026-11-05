@@ -32,6 +32,10 @@ export interface VisualMode {
   dispose(): void;
   /** Resolves once assets the mode loads asynchronously (models, textures) are in its scene; it never rejects. */
   ready?: Promise<void>;
+  /** Compile simulation kernels before the mode becomes visible. */
+  prepare?(renderer: WebGPURenderer): Promise<void>;
+  /** Scale only this mode's scene pass (e.g. bounded, low-resolution volumetrics). */
+  resolutionScale?: number;
   /** Off-screen passes (simulation steps, feedback buffers) run after update and before the scene renders. */
   simulate?(renderer: WebGPURenderer): void;
   // Samples the scene's real intermediate pass before linear bloom/output.
@@ -44,5 +48,5 @@ export interface ModeDefinition {
   backends: readonly BackendName[];
   /** Bloom strength the slider moves to when this mode is selected; absent keeps the current value. */
   bloom?: number;
-  create(budget: QualityBudget): VisualMode;
+  create(budget: QualityBudget, backend?: BackendName): VisualMode;
 }

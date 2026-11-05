@@ -79,9 +79,11 @@ import { createAkiraMode } from './akiraMode';
 import { createWater7Mode } from './water7Mode';
 import { createIchirakuMode } from './ichirakuMode';
 import { createSpaceShipMode } from './spaceShipMode';
+import { createVolumetricMode } from './volumetricMode';
+import { createGpuFlockMode } from './gpuFlockMode';
 export type { ModeFrame, ModeDefinition, VisualMode } from './types';
 
-const definition = (id: string, label: string, create: (budget: QualityBudget) => VisualMode, output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
+const definition = (id: string, label: string, create: ModeDefinition['create'], output: ModeDefinition['output'] = 'scene'): ModeDefinition => ({ id, label, create, output, backends: ['webgpu', 'webgl2'] });
 export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('circle', 'Circle Waveform', () => createLineMode('circle')),
   definition('spiral', 'Spiral', () => createLineMode('spiral')),
@@ -90,7 +92,7 @@ export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('particles', 'Neon Swirl Particles', (budget) => createParticleMode('particles', budget)),
   definition('errors', 'Vintage Errors (Win95)', createErrorMode, 'dom'),
   definition('lissajous', 'Laser Lissajous', () => createLineMode('lissajous')),
-  definition('boids', 'Boids + Beat Bursts', (budget) => createParticleMode('boids', budget)),
+  definition('boids', 'Boids + Beat Bursts', (budget, backend) => backend === 'webgpu' && budget.preset !== 'compatibility' ? createGpuFlockMode(budget) : createParticleMode('boids', budget)),
   definition('fftTunnel', 'FFT Tunnel (Lines)', () => createLineMode('fftTunnel')),
   definition('kaleidoPlane', 'Kaleidoscope Plane', createKaleidoscopeMode),
   definition('city', 'Instanced Cityscape', () => createSpatialMode('city')),
@@ -100,7 +102,7 @@ export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('starTunnel', 'Stars Tunnel', (budget) => createParticleMode('starTunnel', budget)),
   definition('bloomTunnel', 'Bloom Tunnel (Neon)', () => createSpatialMode('bloomTunnel')),
   definition('glitchFX', 'Glitch FX (RGB Split)', createGlitchMode),
-  definition('godrays', 'God Rays (Stylized Cones)', () => createSpatialMode('godrays')),
+  definition('godrays', 'God Rays · Light Shafts', (budget, backend) => backend === 'webgpu' && budget.preset !== 'compatibility' ? createVolumetricMode(budget) : createSpatialMode('godrays')),
 ];
 // First wave of the 32 candidates in docs/research/2026-10-24-new-visualization-modes.md.
 export const waveOneModeDefinitions: readonly ModeDefinition[] = [
@@ -275,7 +277,7 @@ export class ModeRegistry {
     const definition = this.definitions.get(id);
     if (!definition) throw new Error(`Unknown visual mode: ${id}`);
     if (!definition.backends.includes(backend)) throw new Error(`${definition.label} is unavailable on ${backend}`);
-    return definition.create(budget);
+    return definition.create(budget, backend);
   }
   select(id: string, backend: BackendName, budget: QualityBudget = presetBudget('balanced')): VisualMode {
     const next = this.create(id, backend, budget);

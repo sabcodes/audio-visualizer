@@ -2,7 +2,7 @@
 
 **Prepared:** October 24, 2026  
 **Project:** `Desktop/visualizer/`  
-**Status:** Proposed implementation plan; application code has not been changed.  
+**Status:** Modern entry implemented through Stage 4; Stage 5 stabilization and default-entry acceptance remain.
 **Goal:** Preserve all 18 existing visual modes while building a modern, GPU-driven browser visualizer with measurably better image quality, scalability, and usability.
 
 ## 1. Recommendation and scope
@@ -236,6 +236,8 @@ GPU deformation must supply safe bounds; transparent billboards need deliberate 
 **Exit gate:** Quality and responsiveness improve against the baseline at documented settings; compatibility substitutions remain covered.
 
 ### Stage 4 — Advanced visuals and polished controls
+
+**Status (2026-11-05):** Complete in the modern entry. Volumetrics, GPU flocking, richer particles, bounded transitions, controls, and comfort settings are implemented. The build, 271 unit tests, 26 focused browser checks, real-music/resource soak, and 17 one-minute reference configurations pass. See `docs/stage4-results.md` for measured budgets, reviewed captures, and the Chrome/M2 Pro validation scope.
 
 - Add the volumetric treatment, richer GPU particle behavior, bounded transitions, and the improved control panel.
 - Tune reduced-flash/reduced-motion behavior alongside the normal look.

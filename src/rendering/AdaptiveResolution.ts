@@ -16,7 +16,7 @@ const OUTLIER_MS = 250;
 
 /**
  * Render-scale controller. Frame intervals are vsync-quantised, so "fast" can't mean "under budget":
- * a window counts as slow only when intervals miss the budget AND the measured frame cost (CPU + GPU,
+ * a window counts as slow only when intervals miss the budget AND the measured completion cost (including CPU submit,
  * when known) is high; a window within budget counts as good. After enough good windows it probes one
  * level up; a probe followed by a slow window steps back down and doubles the wait before the next probe.
  * It holds still during warmup, cooldown, or a manual lock.
@@ -66,7 +66,7 @@ export class AdaptiveResolution {
 
   /**
    * Returns the new scale when it changes, otherwise null. `costMs` is the frame's measured work
-   * (CPU submit + GPU time); omit it when GPU time is unavailable and intervals alone decide.
+   * (submission start through GPU queue completion); omit it when unavailable and intervals alone decide.
    */
   sample(intervalMs: number, now: number, costMs?: number | null): number | null {
     if (this.locked !== null || now < this.holdUntil) return null;
