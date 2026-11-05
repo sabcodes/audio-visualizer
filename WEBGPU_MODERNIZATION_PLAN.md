@@ -2,7 +2,7 @@
 
 **Prepared:** October 24, 2026  
 **Project:** `Desktop/visualizer/`  
-**Status:** Modern entry implemented through Stage 4; Stage 5 stabilization and default-entry acceptance remain.
+**Status:** Stage 5 complete on the Chrome / Apple M2 Pro reference, November 5, 2026. The modern visualizer is the default entry. See `docs/stage5-results.md` for verified support, recovery, production and long-session evidence.
 **Goal:** Preserve all 18 existing visual modes while building a modern, GPU-driven browser visualizer with measurably better image quality, scalability, and usability.
 
 ## 1. Recommendation and scope
@@ -327,5 +327,5 @@ Checked October 24, 2026. Public documentation may advance after this plan; impl
 - Versioned GPU particle example: https://github.com/mrdoob/three.js/blob/r186/examples/webgpu_compute_particles.html
 - Upgrade reference: https://github.com/mrdoob/three.js/wiki/Migration-Guide
 
-**Next action:** Approve the plan and begin Stage 0 only. Do not start an unmeasured full rewrite or overwrite the original working entry as the first implementation step.
+**Release handoff:** Stage 5 is complete. Use `README.md` for run/build/recovery instructions and `docs/stage5-results.md` for the measured support matrix and acceptance reports. The user explicitly requested completion of Stage 5, including the default-entry switch. The subsequent user-authorized cleanup removes the original implementation and alternate entry; `/` is the sole entry, with the verified WebGL2 fallback retained.
 

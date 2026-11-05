@@ -46,11 +46,16 @@ export interface Figure {
 export function instantiate(gltf: GLTF): Figure {
   const root = cloneSkinned(gltf.scene);
   const materials = new Map<string, FigureMaterial>(), byName = new Map<string, THREE.Object3D>();
+  const geometries = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
   root.traverse((object) => {
     if (!byName.has(object.name)) byName.set(object.name, object);
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.frustumCulled = false;
+    // Rebaking or disposing one visit must not mutate the cached glTF or a prepared sibling.
+    let geometry = geometries.get(mesh.geometry);
+    if (!geometry) { geometry = mesh.geometry.clone(); geometries.set(mesh.geometry, geometry); }
+    mesh.geometry = geometry;
     const own = (material: THREE.Material) => {
       let copy = materials.get(material.name);
       if (!copy) { copy = (material as FigureMaterial).clone(); materials.set(material.name, copy); }

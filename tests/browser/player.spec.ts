@@ -38,7 +38,7 @@ test('local player owns one graph through playback, seeking, modes, restart, and
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const backend = info.project.name === 'hardware-webgpu' ? 'webgpu' : 'webgl2';
-  await page.goto(`/modern.html?backend=${backend}`);
+  await page.goto(`/?backend=${backend}`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#play-btn')).toBeDisabled();
   await expect(page.locator('#synthetic')).not.toBeChecked();
@@ -71,7 +71,7 @@ test('local player owns one graph through playback, seeking, modes, restart, and
 
 test('invalid audio and rejected playback have a recoverable state', async ({ page }, info) => {
   test.skip(info.project.name !== 'compatibility');
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await page.locator('#audio-upload').setInputFiles({ name: 'invalid.wav', mimeType: 'audio/wav', buffer: Buffer.from('not valid audio') });
   await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'error');
   await page.locator('#audio-upload').setInputFiles(tone());

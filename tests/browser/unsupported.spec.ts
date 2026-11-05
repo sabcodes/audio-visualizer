@@ -12,7 +12,7 @@ test('both unavailable backends give an actionable recovery message', async ({ p
       return Reflect.apply(original, this, args);
     } as typeof original;
   });
-  await page.goto('/modern.html?backend=auto');
+  await page.goto('/?backend=auto');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'error');
   await expect(page.locator('#status')).toContainText('localhost/HTTPS');
   await expect(page.getByRole('button', { name: 'Restart in WebGL2' })).toBeVisible();

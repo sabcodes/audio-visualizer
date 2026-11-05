@@ -1,0 +1,15 @@
+{
+  "index.html": "e706235027ec372c21e2598779e9dd22e74e07f7ae76581335014f34243af1ce",
+  "modern.html": "6c37b4949cadeb4205ccaf290ee52a676f8c0185658a210b149a9ab459cba0e1",
+  "legacy.html": "ae58961bb1783840d3ec3913e34966cededf9d62a55d22805f23b60f0a67d4e1",
+  "vite.config.ts": "73eabc3827ad2060b3d4574ab76cefc745c87f0573a9cd0154755f1d04b3b543",
+  "package.json": "5b956e3c4800200a64e3e0e31f9629f0c1ca85f31521af3a42432ffca115cb07",
+  "package-lock.json": "acab73cd8c021d6ce363736289744602166bcf874cd970d06af9b331234f37a0",
+  "src/main.ts": "f229a2d1bfb2ad3dfe04204a4e03f6a2caa0eaf83d8edbc3b1d3aaa13d6d5250",
+  "src/settings.ts": "b76a581db4e7644779785a53a0df0713a831bce68c95ca010fb7f658f8e8f256",
+  "src/rendering/VisualEngine.ts": "62a7808e834f81c140cbbbe75cfaf29086fb553e89960e36be7018883d1763ec",
+  "src/modes/shared.ts": "4c5c1a11d5216497e4d2dcc88b36d300571955986b08ff31d623c96c3c9d67d6",
+  "src/modes/figures.ts": "995be403849533b670b83a4b6da9896c5b640792e8fc32a19acf0dbeae8c0560",
+  "src/modes/goldenGateMode.ts": "7e79a0d2d4d4ea1b088dd87899e2c04ae0ed506a762d84be21f1e210e9e5c581",
+  "src/modes/sparkPlumeMode.ts": "d268090115be6e7b062c6609d23dd6a2b36813883b8859c6378440cf64611ace"
+}

@@ -26,12 +26,18 @@ export function spectrumBin(frame: Pick<ModeFrame, 'spectrumMapping' | 'sampleRa
 export function disposeScene(scene: THREE.Scene) {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
+  const skeletons = new Set<THREE.Skeleton>();
   scene.traverse((object) => {
     const mesh = object as THREE.Mesh;
     if (mesh.geometry) geometries.add(mesh.geometry);
     if (mesh.material) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(material);
-    if (object instanceof THREE.InstancedMesh) object.dispose();
+    if (object instanceof THREE.SkinnedMesh) skeletons.add(object.skeleton);
+    // Object disposal also releases renderer-owned shadow passes and per-object buffers.
+    object.dispose();
   });
+  // TSL backgrounds own a renderer-created sky mesh outside scene.children.
+  scene.backgroundNode?.dispose();
+  skeletons.forEach(skeleton => skeleton.dispose());
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());
   scene.clear();

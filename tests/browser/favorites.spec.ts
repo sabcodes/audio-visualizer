@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }, info) => {
 test('favorites persist and hidden controls switch scenes, sync sliders, and fade on hover', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/modern.html?backend=webgl2&mode=scene&time=2');
+  await page.goto('/?backend=webgl2&mode=scene&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#favorite-modes')).toBeDisabled();
   await page.locator('#favorite').click();
@@ -66,7 +66,7 @@ test('favorites tolerate invalid saved data and unavailable browser storage', as
     localStorage.setItem('visualizer.favoriteModes', '{broken json');
     Storage.prototype.setItem = () => { throw new DOMException('Storage blocked', 'SecurityError'); };
   });
-  await page.goto('/modern.html?backend=webgl2&mode=scene&time=2');
+  await page.goto('/?backend=webgl2&mode=scene&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.locator('#favorite').click();
   await expect(page.locator('#favorite')).toHaveAttribute('aria-pressed', 'true');
@@ -75,7 +75,7 @@ test('favorites tolerate invalid saved data and unavailable browser storage', as
 });
 
 test('imports old browser favorites once and keeps them in the project after browser storage is cleared', async ({ page }) => {
-  await page.goto('/modern.html?backend=webgl2&mode=scene&time=2');
+  await page.goto('/?backend=webgl2&mode=scene&time=2');
   await page.evaluate(() => localStorage.setItem('visualizer.favoriteModes', JSON.stringify(['scene', 'rings', 'removed-mode'])));
   await page.reload();
   await expect(page.locator('#favorite')).toHaveAttribute('aria-pressed', 'true');
@@ -94,7 +94,7 @@ test('imports old browser favorites once and keeps them in the project after bro
 });
 
 test('reports a failed disk save without pretending the favorite was saved', async ({ page }) => {
-  await page.goto('/modern.html?backend=webgl2&mode=scene&time=2');
+  await page.goto('/?backend=webgl2&mode=scene&time=2');
   await expect(page.locator('#favorite')).toBeEnabled();
   await page.route('**/api/settings', route => route.fulfill({ status: 500, json: { error: 'Cannot write settings' } }));
   await page.locator('#hide').click();

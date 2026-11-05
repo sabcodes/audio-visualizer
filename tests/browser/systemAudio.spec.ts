@@ -40,7 +40,7 @@ test('listens to captured audio, drops the video, and releases everything on Sto
   await audit(page);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   for (let round = 1; round <= 3; round++) {
     await page.getByRole('button', { name: 'Use audio playing on this Mac' }).click();
@@ -66,7 +66,7 @@ test('listens to captured audio, drops the video, and releases everything on Sto
 
 test('Stop sharing from the browser returns to the file player', async ({ page }) => {
   await audit(page);
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await page.getByRole('button', { name: 'Use audio playing on this Mac' }).click();
   await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'listening');
   // A stopped track doesn't fire `ended`; the browser's own Stop sharing does, which this simulates.
@@ -94,7 +94,7 @@ for (const [label, behavior, message] of failures) test(`explains when the user 
       throw new DOMException(text, name);
     };
   }, behavior);
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await page.getByRole('button', { name: 'Use audio playing on this Mac' }).click();
   await expect(page.locator('#audio-status')).toContainText(message);
   await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'empty');
@@ -103,7 +103,7 @@ for (const [label, behavior, message] of failures) test(`explains when the user 
 
 test('disables the button where display capture is missing', async ({ page }) => {
   await page.addInitScript(() => { Object.defineProperty(MediaDevices.prototype, 'getDisplayMedia', { value: undefined, configurable: true }); });
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await expect(page.locator('#listen-btn')).toBeDisabled();
   await expect(page.locator('#listen-btn')).toContainText('load a file instead');
 });

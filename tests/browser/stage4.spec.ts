@@ -16,7 +16,7 @@ test('Stage 4 renders particles and the appropriate light-shaft tier without err
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
   const native = info.project.name === 'stage4-webgpu';
-  await page.goto(`/modern.html?backend=${native ? 'webgpu' : 'webgl2'}&mode=godrays&time=2`);
+  await page.goto(`/?backend=${native ? 'webgpu' : 'webgl2'}&mode=godrays&time=2`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#scene-detail')).toContainText(native ? '24 samples' : 'Stylized');
   await page.locator('#hide').click();
@@ -43,7 +43,7 @@ test('Stage 4 renders particles and the appropriate light-shaft tier without err
 test('Stage 4 fades finish, rapid switches settle, and reduced motion and DOM scenes cut', async ({ page }, info) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`/modern.html?backend=${info.project.name === 'stage4-webgpu' ? 'webgpu' : 'webgl2'}&mode=circle&time=2`);
+  await page.goto(`/?backend=${info.project.name === 'stage4-webgpu' ? 'webgpu' : 'webgl2'}&mode=circle&time=2`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.selectOption('#transition', '0.7');
   await page.selectOption('#mode', 'spiral');
@@ -70,7 +70,7 @@ test('Stage 4 fades finish, rapid switches settle, and reduced motion and DOM sc
 });
 
 test('Stage 4 snapshots preserve orientation and display colour during a fade', async ({ page }, info) => {
-  await page.goto(`/modern.html?backend=${info.project.name === 'stage4-webgpu' ? 'webgpu' : 'webgl2'}&mode=rings&time=2`);
+  await page.goto(`/?backend=${info.project.name === 'stage4-webgpu' ? 'webgpu' : 'webgl2'}&mode=rings&time=2`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.selectOption('#transition', '0.7');
   await page.locator('#hide').click();
@@ -97,7 +97,7 @@ test('Stage 4 snapshots preserve orientation and display colour during a fade', 
 
 test('Stage 4 search navigates filtered scenes and preferences survive reload on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 740 });
-  await page.goto('/modern.html?backend=webgl2&mode=circle&time=2');
+  await page.goto('/?backend=webgl2&mode=circle&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.locator('#scene-search').fill('tunnel');
   const visible = await page.locator('#mode option').evaluateAll(options => options.filter(option => !(option as HTMLOptionElement).hidden && !(option as HTMLOptionElement).disabled).map(option => (option as HTMLOptionElement).value));
@@ -128,7 +128,7 @@ test('Stage 4 ignores malformed visual preferences and explicit URLs override sa
       quality: 'missing', exposure: 'Infinity', bloom: '-10', transition: '99', motion: 'yes', 'reduced-flash': false, aa: 'smaa', 'tone-mapping': 'agx',
     } }));
   });
-  await page.goto('/modern.html?backend=webgl2&mode=circle&aa=fxaa&tone=aces');
+  await page.goto('/?backend=webgl2&mode=circle&aa=fxaa&tone=aces');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#quality')).toHaveValue('balanced');
   await expect(page.locator('#exposure')).toHaveValue('1');
@@ -143,7 +143,7 @@ test('Stage 4 ignores malformed visual preferences and explicit URLs override sa
 test('Stage 4 collects a short Balanced 1080p native timing smoke check', async ({ page }, info) => {
   test.skip(info.project.name !== 'stage4-webgpu');
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/modern.html?backend=webgpu&mode=particles&quality=balanced');
+  await page.goto('/?backend=webgpu&mode=particles&quality=balanced');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#status')).toContainText('native WebGPU');
   await page.selectOption('#scale', '1');
@@ -177,7 +177,7 @@ test('Stage 4 collects a short Balanced 1080p native timing smoke check', async 
 
 test('Stage 4 GPU flock matches one immutable-input steering step and releases storage', async ({ page }, info) => {
   test.skip(info.project.name !== 'stage4-webgpu');
-  await page.goto('/modern.html?backend=webgpu&mode=circle&time=2');
+  await page.goto('/?backend=webgpu&mode=circle&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   const result = await page.evaluate(async () => {
     const flockPath = '/src/modes/gpuFlockMode.ts', qualityPath = '/src/rendering/quality.ts', simulationPath = '/src/simulations/flock.ts';
@@ -221,7 +221,7 @@ test('Stage 4 GPU flock matches one immutable-input steering step and releases s
 
 test('Stage 4 never treats summed pass timestamps as elapsed GPU completion time', async ({ page }, info) => {
   test.skip(info.project.name !== 'stage4-webgpu');
-  await page.goto('/modern.html?backend=webgpu&mode=circle');
+  await page.goto('/?backend=webgpu&mode=circle');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.evaluate(() => { (window as any).__visualizerDebug.renderer.resolveTimestampsAsync = async () => 999; });
   await expect.poll(() => page.evaluate(() => (window as any).__visualizerDebug.frameTiming.gpuPassMs)).toBe(1998);
@@ -231,7 +231,7 @@ test('Stage 4 never treats summed pass timestamps as elapsed GPU completion time
 
 test('Stage 4 disposes GPU storage when a prepared selection is superseded', async ({ page }, info) => {
   test.skip(info.project.name !== 'stage4-webgpu');
-  await page.goto('/modern.html?backend=webgpu&mode=circle');
+  await page.goto('/?backend=webgpu&mode=circle');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.evaluate(() => (window as any).__visualizerDebug.setCompileDelay(1200));
   await page.selectOption('#mode', 'boids');

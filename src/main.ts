@@ -131,7 +131,7 @@ syncQuickControls();
 void loadFavorites(validFavoriteIds).then(saved => {
   favorites = saved; favoritesReady = true; syncQuickControls();
 }).catch(() => {
-  settingsStatus.textContent = 'Could not load favorites. Check that the local server is running, then reload to retry.';
+  settingsStatus.textContent = 'Could not load favorites. Check browser storage or the local server, then reload to retry.';
   settingsStatus.hidden = false;
 });
 const requestedTime = Number(params.get('time'));
@@ -147,6 +147,7 @@ motionPreference.addEventListener('change', event => {
 
 let engine: VisualEngine | undefined;
 let starting = false;
+let modeDefaultsApplied = false;
 let shutdown = false;
 let failed = false;
 const loop = new FrameLoop();
@@ -176,7 +177,7 @@ function fail(error: unknown) {
 function metadata() {
   const state = audio.state;
   return {
-    schemaVersion: 2, stage: 'Stage 4 advanced visuals',
+    schemaVersion: 2, stage: 'Stage 5 release',
     timestamp: new Date().toISOString(),
     secureContext: isSecureContext, backendRequested: backend.value, backendActual: engine?.backend ?? 'unavailable',
     startupFailures: engine?.startupFailures ?? [], gpu: 'Record physical GPU and OS in the hardware review.',
@@ -225,6 +226,7 @@ async function releaseGraphics() {
 async function start() {
   if (starting || shutdown) return;
   const generation = ++epoch;
+  const requestedMode = mode.value;
   starting = true;
   failed = false;
   loop.stop();
@@ -248,14 +250,17 @@ async function start() {
     await candidate.setQuality(budget());
     candidate.setOutput(outputSettings());
     candidate.setTransition(Number(transition.value), motion.checked);
-    applyModeBloom();
+    if (!modeDefaultsApplied || mode.value !== requestedMode) {
+      applyModeBloom(); modeDefaultsApplied = true;
+    }
     viewport.replaceChildren(candidate.renderer.domElement);
     resize();
     await candidate.select(mode.value);
     if (shutdown || generation !== epoch) return;
+    if (failed) throw new Error('Graphics validation failed during initialization.');
     draw(0);
     if (failed) throw new Error('Graphics validation failed during the first frame.');
-    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1 · Stage 4`;
+    status.textContent = `Ready: ${candidate.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility'} · Three.js 0.186.1`;
     updateSceneDetail();
     status.dataset.state = 'ready';
     if (!document.hidden) loop.start(frame);
@@ -341,13 +346,23 @@ mode.addEventListener('change', () => {
   // Hold adaptive scaling through the compile: a one-time shader compile must not lower quality.
   adaptive.reset(performance.now());
   sceneDetail.textContent = 'Preparing scene…';
-  engine.select(mode.value).then((active) => { if (active) { clock = 0; applyModeBloom(); updateSceneDetail(); resetTiming(); } }).catch(fail);
+  const selectedEngine = engine;
+  const generation = epoch;
+  selectedEngine.select(mode.value).then((active) => {
+    if (active && selectedEngine === engine && generation === epoch && !failed && !shutdown) {
+      clock = 0; applyModeBloom(); updateSceneDetail(); resetTiming();
+    }
+  }).catch(error => { if (selectedEngine === engine && generation === epoch && !shutdown) fail(error); });
 });
 scale.addEventListener('change', resize);
 quality.addEventListener('change', () => {
   if (!engine || failed || starting) return;
   adaptive.reset(performance.now());
-  engine.setQuality(budget()).then(() => { updateSceneDetail(); resetTiming(); }).catch(fail);
+  const selectedEngine = engine;
+  const generation = epoch;
+  selectedEngine.setQuality(budget()).then(() => {
+    if (selectedEngine === engine && generation === epoch && !failed && !shutdown) { updateSceneDetail(); resetTiming(); }
+  }).catch(error => { if (selectedEngine === engine && generation === epoch && !shutdown) fail(error); });
 });
 for (const control of [toneMapping, antialiasing]) control.addEventListener('change', () => {
   if (!engine || failed || starting) return;

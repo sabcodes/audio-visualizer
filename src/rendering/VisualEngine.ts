@@ -43,7 +43,21 @@ export class VisualEngine {
   static async create(preference: BackendPreference, onLoss: (message: string) => void) {
     const result = await initializeBackend(
       preference,
-      (forceWebGL) => new THREE.WebGPURenderer({ antialias: false, forceWebGL, trackTimestamp: true }),
+      (forceWebGL) => {
+        const renderer = new THREE.WebGPURenderer({ antialias: false, forceWebGL, trackTimestamp: true });
+        const dispose = renderer.dispose.bind(renderer);
+        renderer.dispose = async () => {
+          if (renderer.initialized) { await dispose(); return; }
+          // r186 dispose() calls setAnimationLoop() without awaiting it. After failed init
+          // that re-enters the rejected initialization and leaks an unhandled rejection.
+          // No renderer managers exist yet; release only a partially acquired backend.
+          const partial = renderer.backend as unknown as { device?: { destroy(): void }; gl?: WebGL2RenderingContext };
+          partial.device?.destroy();
+          partial.gl?.getExtension('WEBGL_lose_context')?.loseContext();
+          renderer.domElement.remove();
+        };
+        return renderer;
+      },
       async (renderer) => {
         await renderer.init();
         return 'isWebGPUBackend' in renderer.backend && renderer.backend.isWebGPUBackend
@@ -57,11 +71,31 @@ export class VisualEngine {
     engine.renderer.onDeviceLost = (info) => {
       if (!engine.disposed) onLoss(`Graphics device lost: ${info.message}. Restart in WebGL2 or retry the renderer.`);
     };
-    engine.renderer.onError = (message) => { if (!engine.disposed) onLoss(`Graphics validation failed: ${message}`); };
+    // The r186 runtime supplies an error object; its declaration still says string.
+    engine.renderer.onError = (info: unknown) => {
+      const message = info && typeof info === 'object' && 'message' in info ? info.message : info;
+      if (!engine.disposed) onLoss(`Graphics validation failed: ${String(message)}`);
+    };
     engine.renderer.debug.onShaderError = () => {
       if (!engine.disposed) onLoss('Shader compilation failed. Inspect the browser console, then retry another backend.');
     };
-    engine.renderer.domElement.setAttribute('aria-label', 'Rendered capability probe');
+    // r186 geometry disposal sees only its first render object's node attributes.
+    // Output/shadow contexts create additional wrappers (notably instance matrices).
+    // Keep their lifetime tied to the owning material, including AA rebuilds.
+    engine.renderer.debug.onNodeBuilderCreated = (builder, object) => {
+      const material = (object as { material?: THREE.Material }).material;
+      if (!material) return; // Compute kernels have their own disposal path.
+      const release = () => {
+        material.removeEventListener('dispose', release);
+        const attributes = (engine.renderer as unknown as { _attributes: { delete(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): void } })._attributes;
+        const built = builder as unknown as { getAttributesArray(): { node?: { attribute?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute } }[] };
+        for (const entry of built.getAttributesArray()) {
+          if (entry.node?.attribute) attributes.delete(entry.node.attribute);
+        }
+      };
+      material.addEventListener('dispose', release);
+    };
+    engine.renderer.domElement.setAttribute('aria-label', 'Music visualizer');
     return engine;
   }
 
@@ -117,7 +151,10 @@ export class VisualEngine {
       await candidate.ready;
       if (generation !== this.selectGeneration || this.disposed) { candidate.dispose(); return false; }
       output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa, resolutionScale: candidate.resolutionScale });
-      await this.renderer.compileAsync(candidate.scene, candidate.camera);
+      // Native compilation yields while the old scene renders. WebGL's per-object
+      // async polling can take minutes on large instanced models; the complete
+      // offscreen pipeline warmup below compiles its actual render path directly.
+      if (this.backend === 'webgpu') await this.renderer.compileAsync(candidate.scene, candidate.camera);
       output.prepare(this.lastBloom);
       // Register geometry/storage ownership before compiling kernels, even for superseded candidates.
       // Simulation hooks run only after activation: legacy hooks can change shared renderer state.

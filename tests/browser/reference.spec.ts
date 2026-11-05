@@ -10,7 +10,7 @@ const dir = 'benchmark-results/stage3-review';
 type Shot = { group: string; label: string; file: string };
 
 async function open(page: Page, query: string) {
-  await page.goto(`/modern.html?backend=webgpu&quality=balanced&${query}`);
+  await page.goto(`/?backend=webgpu&quality=balanced&${query}`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.selectOption('#scale', '1');
 }

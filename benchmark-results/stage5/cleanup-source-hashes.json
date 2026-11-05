@@ -1,0 +1,18 @@
+{
+  "index.html": "d66ac44edae6d43f48e82d49fb273727c9e8686419d611fe7186238eda569cc9",
+  "vite.config.ts": "160327337f4df4951318f012815359da1c76bf6093930597561eee29f0bb18c3",
+  "package.json": "5b6d85c217f7a0652550d2af75e0282383433e759182b3e79e20684f4b424300",
+  "package-lock.json": "acab73cd8c021d6ce363736289744602166bcf874cd970d06af9b331234f37a0",
+  "src/main.ts": "f229a2d1bfb2ad3dfe04204a4e03f6a2caa0eaf83d8edbc3b1d3aaa13d6d5250",
+  "src/settings.ts": "b76a581db4e7644779785a53a0df0713a831bce68c95ca010fb7f658f8e8f256",
+  "src/rendering/VisualEngine.ts": "62a7808e834f81c140cbbbe75cfaf29086fb553e89960e36be7018883d1763ec",
+  "src/modes/shared.ts": "4c5c1a11d5216497e4d2dcc88b36d300571955986b08ff31d623c96c3c9d67d6",
+  "src/modes/figures.ts": "995be403849533b670b83a4b6da9896c5b640792e8fc32a19acf0dbeae8c0560",
+  "src/modes/goldenGateMode.ts": "7e79a0d2d4d4ea1b088dd87899e2c04ae0ed506a762d84be21f1e210e9e5c581",
+  "src/modes/sparkPlumeMode.ts": "d268090115be6e7b062c6609d23dd6a2b36813883b8859c6378440cf64611ace",
+  "src/modes/giantMode.ts": "33a204dd9d76f03db2dbb5c6300268b44c7c9435ffdd7541a8fd981c4b9cc122",
+  "src/assets/models/swamp_giant.glb": "dafca85956680f2016518b6708a7d023664abe085699d5881c4c7caa0b461d6c",
+  "playwright.config.ts": "b533f737d8d98baec9bf913727baa87eb146a48f985bd7f1aae9f93c3b63cbfb",
+  "playwright.stage5.config.ts": "7527a2580f41de0dc48f8e1bd48591548264cc1fff385455d3ee6fb1801b6cec",
+  "tests/browser/stage5.spec.ts": "ae0cae4d36423e6dc96b6013c14fad88c67ccff698c5b6f7966348855992278c"
+}

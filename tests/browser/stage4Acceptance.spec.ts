@@ -19,7 +19,7 @@ test('Stage 4 real music, comfort settings, quality tiers and resource soak', as
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
-  await page.goto('/modern.html?backend=webgpu&mode=circle');
+  await page.goto('/?backend=webgpu&mode=circle');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.locator('#audio-upload').setInputFiles(resolve('ghost.wav'));
   await expect(page.locator('#audio-status')).toHaveAttribute('data-state', 'ready');
@@ -98,7 +98,7 @@ test('Stage 4 one-minute native quality matrix and accelerated WebGL fallback ac
   for (const config of configurations) {
     await page.setViewportSize({ width: config.width, height: config.height });
     for (const mode of config.modes) {
-      await page.goto(`/modern.html?backend=${config.backend}&quality=${config.quality}&mode=${mode}`);
+      await page.goto(`/?backend=${config.backend}&quality=${config.quality}&mode=${mode}`);
       await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
       await expect(page.locator('#status')).toContainText(config.backend === 'webgpu' ? 'native WebGPU' : 'WebGL2 compatibility');
       await page.selectOption('#target-hz', String(config.hz));
@@ -127,7 +127,7 @@ test('Stage 4 prewarming preserves shared renderer state and feedback families',
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('404')) errors.push(message.text()); });
-  await page.goto('/modern.html?backend=webgpu&mode=warehouseHall');
+  await page.goto('/?backend=webgpu&mode=warehouseHall');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   for (const mode of ['redStairwell', 'warehouseHall']) {
     await page.selectOption('#mode', mode);

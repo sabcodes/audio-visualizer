@@ -111,12 +111,16 @@ export function createSparkPlumeMode(budget: QualityBudget): VisualMode {
   material.opacityNode = fade;
   const sprites = new THREE.Sprite(material);
   sprites.geometry = sprites.geometry.clone(); sprites.count = count; sprites.frustumCulled = false;
+  // Geometry owns the storage buffers so disposal releases them on every selection path.
+  sprites.geometry.setAttribute('plumeState', state.value);
+  sprites.geometry.setAttribute('plumeMotion', motion.value);
   scene.add(sprites);
 
   const hits = createHits({ decay: 0.2, interval: 0.2 });
   let initialised = false, flipClock = 0, colourTarget = 0, cycle = 0, sway = 0;
   return {
     scene, camera,
+    async prepare(renderer) { await renderer.compileComputeAsync([init, update]); },
     simulate(renderer) {
       if (!initialised) { renderer.compute(init); initialised = true; }
       renderer.compute(update);
@@ -151,6 +155,6 @@ export function createSparkPlumeMode(budget: QualityBudget): VisualMode {
       body.pose(hoverPose(sway), -0.25, -0.36 + Math.sin(sway * 0.7) * 0.01, 0.5, Math.PI / 2 + 0.25, frame.time);
       head.value.copy(body.head).add(new THREE.Vector2(0.004, 0.035));
     },
-    dispose: () => disposeScene(scene),
+    dispose() { init.dispose(); update.dispose(); disposeScene(scene); },
   };
 }

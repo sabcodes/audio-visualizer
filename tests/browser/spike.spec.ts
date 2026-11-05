@@ -5,7 +5,7 @@ test('forced compatibility renders all probe scenes before audio exists', async 
   test.skip(testInfo.project.name !== 'compatibility');
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/modern.html?backend=webgl2&time=2');
+  await page.goto('/?backend=webgl2&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#status')).toContainText('WebGL2 compatibility');
   for (const mode of [...modes, ...modes]) {
@@ -32,7 +32,7 @@ test('forced compatibility renders all probe scenes before audio exists', async 
 test('reduced motion is respected and native controls retain keyboard behavior', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'compatibility');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/modern.html?backend=webgl2');
+  await page.goto('/?backend=webgl2');
   await expect(page.locator('#motion')).toBeChecked();
   await page.locator('#mode').focus();
   await page.keyboard.press('h');
@@ -43,7 +43,7 @@ test('@hardware initializes actual native WebGPU with all probe scenes', async (
   test.skip(testInfo.project.name !== 'hardware-webgpu');
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/modern.html?backend=webgpu&time=2');
+  await page.goto('/?backend=webgpu&time=2');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await expect(page.locator('#status')).toContainText('native WebGPU');
   for (const mode of modes) {

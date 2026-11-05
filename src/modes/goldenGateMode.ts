@@ -5,7 +5,7 @@ import type { VisualMode } from './types';
 import { approach, disposeScene, resizeCamera, sceneDefaults, settleStep, wrap } from './shared';
 import { createHits, linearRgb, variantSequence } from './hitPulse';
 import { drive, isSnare } from './waveSixShared';
-import { whenLoaded } from './figures';
+import { instantiate, whenLoaded } from './figures';
 import { seededRandom } from '../rendering/diagnostics';
 import { presetBudget, type QualityBudget } from '../rendering/quality';
 import bridgeUrl from '../assets/wave6/gg_bridge.glb?url';
@@ -240,11 +240,12 @@ export function createGoldenGateMode(budget: QualityBudget = presetBudget('balan
   const beacons: THREE.Material[] = [];
 
   const models = whenLoaded([bridgeUrl, terrainUrl], ([bridge, terrain]: GLTF[]) => {
-    for (const model of [bridge, terrain]) {
-      // COLOR_0 holds the builder's part ids, not paint.
-      model.scene.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.isMesh) mesh.geometry.deleteAttribute('color'); });
+    const roots = [instantiate(bridge).root, instantiate(terrain).root];
+    for (const root of roots) {
+      // COLOR_0 holds the builder's part ids, not paint. Only edit this visit's copy.
+      root.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.isMesh) mesh.geometry.deleteAttribute('color'); });
     }
-    const root = bridge.scene;
+    const root = roots[0];
     root.updateMatrixWorld(true);
     const extras = root.getObjectByName('lanes')?.userData as { lanes?: [number, number, number][][] } | undefined;
     if (extras?.lanes?.length === 6) lanes = extras.lanes.map((points) => new LanePath(points[0][0], points.map((p) => [p[2], p[1]] as const)));
@@ -305,7 +306,7 @@ export function createGoldenGateMode(budget: QualityBudget = presetBudget('balan
       root.add(mesh);
     }
     for (const holder of holders) holder.updateMatrixWorld(true);
-    scene.add(root, terrain.scene);
+    scene.add(...roots);
   });
 
   // Sparks on the main cables: a bright head and a fading trail, kicked up towards the tower tops on each hit.

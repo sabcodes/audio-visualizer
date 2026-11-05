@@ -1,0 +1,2376 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node@22/22.23.4/bin/node",
+      "./node_modules/.bin/playwright",
+      "test",
+      "--config=playwright.stage5.config.ts",
+      "--grep-invert",
+      "@soak"
+    ],
+    "configFile": "./playwright.stage5.config.ts",
+    "rootDir": "./tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-webgpu",
+        "name": "release-webgpu",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-webgl2",
+        "name": "release-webgl2",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-software",
+        "name": "release-software",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "release-webgpu",
+        "testDir": "./tests/browser",
+        "snapshotDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": "**/stage5*.spec.ts",
+        "timeout": 90000,
+        "use": {
+          "channel": "chrome",
+          "headless": true,
+          "baseURL": "http://127.0.0.1:5178",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "launchOptions": {
+            "args": [
+              "--enable-unsafe-webgpu"
+            ]
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "release-webgpu"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "release-webgl2",
+        "testDir": "./tests/browser",
+        "snapshotDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": "**/stage5*.spec.ts",
+        "timeout": 90000,
+        "use": {
+          "channel": "chrome",
+          "headless": true,
+          "baseURL": "http://127.0.0.1:5178",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "release-webgl2"
+      },
+      {
+        "grep": {},
+        "grepInvert": {},
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "release-software",
+        "testDir": "./tests/browser",
+        "snapshotDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": "**/stage5*.spec.ts",
+        "timeout": 90000,
+        "use": {
+          "channel": "chrome",
+          "headless": true,
+          "baseURL": "http://127.0.0.1:5178",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "launchOptions": {
+            "args": [
+              "--enable-webgl",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader"
+            ]
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "release-software"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/stage5-matrix.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "stage5.spec.ts",
+      "file": "stage5.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "root entry loads the visualizer with parameters and no legacy assets",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1149,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:22.327Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-2a7f7314f6fe6d218238",
+          "file": "stage5.spec.ts",
+          "line": 18,
+          "column": 1
+        },
+        {
+          "title": "static favorites persist, migrate once, and report storage failures honestly",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 42,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 129,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:23.926Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 42,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-aaae97f0054d07df870b",
+          "file": "stage5.spec.ts",
+          "line": 41,
+          "column": 1
+        },
+        {
+          "title": "denied native adapter falls back automatically and strict native can recover",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 971,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:24.067Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-4f7bc392a923585440f2",
+          "file": "stage5.spec.ts",
+          "line": 56,
+          "column": 1
+        },
+        {
+          "title": "actual graphics loss stops rendering and compatibility restart preserves player and picture settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2524,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:25.053Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-ccc9e8e5875aac3f0a36",
+          "file": "stage5.spec.ts",
+          "line": 67,
+          "column": 1
+        },
+        {
+          "title": "compile and submission failures recover; stale selection errors cannot poison a restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2587,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:27.592Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-c3b0b64219c7b66bb689",
+          "file": "stage5.spec.ts",
+          "line": 107,
+          "column": 1
+        },
+        {
+          "title": "visibility suspension and cached-page restore leave one active renderer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 974,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:30.190Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-c12f7edb07d9bcc34998",
+          "file": "stage5.spec.ts",
+          "line": 131,
+          "column": 1
+        },
+        {
+          "title": "static build supports playback, comfort controls, resize, reload and compatibility restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 154,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 156,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:31.178Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 154,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-b6056db55f79ad7ab11a",
+          "file": "stage5.spec.ts",
+          "line": 153,
+          "column": 1
+        },
+        {
+          "title": "final reference captures cover scene, fullscreen, particles and compatibility treatments",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4404,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:31.345Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-c05c760bda45fec3df04",
+          "file": "stage5.spec.ts",
+          "line": 174,
+          "column": 1
+        },
+        {
+          "title": "no WebGPU API uses compatibility; no usable APIs produce actionable production recovery",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 189,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 145,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:35.758Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 189,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-bc5b3ff5778ca29a9448",
+          "file": "stage5.spec.ts",
+          "line": 188,
+          "column": 1
+        },
+        {
+          "title": "Spark Plume releases both compute buffers and kernels when switched away or superseded",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4207,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:35.916Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-7211febfa673172b300b",
+          "file": "stage5.spec.ts",
+          "line": 205,
+          "column": 1
+        },
+        {
+          "title": "failed backend initialization and repeated retries produce no unhandled rejections",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 770,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:40.136Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-a09c6291161d7c73445c",
+          "file": "stage5.spec.ts",
+          "line": 224,
+          "column": 1
+        },
+        {
+          "title": "cached model scenes survive repeat visits and overlapping preparation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 37087,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "model revisit release-webgpu/0/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/circle\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/circle\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:44:40.919Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-ffdd097ee5b68a6f3f96",
+          "file": "stage5.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "shadow and skinned scene resources plateau on every revisit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12356,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "resource revisit \u001b[33m0\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    },
+                    {
+                      "text": "resource revisit \u001b[33m1\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    },
+                    {
+                      "text": "resource revisit \u001b[33m2\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:18.019Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-93e59abd2015f51245b8",
+          "file": "stage5.spec.ts",
+          "line": 260,
+          "column": 1
+        },
+        {
+          "title": "Golden Gate instance buffers return to the same baseline after every visit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19887,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "bridge buffers \u001b[33m0\u001b[39m \u001b[33m6168\u001b[39m\n"
+                    },
+                    {
+                      "text": "bridge buffers \u001b[33m1\u001b[39m \u001b[33m6168\u001b[39m\n"
+                    },
+                    {
+                      "text": "bridge buffers \u001b[33m2\u001b[39m \u001b[33m6168\u001b[39m\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:30.386Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-9714e71051dce4370d35",
+          "file": "stage5.spec.ts",
+          "line": 278,
+          "column": 1
+        },
+        {
+          "title": "renderer restart preserves custom bloom on scenes with an authored bloom default",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 914,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:50.286Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-549447d300654091dde2",
+          "file": "stage5.spec.ts",
+          "line": 300,
+          "column": 1
+        },
+        {
+          "title": "root entry loads the visualizer with parameters and no legacy assets",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1048,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:52.110Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-373cfc82d23d0270196c",
+          "file": "stage5.spec.ts",
+          "line": 18,
+          "column": 1
+        },
+        {
+          "title": "static favorites persist, migrate once, and report storage failures honestly",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 42,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 127,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:53.645Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 42,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-2500a0274fa6030c9ccd",
+          "file": "stage5.spec.ts",
+          "line": 41,
+          "column": 1
+        },
+        {
+          "title": "denied native adapter falls back automatically and strict native can recover",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 951,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:53.785Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-5d24d7c57f487c5d6372",
+          "file": "stage5.spec.ts",
+          "line": 56,
+          "column": 1
+        },
+        {
+          "title": "actual graphics loss stops rendering and compatibility restart preserves player and picture settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1316,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:54.751Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-4aab02892af05335c76e",
+          "file": "stage5.spec.ts",
+          "line": 67,
+          "column": 1
+        },
+        {
+          "title": "compile and submission failures recover; stale selection errors cannot poison a restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2623,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:56.077Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-edb3ece1fe77f70004a6",
+          "file": "stage5.spec.ts",
+          "line": 107,
+          "column": 1
+        },
+        {
+          "title": "visibility suspension and cached-page restore leave one active renderer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 965,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:58.710Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-8330f5330a3a8a8074e6",
+          "file": "stage5.spec.ts",
+          "line": 131,
+          "column": 1
+        },
+        {
+          "title": "static build supports playback, comfort controls, resize, reload and compatibility restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 154,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 133,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:59.685Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 154,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-c7ef79a9bc08fdef2849",
+          "file": "stage5.spec.ts",
+          "line": 153,
+          "column": 1
+        },
+        {
+          "title": "final reference captures cover scene, fullscreen, particles and compatibility treatments",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4106,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:45:59.830Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-bad3b0ccc88c9e982cbf",
+          "file": "stage5.spec.ts",
+          "line": 174,
+          "column": 1
+        },
+        {
+          "title": "no WebGPU API uses compatibility; no usable APIs produce actionable production recovery",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 189,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 161,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:03.945Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 189,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-16cfdea845890f906145",
+          "file": "stage5.spec.ts",
+          "line": 188,
+          "column": 1
+        },
+        {
+          "title": "Spark Plume releases both compute buffers and kernels when switched away or superseded",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 206,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 136,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:04.118Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 206,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-b5e7c8c613c8c72305e7",
+          "file": "stage5.spec.ts",
+          "line": 205,
+          "column": 1
+        },
+        {
+          "title": "failed backend initialization and repeated retries produce no unhandled rejections",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 225,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 127,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:04.264Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 225,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-205c81db4a69c1ce5be5",
+          "file": "stage5.spec.ts",
+          "line": 224,
+          "column": 1
+        },
+        {
+          "title": "cached model scenes survive repeat visits and overlapping preparation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 25537,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "model revisit release-webgl2/0/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/circle\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/circle\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:04.400Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-65749a54059975eef0cb",
+          "file": "stage5.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "shadow and skinned scene resources plateau on every revisit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 261,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 153,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:29.948Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 261,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-5083be7d67d03c61a18a",
+          "file": "stage5.spec.ts",
+          "line": 260,
+          "column": 1
+        },
+        {
+          "title": "Golden Gate instance buffers return to the same baseline after every visit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 279,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 130,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:30.113Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 279,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-4256f9e17574ca68dbb2",
+          "file": "stage5.spec.ts",
+          "line": 278,
+          "column": 1
+        },
+        {
+          "title": "renderer restart preserves custom bloom on scenes with an authored bloom default",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 928,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:30.253Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-6d7eb50974211dc4bb8a",
+          "file": "stage5.spec.ts",
+          "line": 300,
+          "column": 1
+        },
+        {
+          "title": "root entry loads the visualizer with parameters and no legacy assets",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9624,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:31.690Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-06be49f76614ed21eda1",
+          "file": "stage5.spec.ts",
+          "line": 18,
+          "column": 1
+        },
+        {
+          "title": "static favorites persist, migrate once, and report storage failures honestly",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 42,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 158,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:41.711Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 42,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-e8950ea9cbfe14f5db78",
+          "file": "stage5.spec.ts",
+          "line": 41,
+          "column": 1
+        },
+        {
+          "title": "denied native adapter falls back automatically and strict native can recover",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 57,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 134,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:41.882Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 57,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-91039777b541e34c38f7",
+          "file": "stage5.spec.ts",
+          "line": 56,
+          "column": 1
+        },
+        {
+          "title": "actual graphics loss stops rendering and compatibility restart preserves player and picture settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6767,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:42.031Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-e35ba39a81aa5f41c089",
+          "file": "stage5.spec.ts",
+          "line": 67,
+          "column": 1
+        },
+        {
+          "title": "compile and submission failures recover; stale selection errors cannot poison a restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10765,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:48.807Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-f738a27935728eab1213",
+          "file": "stage5.spec.ts",
+          "line": 107,
+          "column": 1
+        },
+        {
+          "title": "visibility suspension and cached-page restore leave one active renderer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4549,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:46:59.581Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-e9a83275af6878af10e9",
+          "file": "stage5.spec.ts",
+          "line": 131,
+          "column": 1
+        },
+        {
+          "title": "static build supports playback, comfort controls, resize, reload and compatibility restart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 154,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 1019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:04.141Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 154,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-516def556199d64e6ea6",
+          "file": "stage5.spec.ts",
+          "line": 153,
+          "column": 1
+        },
+        {
+          "title": "final reference captures cover scene, fullscreen, particles and compatibility treatments",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 175,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 140,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.171Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 175,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-6a9a310fcab5edb2c81d",
+          "file": "stage5.spec.ts",
+          "line": 174,
+          "column": 1
+        },
+        {
+          "title": "no WebGPU API uses compatibility; no usable APIs produce actionable production recovery",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 189,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 138,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.321Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 189,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-7c744980005ef7ecec68",
+          "file": "stage5.spec.ts",
+          "line": 188,
+          "column": 1
+        },
+        {
+          "title": "Spark Plume releases both compute buffers and kernels when switched away or superseded",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 206,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 138,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.468Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 206,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-8baf7831868f24291812",
+          "file": "stage5.spec.ts",
+          "line": 205,
+          "column": 1
+        },
+        {
+          "title": "failed backend initialization and repeated retries produce no unhandled rejections",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 225,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 142,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.617Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 225,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-1f47675c027b980dd748",
+          "file": "stage5.spec.ts",
+          "line": 224,
+          "column": 1
+        },
+        {
+          "title": "cached model scenes survive repeat visits and overlapping preparation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 243,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 131,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.771Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 243,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-b1cfbd6a6cda8bc0c79f",
+          "file": "stage5.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "shadow and skinned scene resources plateau on every revisit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 261,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 133,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:05.914Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 261,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-22e9fc4c142029a9117c",
+          "file": "stage5.spec.ts",
+          "line": 260,
+          "column": 1
+        },
+        {
+          "title": "Golden Gate instance buffers return to the same baseline after every visit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 279,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 139,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:06.055Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 279,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-8f5912f08633ffec57df",
+          "file": "stage5.spec.ts",
+          "line": 278,
+          "column": 1
+        },
+        {
+          "title": "renderer restart preserves custom bloom on scenes with an authored bloom default",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 301,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-software",
+              "projectName": "release-software",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 139,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:06.205Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 301,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-446fd602f01e17de90f9",
+          "file": "stage5.spec.ts",
+          "line": 300,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-05T10:44:21.833Z",
+    "duration": 164600.343,
+    "expected": 24,
+    "skipped": 21,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

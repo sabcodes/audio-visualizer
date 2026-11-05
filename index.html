@@ -1,69 +1,86 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>EDM Visuals</title>
-  <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="black"/><circle cx="32" cy="32" r="22" fill="white"/><circle cx="32" cy="32" r="16" fill="black"/></svg>'>
-
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- Import map so addons that say `import ... from 'three'` can resolve -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
-    }
-  }
-  </script>
+  <link rel="stylesheet" href="/src/spike.css">
 </head>
 <body>
-  <div id="ui">
-    <div class="row">
-      <label class="btn">
-        <input id="audio-upload" type="file" accept="audio/*" />
-        Load Track
-      </label>
-      <button id="play-btn" class="btn">Play</button>
-      <label>Visual:
-        <select id="vis-type">
-          <option value="circle">Circle Waveform</option>
-          <option value="spiral">Spiral</option>
-          <option value="star">Star Burst 3D</option>
-          <option value="cube">Cubic Field</option>
-          <option value="particles">Neon Swirl Particles</option>
-          <option value="errors">Vintage Errors (Win95)</option>
-          <option value="lissajous">Laser Lissajous</option>
-          <option value="boids">Boids + Beat Bursts</option>
-          <option value="fftTunnel">FFT Tunnel (Lines)</option>
-          <option value="kaleidoPlane">Kaleidoscope Plane</option>
-          <option value="city">Instanced Cityscape</option>
-          <option value="glitchRing">Glitch Ring</option>
-          <option value="vjRings">VJ Smooth Rings (FS)</option>
-          <option value="neonKaleido">Neon Kaleido Blink (FS)</option>
-          <option value="starTunnel">Stars Tunnel</option>
-          <option value="bloomTunnel">Bloom Tunnel (Neon)</option>
-          <option value="glitchFX">Glitch FX (RGB Split)</option>
-          <option value="godrays">God Rays (Volumetric)</option>
-        </select>
-      </label>
+  <main id="viewport" aria-label="Music visualizer canvas"></main>
+  <section id="controls" aria-labelledby="title">
+    <header class="panel-header"><h1 id="title">EDM Visuals <small>Music visualizer</small></h1><div class="row"><button id="fullscreen" type="button">Fullscreen</button><button id="hide" type="button">Hide controls</button></div></header>
+    <div class="scene-browser">
+      <label for="scene-search">Find a scene</label>
+      <input id="scene-search" type="search" placeholder="Search names or waves…" autocomplete="off" aria-controls="mode">
+      <span id="scene-count" role="status"></span>
     </div>
-
-    <div class="row">
-      <label>Color change (sec):
-        <input id="color-speed-slider" type="range" min="0.1" max="5" step="0.1" value="0.5" />
-      </label>
-      <div class="time">
-        <span id="time-current">0:00</span> /
-        <span id="time-total">0:00</span>
-      </div>
+    <div class="row scene-picker">
+      <button id="previous-mode" type="button" aria-label="Previous scene">←</button>
+      <label>Scene <select id="mode"><option value="scene">Basic neon scene</option></select></label>
+      <button id="next-mode" type="button" aria-label="Next scene">→</button>
+      <button id="favorite" type="button" aria-pressed="false" title="Save this visualization to favorites">☆ Favorite</button>
     </div>
-
-    <input id="seek-slider" type="range" min="0" max="0" step="0.01" value="0" />
-  </div>
-
-  <!-- Load our code as a module so ESM imports work -->
-  <script type="module" src="script.js"></script>
+    <p id="scene-detail" role="status">Preparing scene…</p>
+    <details open><summary>Audio</summary>
+    <fieldset id="player">
+      <legend>Local audio · stays on this device</legend>
+      <label>Load track <input id="audio-upload" type="file" accept="audio/*"></label>
+      <div class="row"><button id="listen-btn" type="button">Use audio playing on this Mac</button></div>
+      <div class="row" id="file-controls"><button id="play-btn" type="button" disabled>Play</button><span id="track-name">No track loaded</span><output id="time-current">0:00</output><span>/</span><output id="time-total">0:00</output></div>
+      <label id="seek-label">Seek <input id="seek-slider" type="range" min="0" max="0" step="0.01" value="0" disabled></label>
+      <div class="row" id="live-controls" hidden><span>Listening to system audio ·</span><button id="stop-listen-btn" type="button">Stop</button></div>
+      <p id="audio-status" role="status" aria-live="polite">Silent startup · load a local audio file to begin.</p>
+    </fieldset>
+    </details>
+    <details open><summary>Picture and motion</summary>
+    <div class="row">
+      <label>Quality <select id="quality" data-persist><option value="compatibility">Compatibility (1080p, stylized rays)</option><option value="balanced" selected>Balanced (1080p, 24 ray samples)</option><option value="high">High (1440p, 40 ray samples)</option><option value="ultra">Ultra (native, 64 ray samples)</option></select></label>
+      <label>Transition <select id="transition" data-persist><option value="0">Cut</option><option value="0.35" selected>Short fade · 0.35s</option><option value="0.7">Soft fade · 0.7s</option></select></label>
+      <label>Exposure <input id="exposure" data-persist type="range" min="0.25" max="2" value="1" step="0.05"></label>
+      <label>Bloom <input id="bloom" data-persist type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
+    </div>
+    <div class="row">
+      <label>Bounce sensitivity <input id="sensitivity" data-persist type="range" min="0.25" max="4" step="0.05" value="1.8"></label>
+      <label>Color change (sec) <input id="color-speed-slider" data-persist type="range" min="0.1" max="5" step="0.1" value="0.5"></label>
+      <label><input id="reduced-flash" data-persist type="checkbox" checked> Reduced flash</label>
+      <label><input id="motion" data-persist type="checkbox"> Reduced motion</label>
+    </div>
+    <div class="row">
+      <label title="Asked only when ticked; frames stay in this browser"><input id="blob-webcam" type="checkbox"> Webcam source (Blob Track)</label>
+      <label>Blob Track picture change (sec) <input id="blob-timer" type="range" min="10" max="90" step="5" value="30"></label>
+    </div>
+    <p class="hint">Reduced motion holds animation and uses cuts. Reduced flash keeps brightness steady. Space plays/pauses · H hides controls · F enters fullscreen (outside native controls).</p>
+    </details>
+    <p id="status" role="status" aria-live="polite">Initializing renderer…</p>
+    <details open><summary>Rendering and diagnostics</summary>
+    <div class="row">
+      <label>Backend <select id="backend"><option value="auto">Automatic</option><option value="webgpu">WebGPU only</option><option value="webgl2">Force WebGL2</option></select></label>
+      <button id="restart" type="button">Restart renderer</button>
+      <label>Render scale <select id="scale" data-persist><option value="auto" selected>Auto</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+      <label>Target <select id="target-hz" data-persist><option value="30">30 Hz · quality priority</option><option value="60" selected>60 Hz</option><option value="120">120 Hz</option></select></label>
+      <label>Tone mapping <select id="tone-mapping" data-persist><option value="aces" selected>ACES</option><option value="agx">AgX</option></select></label>
+      <label>Antialiasing <select id="aa" data-persist><option value="fxaa" selected>FXAA</option><option value="smaa">SMAA</option><option value="none">Off</option></select></label>
+      <label>Spectrum <select id="spectrum" data-persist><option value="linear" selected>Linear bins</option><option value="log">Log frequency</option></select></label>
+      <label><input id="synthetic" type="checkbox"> Synthetic bass fixture (testing)</label>
+      <button id="freeze" type="button" aria-pressed="false">Freeze at 2s</button>
+    </div>
+    <pre id="diagnostics" aria-label="Rendering diagnostics">Waiting for first frame.</pre>
+    <div class="row"><button id="benchmark" type="button">Benchmark this scene (60s)</button><button id="export" type="button">Export diagnostics JSON</button><button id="compatibility" type="button" hidden>Restart in WebGL2</button></div>
+    <p id="benchmark-status" role="status"></p>
+    <p class="hint">God Rays uses raymarched scattering on WebGPU; WebGL2 and Compatibility use stylized cones. Visual preferences stay in this browser.</p>
+    </details>
+  </section>
+  <nav id="quick-controls" aria-label="Quick visualization controls" hidden>
+    <button id="show" type="button">Show controls</button>
+    <select id="favorite-modes" aria-label="Favorite visualizations"></select>
+    <button id="quick-favorite" type="button" aria-label="Favorite current visualization" aria-pressed="false">☆</button>
+    <label>Bloom <input id="quick-bloom" type="range" min="0" max="1.5" value="0.6" step="0.05"></label>
+    <label>Exposure <input id="quick-exposure" type="range" min="0.25" max="2" value="1" step="0.05"></label>
+  </nav>
+  <p id="settings-status" role="status" hidden></p>
+  <noscript>This visualizer requires JavaScript and a usable WebGPU or WebGL2 backend.</noscript>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -9,7 +9,7 @@ export default defineConfig({
   timeout: 90000,
   workers: 1,
   use: { baseURL: existingServer ?? 'http://127.0.0.1:5174', viewport: { width: 1280, height: 720 } },
-  webServer: existingServer ? undefined : { command: 'npm run dev -- --port 5174 --strictPort', url: 'http://127.0.0.1:5174/modern.html', reuseExistingServer: false },
+  webServer: existingServer ? undefined : { command: 'npm run dev -- --port 5174 --strictPort', url: 'http://127.0.0.1:5174/', reuseExistingServer: false },
   projects: [
     { name: 'stage4-webgpu', testMatch: '**/stage4*.spec.ts', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-unsafe-webgpu'] } } },
     { name: 'compatibility', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } } },

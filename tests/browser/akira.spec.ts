@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('Akira is selectable with its own bloom setting and survives switching modes', async ({ page }, info) => {
   test.skip(info.project.name !== 'compatibility');
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/modern.html?backend=webgl2&mode=akira');
+  await page.goto('/?backend=webgl2&mode=akira');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 60000 });
   await expect(page.locator('#mode')).toHaveValue('akira'); await expect(page.locator('#bloom')).toHaveValue('0.45');
   await page.locator('#mode').selectOption('circle'); await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');

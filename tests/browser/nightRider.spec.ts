@@ -6,7 +6,7 @@ for (const id of ['nightRider','nightRiderV2']) test(`${id} is selectable in the
   test.skip(info.project.name !== 'compatibility');
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`/modern.html?backend=webgl2&mode=${id}`);
+  await page.goto(`/?backend=webgl2&mode=${id}`);
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 60000 });
   await expect(page.locator('#mode')).toHaveValue(id);
   await expect(page.locator('#bloom')).toHaveValue('0.35');

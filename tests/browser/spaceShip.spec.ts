@@ -65,7 +65,7 @@ test('Space Ship is selectable in the visualizer and survives switching away and
   page.on('console',m=>{if(m.type()==='error'||m.text().includes('Model load failed'))errors.push(m.text());});
   // The existing app shell has no favicon; keep its browser-generated request out of the asset check.
   await page.route('**/favicon.ico',route=>route.fulfill({status:204}));
-  await page.goto('/modern.html?backend=webgl2&mode=spaceShip');
+  await page.goto('/?backend=webgl2&mode=spaceShip');
   await expect(page.locator('#status')).toHaveAttribute('data-state','ready',{timeout:60000});
   await expect(page.locator('#mode')).toHaveValue('spaceShip');
   await expect(page.locator('#mode option[value="spaceShip"]')).toHaveText('<experimental-wave6> Space Ship');

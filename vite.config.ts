@@ -1,11 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { localSettings } from './server/settings';
 
-// The legacy source stays untouched and served by Vite in development.
-// Production intentionally contains only the experimental bundled entry.
 export default defineConfig({
   base: './',
+  // Reliability runs must not reload when filesystem providers emit metadata events.
+  server: process.env.STAGE5_SOAK === '1' ? { hmr: false, watch: null } : undefined,
   plugins: [localSettings()],
-  build: { rollupOptions: { input: 'modern.html' } },
   test: { include: ['tests/unit/**/*.test.ts'] },
 });

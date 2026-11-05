@@ -13,7 +13,10 @@
     "test": "vitest run",
     "test:browser": "playwright test --project=compatibility --project=unsupported",
     "test:browser:hardware": "playwright test --project=hardware-webgpu",
-    "bench": "playwright test --project=benchmark"
+    "bench": "playwright test --project=benchmark",
+    "test:release": "playwright test --config=playwright.stage5.config.ts",
+    "test:release:static": "STAGE5_STATIC=1 playwright test --config=playwright.stage5.config.ts",
+    "test:release:soak": "STAGE5_SOAK=1 playwright test --config=playwright.stage5.config.ts --grep @soak"
   },
   "dependencies": {
     "three": "0.186.1"

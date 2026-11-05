@@ -25,7 +25,7 @@ test('captured tab audio drives the analyser after the video track is dropped @h
     const capture = MediaDevices.prototype.getDisplayMedia;
     MediaDevices.prototype.getDisplayMedia = async function (options) { const stream = await capture.call(this, options); target.captured.push(stream); return stream; };
   });
-  await page.goto('/modern.html?backend=webgpu');
+  await page.goto('/?backend=webgpu');
   await page.bringToFront(); // getDisplayMedia rejects with InvalidStateError from a background tab.
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
   await page.getByRole('button', { name: 'Use audio playing on this Mac' }).click();

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { figureModeDefinitions, modeDefinitions, waveThreeModeDefinitions } from '../../src/modes/registry';
+import { instantiate } from '../../src/modes/figures';
 import { TempoTracker } from '../../src/modes/figures';
 import { wingStroke, ISLANDS } from '../../src/modes/flightModes';
 import { crowdLayout } from '../../src/modes/crowdMode';
@@ -148,4 +149,19 @@ describe('figure motion helpers', () => {
     body.kick(bottom, 5, 5, 5); body.step(1 / 60);
     expect(Math.abs(body.offset[bottom * 3 + 1])).toBe(0);
   });
+});
+
+it('figure instances own geometry so rebaking plumage cannot corrupt the cached asset or another visit', async () => {
+  const model = await load('phoenix_webgpu');
+  const first = instantiate(model), second = instantiate(model);
+  let source: THREE.Mesh | undefined;
+  model.scene.traverse(object => { const mesh = object as THREE.Mesh; if (!source && mesh.isMesh && mesh.geometry.hasAttribute('color')) source = mesh; });
+  expect(source).toBeDefined();
+  const a = first.node(source!.name) as THREE.Mesh, b = second.node(source!.name) as THREE.Mesh;
+  expect(a.geometry).not.toBe(source!.geometry);
+  expect(a.geometry).not.toBe(b.geometry);
+  const original = source!.geometry.getAttribute('color');
+  a.geometry.deleteAttribute('color');
+  expect(source!.geometry.getAttribute('color')).toBe(original);
+  expect(b.geometry.getAttribute('color').itemSize).toBe(original.itemSize);
 });

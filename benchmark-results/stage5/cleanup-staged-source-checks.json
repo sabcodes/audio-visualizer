@@ -1,0 +1,647 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node@22/22.23.4/bin/node",
+      "./node_modules/.bin/playwright",
+      "test",
+      "--config=playwright.stage5.config.ts",
+      "--project=release-webgpu",
+      "--project=release-webgl2",
+      "--grep",
+      "cached model scenes|shadow and skinned|root entry"
+    ],
+    "configFile": "./playwright.stage5.config.ts",
+    "rootDir": "./tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-webgpu",
+        "name": "release-webgpu",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-webgl2",
+        "name": "release-webgl2",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "release-software",
+        "name": "release-software",
+        "testDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/stage5*.spec.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "release-webgpu",
+        "testDir": "./tests/browser",
+        "snapshotDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": "**/stage5*.spec.ts",
+        "timeout": 90000,
+        "use": {
+          "channel": "chrome",
+          "headless": true,
+          "baseURL": "http://127.0.0.1:5179",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "launchOptions": {
+            "args": [
+              "--enable-unsafe-webgpu"
+            ]
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "release-webgpu"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "./test-results/stage5-matrix",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "release-webgl2",
+        "testDir": "./tests/browser",
+        "snapshotDir": "./tests/browser",
+        "testIgnore": [],
+        "testMatch": "**/stage5*.spec.ts",
+        "timeout": 90000,
+        "use": {
+          "channel": "chrome",
+          "headless": true,
+          "baseURL": "http://127.0.0.1:5179",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "release-webgl2"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/stage5-matrix.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "stage5.spec.ts",
+      "file": "stage5.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "root entry loads the visualizer with parameters and no legacy assets",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1145,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:25.697Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-2a7f7314f6fe6d218238",
+          "file": "stage5.spec.ts",
+          "line": 18,
+          "column": 1
+        },
+        {
+          "title": "cached model scenes survive repeat visits and overlapping preparation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 37460,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "model revisit release-webgpu/0/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/0/circle\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgpu/1/circle\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:47:27.242Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-ffdd097ee5b68a6f3f96",
+          "file": "stage5.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "shadow and skinned scene resources plateau on every revisit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgpu",
+              "projectName": "release-webgpu",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11809,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "resource revisit \u001b[33m0\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    },
+                    {
+                      "text": "resource revisit \u001b[33m1\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    },
+                    {
+                      "text": "resource revisit \u001b[33m2\u001b[39m {\"attributes\":2,\"attributesSize\":6168,\"geometries\":2,\"indexAttributes\":0,\"indexAttributesSize\":0,\"indirectStorageAttributes\":0,\"indirectStorageAttributesSize\":0,\"programs\":16,\"programsSize\":38790,\"readbackBuffers\":0,\"readbackBuffersSize\":0,\"renderTargets\":14,\"storageAttributes\":0,\"storageAttributesSize\":0,\"textures\":26,\"texturesSize\":43704184,\"uniformBuffers\":17,\"uniformBuffersSize\":1824,\"total\":43750966}\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:48:04.716Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-93e59abd2015f51245b8",
+          "file": "stage5.spec.ts",
+          "line": 260,
+          "column": 1
+        },
+        {
+          "title": "root entry loads the visualizer with parameters and no legacy assets",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 929,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:48:17.054Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-373cfc82d23d0270196c",
+          "file": "stage5.spec.ts",
+          "line": 18,
+          "column": 1
+        },
+        {
+          "title": "cached model scenes survive repeat visits and overlapping preparation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 163388,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "model revisit release-webgl2/0/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/0/circle\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/swampGiant\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/dragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/highPolyDragon\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/phoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/lowPolyWesternPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/westernPhoenix\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/crowdMascot\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/skeletonBand\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/jellyBlob\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/goldenGate\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/lasNoches\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/evilPumpkin\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/nightRider\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/nightRiderV2\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/akira\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/water7\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/ichiraku\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/spaceShip\n"
+                    },
+                    {
+                      "text": "model revisit release-webgl2/1/circle\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:48:18.386Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-65749a54059975eef0cb",
+          "file": "stage5.spec.ts",
+          "line": 242,
+          "column": 1
+        },
+        {
+          "title": "shadow and skinned scene resources plateau on every revisit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "location": {
+                    "file": "./tests/browser/stage5.spec.ts",
+                    "line": 261,
+                    "column": 8
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "release-webgl2",
+              "projectName": "release-webgl2",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "skipped",
+                  "duration": 142,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-05T10:51:01.785Z",
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "./tests/browser/stage5.spec.ts",
+                        "line": 261,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "e3b4797897cdae8f29a9-5083be7d67d03c61a18a",
+          "file": "stage5.spec.ts",
+          "line": 260,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-05T10:47:25.226Z",
+    "duration": 216801.036,
+    "expected": 5,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -10,7 +10,7 @@ test('benchmark representative modes on native WebGPU @benchmark', async ({ page
   const label = process.env.BENCH_LABEL ?? 'run';
   const results: Record<string, unknown> = {};
   for (const mode of modes) {
-    await page.goto(`/modern.html?backend=webgpu&quality=balanced&mode=${mode}`);
+    await page.goto(`/?backend=webgpu&quality=balanced&mode=${mode}`);
     await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready');
     await page.locator('#synthetic').check();
     await page.selectOption('#scale', '1');
