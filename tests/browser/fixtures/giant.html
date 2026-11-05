@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Swamp Ogre render review</title>
+<link rel="icon" href="data:,">
+<style>body{margin:0;background:#06100c}canvas{display:block}</style>
+<script type="module">
+  import * as THREE from 'three/webgpu';
+  import { createGiantMode } from '../../../src/modes/giantMode.ts';
+  import { createOutputPipeline } from '../../../src/rendering/OutputPipeline.ts';
+  const renderer=new THREE.WebGPURenderer({forceWebGL:new URLSearchParams(location.search).get('backend')!=='webgpu',antialias:false});await renderer.init();renderer.setSize(960,640);
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace;
+  const mode=createGiantMode();await mode.ready;
+  const frame={time:0,delta:1/60,aspect:1.5,spectrumMapping:'linear',sampleRate:48000,hue:0,reducedMotion:false,reducedFlash:false,
+    response:{bass:0.75,loudness:0.8,impact:0,bounce:0.7},
+    audio:{waveform:new Float32Array(1024),spectrum:new Uint8Array(512),bass:0.7,mid:0.6,highs:0.4,rms:0.6,onset:false,time:0}};
+  const pipeline=createOutputPipeline(renderer,mode.scene,mode.camera,mode.filter);document.body.append(renderer.domElement);
+  const tick=(n=1)=>{for(let i=0;i<n;i++){frame.time+=frame.delta;mode.update(frame);}};
+  tick();
+  const position=name=>mode.scene.getObjectByName(name).getWorldPosition(new THREE.Vector3()).toArray();
+  const state=()=>({...mode.scene.userData,backend:renderer.backend.isWebGPUBackend?'webgpu':'webgl2',calls:renderer.info.render.drawCalls,hand:position('LeftHand'),club:position('socket_club_tip'),
+    camera:mode.camera.position.toArray(),head:mode.scene.getObjectByName('Head').quaternion.toArray()});
+  const render=()=>new Promise(resolve=>requestAnimationFrame(()=>{pipeline.render(0.28);resolve(state());}));
+  const beat=()=>{frame.audio.onset=true;frame.response.impact=1;tick();frame.audio.onset=false;frame.response.impact=0;};
+  window.giantReview={state,
+    async advance(n=1){tick(n);return render();},
+    async beat(n=15,limited=false){frame.reducedMotion=false;frame.reducedFlash=limited;beat();tick(n);return render();},
+    async frozen(){frame.reducedMotion=true;frame.delta=30;for(let i=0;i<20;i++)mode.update(frame);frame.delta=1/60;return render();},
+    async portrait(){frame.aspect=9/16;renderer.setSize(540,960);frame.delta=0;mode.update(frame);frame.delta=1/60;return render();},
+    async detail(){mode.camera.position.set(4.8,8.7,12.8);mode.camera.lookAt(0,8,0);return render();},
+    async laserPixels(){
+      const canvas=document.createElement('canvas');canvas.width=960;canvas.height=640;const ctx=canvas.getContext('2d');
+      const capture=()=>new Promise(resolve=>requestAnimationFrame(()=>{pipeline.render(0.28);ctx.drawImage(renderer.domElement,0,0);resolve(ctx.getImageData(0,0,960,640).data);}));
+      const laser=mode.scene.getObjectByName('Ogre / mouth laser');laser.visible=false;const before=await capture();laser.visible=true;const after=await capture();let changed=0;
+      for(let i=0;i<before.length;i+=4)if(Math.abs(before[i]-after[i])+Math.abs(before[i+1]-after[i+1])+Math.abs(before[i+2]-after[i+2])>25)changed++;return {changed};
+    },
+    rigHealth(){let maxEdge=0,finite=true,minFoot=Infinity;const a=new THREE.Vector3(),b=new THREE.Vector3();
+      mode.scene.getObjectByName('Swamp Ogre / character').traverse(mesh=>{if(!mesh.isSkinnedMesh)return;mesh.skeleton.update();
+        const index=mesh.geometry.index,position=mesh.geometry.attributes.position;
+        for(let i=0;i<position.count;i++){mesh.getVertexPosition(i,a);finite&&=a.toArray().every(Number.isFinite);}
+        for(let i=0;i<index.count;i+=3){mesh.getVertexPosition(index.getX(i),a);mesh.getVertexPosition(index.getX(i+1),b);maxEdge=Math.max(maxEdge,a.distanceTo(b));}
+      });
+      for(const name of ['LeftFoot','RightFoot'])minFoot=Math.min(minFoot,position(name)[1]);return {maxEdge,finite,minFoot};
+    },
+    release(){mode.dispose();pipeline.dispose();return mode.scene.children.length;}
+  };await render();document.body.dataset.ready='true';
+</script>

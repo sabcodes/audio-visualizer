@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Machine | Reference Mac, installed Chrome, native WebGPU (120 Hz display) |
+| Environment | Installed Chrome, native WebGPU; hardware identity omitted |
 | Preset | Balanced, render scale locked at 1.0, ACES + FXAA, bloom 0.6 |
 | Drawing buffer | 1920 × 1080 (asserted in every result) |
 | Input | Synthetic bass fixture, 5 s warmup, 60 s per mode |
@@ -37,7 +37,7 @@ rAF = requestAnimationFrame interval (display cadence, not GPU work). CPU = `mod
 
 ## What Stage 3 changed for a user
 
-- **Balanced now renders at 1080p internally on any display.** On this Mac's 2× screen, Stage 2 rendered at native 3024×1722, which is about 2.5× the pixels of Balanced's roughly 1897×1080. Presets: Compatibility 1080p with half particles, Balanced 1080p, High 1440p with 2× particles and 440 boids, Ultra native.
+- **Balanced now renders at 1080p internally on any display.** Stage 2 rendered at native display resolution, which in the benchmark was about 2.5× the pixels of Balanced's roughly 1897×1080. Presets: Compatibility 1080p with half particles, Balanced 1080p, High 1440p with 2× particles and 440 boids, Ultra native.
 - **Auto render scale.** It steps down one level on sustained slow frames when the measured CPU + GPU cost is actually high, probes back up when frames are within budget, and backs off if a probe regresses. It holds still during warmup, shader compiles, benchmarks and manual locks. The target is selectable (60 or 120 Hz).
 - **Mode switches compile before they display.** The previous mode keeps rendering, and only the requested mode is ever compiled.
 - **Diagnostics** show refresh-aware missed frames, CPU ms and GPU ms ("n/a" on WebGL2). Exports carry no user-agent or platform strings.

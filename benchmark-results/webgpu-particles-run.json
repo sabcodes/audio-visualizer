@@ -2,8 +2,8 @@
   "browser": "Chrome (desktop)",
   "visibility": "visible",
   "adapter": {
-    "vendor": "apple",
-    "architecture": "metal-3",
+    "vendor": "redacted",
+    "architecture": "redacted",
     "device": "",
     "description": "",
     "isFallbackAdapter": false

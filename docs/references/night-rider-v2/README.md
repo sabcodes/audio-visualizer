@@ -7,7 +7,7 @@ V2 shares the original 32-shot reel, six districts, six authored bike clips,
 procedural stunts, beat-driven exhaust, embers, drift sparks, tyre smoke and
 acceleration effects. Its wider camera views provide extra rider headroom.
 
-The supplied `/Users/sabarnoislam/Downloads/output.glb` is copied unchanged to
+The supplied character model is copied unchanged to
 `src/assets/wave6/nr_rider_v2.glb` (5,778,720 bytes). SHA-256:
 `640674b28adda7a0d623a2e51a72fc1afee0eab9431eb9216e0f7ff5ff23f59c`.
 It contains one textured A-pose mesh, with no skeleton or animation clips.

@@ -1,6 +1,6 @@
 # Build wave 6 visualization modes (code-only)
 
-You are building new audio-reactive visualization modes in the desktop music visualizer at `/Users/sabarnoislam/Desktop/visualizer` (Three.js 0.186, WebGPU first with a WebGL2 fallback, TSL node materials, Vite, Vitest, Playwright). The private GitHub repo is `sabcodes/desktop-music-visualizer`.
+You are building new audio-reactive visualization modes in the desktop music visualizer project root (Three.js 0.186, WebGPU first with a WebGL2 fallback, TSL node materials, Vite, Vitest, Playwright). The GitHub repo is `sabcodes/desktop-music-visualizer`.
 
 ## What to build
 
@@ -58,7 +58,7 @@ Study a few existing wave 5 modes before writing any code: `src/modes/registry.t
 
 Pull frames with ffmpeg at 4–8 fps and crop to the subject; contact sheets alone misled earlier attempts. Put working files in a scratch folder outside the repo, not in the repo. Batch 2 clips have audio: you can measure tempo and hit times from it.
 
-All files are in `/Users/sabarnoislam/.claude/uploads/11dbe423-83b1-4d3e-bb1f-50bfda679a77/`:
+Use the user-supplied files in the project's Wave6 assets folder:
 
 - #1 Night Parlour: `a6c79b89-image.jpg` (daylight still; the mode is at **night**)
 - #2 Slot Hall: `e94d9831-image.jpg`

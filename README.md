@@ -71,3 +71,16 @@ See the [Stage 4 rendering results](docs/stage4-results.md) and [Stage 5 release
 ### Phase 6 — Road to 200 visualizations · Planned
 
 - Expand the collection toward 200 visualizations.
+
+## Development checks
+
+```sh
+npm test -- --maxWorkers=2
+npm run build
+npm run test:browser:ogre
+npm run test:security
+```
+
+The Ogre checks use isolated, headless Chrome sessions on WebGPU and WebGL2. The optional repository security scanner uses Python's standard library; it is not an application dependency. Run `npm run security:staged` before committing. `npm run security:install` installs repository-local commit/push hooks and preserves existing hooks.
+
+Runtime assets are versioned under `src/assets/`. Curated reference sheets are included under `docs/`; original delivery ZIPs, extracted frame sequences, duplicate exports, and scratch scripts stay local and are ignored. The Ogre source asset can be rebuilt with Blender using `scripts/build_ogre.py`; Blender is only needed for authoring the model.

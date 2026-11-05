@@ -19,3 +19,32 @@ visualizer-capabilities*.json
 .DS_Store
 .claude/
 .superpowers/
+
+# Local credentials, browser automation traces and security reports
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.playwright-mcp/
+.security-reports/
+__pycache__/
+*.security-cleanup.tmp
+
+# Local source deliveries and extraction scratch; runtime copies live under src/assets
+/Model assets/
+/Model assets.zip
+/flower_peony_v2.glb
+/docs/superpowers/specs/wave-four-reference-images.zip
+/docs/references/las-noches/frames/
+/docs/references/las-noches/location-study/frames/
+/.perfcheck.mjs
+/.timed-shots.mjs
+
+# Duplicate Finder exports; keep the canonical files
+/benchmark-results/* 2.json
+/benchmark-results/stage3-review/* 2.*
+/docs/stage3-results 2.md
+/docs/research/* 2.md
+/docs/superpowers/plans/* 2.md
+/tests/browser/*spec 2.ts

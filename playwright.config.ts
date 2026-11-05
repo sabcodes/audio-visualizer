@@ -6,11 +6,13 @@ const existingServer = process.env.PLAYWRIGHT_BASE_URL;
 // Explicitly select the headed project to validate a physical GPU separately.
 export default defineConfig({
   testDir: './tests/browser',
+  outputDir: 'test-results/browser',
   timeout: 90000,
   workers: 1,
   use: { baseURL: existingServer ?? 'http://127.0.0.1:5174', viewport: { width: 1280, height: 720 } },
   webServer: existingServer ? undefined : { command: 'npm run dev -- --port 5174 --strictPort', url: 'http://127.0.0.1:5174/', reuseExistingServer: false },
   projects: [
+    { name: 'ogre-webgpu', testMatch: '**/giant.spec.ts', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-unsafe-webgpu'] } } },
     { name: 'stage4-webgpu', testMatch: '**/stage4*.spec.ts', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-unsafe-webgpu'] } } },
     { name: 'compatibility', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } } },
     { name: 'unsupported', testMatch: '**/unsupported.spec.ts', use: { channel: 'chrome', headless: true, launchOptions: { args: ['--disable-webgl', '--disable-webgpu'] } } },
