@@ -120,6 +120,18 @@ class SecurityGateTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertTrue({'private-or-archive-file', 'device-diagnostics'} <= {f['detector'] for f in report['findings']})
 
+    def test_machine_models_are_blocked_in_prose_without_blocking_generic_requirements(self):
+        model = 'Apple ' + 'M2 ' + 'Pro'
+        self.write('README.md', 'Captured on ' + model + '.')
+        self.run_git('add', 'README.md')
+        status, report = self.scan()
+        self.assertEqual(status, 1)
+        self.assertEqual(report['findings'][0]['detector'], 'hardware-model')
+        self.assertNotIn(model, json.dumps(report))
+        self.write('README.md', 'Requires a browser supporting WebGPU or WebGL2; no specific GPU is required.')
+        self.run_git('add', 'README.md')
+        self.assertEqual(self.scan()[0], 0)
+
     def test_legitimate_zip_is_scanned_and_nested_image_leaks_are_blocked(self):
         def archive(content):
             output = io.BytesIO()

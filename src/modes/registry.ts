@@ -104,7 +104,7 @@ export const legacyModeDefinitions: readonly ModeDefinition[] = [
   definition('glitchFX', 'Glitch FX (RGB Split)', createGlitchMode),
   definition('godrays', 'God Rays · Light Shafts', (budget, backend) => backend === 'webgpu' && budget.preset !== 'compatibility' ? createVolumetricMode(budget) : createSpatialMode('godrays')),
 ];
-// First wave of the 32 candidates in docs/research/2026-10-24-new-visualization-modes.md.
+// First collection of additional visualizations.
 export const waveOneModeDefinitions: readonly ModeDefinition[] = [
   definition('epicycles', 'Fourier Epicycles', createEpicycleMode),
   definition('polyhedra', 'Polyhedra Morph', createPolyhedraMode),
@@ -143,7 +143,7 @@ export const waveThreeModeDefinitions: readonly ModeDefinition[] = [
   definition('ledAnalyzer', 'LED Bar Analyzer', createLedAnalyzerMode),
   definition('storm', 'Thunderstorm Sky', (budget) => createStormMode(budget)),
 ];
-/** Figure modes built from the supplied glTF models (Model assets/wave3_assets, spec in docs/3d-asset-spec.md), labelled experimental in the menu. */
+/** Figure modes built from the bundled glTF models, labelled experimental in the menu. */
 export const figureModeDefinitions: readonly ModeDefinition[] = [
   definition('swampGiant', '<EXPERIMENTAL> Swamp Giant', createGiantMode),
   definition('dragon', '<EXPERIMENTAL> Low-Poly Dragon', createDragonMode),
@@ -160,7 +160,7 @@ const waveFour = (id: string, label: string, create: (budget: QualityBudget) => 
   definition(id, `<experimental-wave4> ${label}`, finish ? (budget) => withCinematic(create(budget), finish) : create, output);
 /** Camera finishes for the procedural modes whose references are footage or photographic renders. */
 const FILM = { grain: 0.05, halation: 0.3, vignette: 0.45, soften: 0.15 }, CLEAN = { grain: 0.03, halation: 0.2, vignette: 0.35, soften: 0.05 };
-/** Wave 4 (docs/superpowers/specs/2026-10-24-wave-four-modes-design.md): beat-gated modes from reference clips; 4b ones use the supplied kits. */
+/** Wave 4: beat-gated modes; the environment scenes use the supplied kits. */
 export const waveFourModeDefinitions: readonly ModeDefinition[] = [
   waveFour('prismBowtie', 'Prism Bowtie (FS)', createPrismBowtieMode, 'fullscreen', CLEAN),
   waveFour('blockBowtie', 'Block Bowtie (FS)', createBlockBowtieMode, 'fullscreen', CLEAN),
@@ -200,7 +200,7 @@ const waveFive = (id: string, label: string, create: (budget: QualityBudget) => 
 const waveFiveGpu = (...args: Parameters<typeof waveFive>): ModeDefinition => ({ ...waveFive(...args), backends: ['webgpu'] });
 const PAPER = { grain: 0.025, halation: 0, vignette: 0.15, soften: 0.03 };
 /**
- * Wave 5 (docs/superpowers/specs/2026-10-25-wave-five-modes-design.md): the code-only modes. The figure, hand,
+ * Wave 5: the code-only modes. The figure, hand,
  * tree and model-dependent clips (3, 4, 5, 7, 9, 11, 12, 13) and the Warehouse Hall change (14) are not built yet.
  */
 export const waveFiveModeDefinitions: readonly ModeDefinition[] = [
@@ -225,7 +225,7 @@ const waveSix = (id: string, label: string, create: (budget: QualityBudget) => V
 /** Soft focus for the facade: the clip is a long-lens phone shot. */
 const SOFT = { grain: 0.05, halation: 0, vignette: 0.4, soften: 0.28 };
 /**
- * Wave 6 (docs/superpowers/specs/2026-10-26-wave-six-modes-design.md), followed by the supplied
+ * Wave 6, followed by the supplied
  * Golden Gate, Las Noches and Night Rider models supplied by the user.
  */
 export const waveSixModeDefinitions: readonly ModeDefinition[] = [

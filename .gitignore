@@ -48,3 +48,26 @@ __pycache__/
 /docs/research/* 2.md
 /docs/superpowers/plans/* 2.md
 /tests/browser/*spec 2.ts
+
+# Generated measurements and private development notes are not release inputs
+/benchmark-results/
+/WEBGPU_MODERNIZATION_PLAN.md
+/docs/backlog.md
+/docs/3d-asset-spec.md
+/docs/stage*-results*.md
+/docs/research/
+/docs/superpowers/
+AGENTS.md
+CLAUDE.md
+CONTEXT.md
+/src/**/* 2.ts
+/tests/**/* 2.ts
+
+# Keep only the three README scene previews from the development reference folder
+/docs/references/**
+!/docs/references/akira/
+!/docs/references/akira/portrait.jpg
+!/docs/references/ichiraku/
+!/docs/references/ichiraku/portrait.jpg
+!/docs/references/water7/
+!/docs/references/water7/portrait.jpg

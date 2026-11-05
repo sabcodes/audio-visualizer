@@ -33,6 +33,7 @@ RULES = {
     'personal-home-path': HOME_PATH,
     'mac-private-temp': re.compile(rb'/(?:private/)?var/folders/[a-zA-Z0-9_/.-]{8,}'),
     'device-hostname': re.compile(rb'(?i)\b[a-z0-9][a-z0-9-]{2,60}(?:-MacBook(?:-Pro|-Air)?|-iMac|\.local)\b'),
+    'hardware-model': re.compile(rb'(?i)\b(?:Apple[ \t]+M[1-9][0-9]?(?:[ \t]+(?:Pro|Max|Ultra))?|MacBook(?:Pro|Air)?[0-9]{1,2},[0-9]{1,2}|NVIDIA[ \t]+(?:GeForce[ \t]+)?(?:RTX|GTX)[ \t]+[0-9]{3,4}|AMD[ \t]+Radeon[ \t]+RX[ \t]+[0-9]{3,4})\b'),
     'private-network-address': re.compile(rb'\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'),
     'device-mac-address': re.compile(rb'(?i)\b(?:[a-f0-9]{2}:){5}[a-f0-9]{2}\b'),
     'contact-email': re.compile(rb'(?i)(?<![a-z0-9._%+-])[a-z0-9][a-z0-9._%+-]{0,80}@[a-z0-9.-]+\.[a-z]{2,20}\b'),
@@ -93,7 +94,7 @@ class Scanner:
         for variant in variants:
             for detector, regex in RULES.items():
                 # Compressed pixels can accidentally resemble an email or device identifier.
-                if binary and detector in ('contact-email', 'device-mac-address', 'device-hostname', 'private-network-address'):
+                if binary and detector in ('contact-email', 'device-mac-address', 'device-hostname', 'hardware-model', 'private-network-address'):
                     continue
                 for match in regex.finditer(variant):
                     value = match.group()

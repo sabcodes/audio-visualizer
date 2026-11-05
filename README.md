@@ -4,7 +4,7 @@ A free music visualizer that runs entirely in your browser. Choose from 100+ mus
 
 Visualize audio from apps such as Spotify, YouTube, Apple Music, or VirtualDJ through browser or system-audio capture, where supported. You can also load local music files directly. Audio analysis happens on your device. App compatibility depends on your browser, operating system, and audio routing; external DJ hardware, including Pioneer DJ equipment, needs its audio routed through the computer for capture.
 
-Tested in Chrome on an Apple M2 Pro, including separate 30-minute WebGPU and WebGL2 reliability sessions. Performance varies by GPU, scene, resolution, and quality setting; other hardware and browsers are not yet verified. See the [release verification results](docs/stage5-results.md).
+Chrome is the primary tested browser. Performance varies by graphics support, scene, resolution, and quality setting. Start with **Balanced** quality and **Auto** render scale.
 
 ## Preview
 
@@ -20,14 +20,14 @@ A few more scenes from existing captures:
 
 ## Run locally
 
-Requires Node.js 22.12+ (22.x) or 24.x.
+Requires Node.js 22.12+ (22.x) or 24.x and npm. See [REQUIREMENTS.md](REQUIREMENTS.md) for the complete runtime, build, browser-test, and optional model-authoring requirements.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open [http://127.0.0.1:5173/](http://127.0.0.1:5173/). The visualizer opens at the root URL.
+Open the local URL printed by Vite. The visualizer opens at the root URL.
 
 Choose a scene, then load a track or select **Use audio playing on this Mac**. For live audio, choose a tab or screen in the browser's share picker and enable audio sharing if offered. Start with **Balanced** quality and **Auto** render scale. If graphics fail, use **Restart renderer** or **Restart in WebGL2**.
 
@@ -40,37 +40,7 @@ npm run preview
 
 Serve the app through localhost or HTTPS; opening the HTML directly with `file://` is unsupported.
 
-## Roadmap
-
-### Phase 1 — Initial visualizations · Complete
-
-- Created an initial collection of 100+ scenes that react to music.
-- Added support for local audio files and browser/system-audio capture where available.
-
-### Phase 2 — Rendering upgrades and release stabilization · Complete
-
-- Moved rendering to WebGPU, with a WebGL2 compatibility fallback.
-- Added volumetric lighting, richer GPU particles, transitions, and improved controls.
-- Verified recovery from graphics failures and long-session reliability on the reference Chrome/M2 Pro setup.
-- Made the visualizer the default at `/` and removed the old implementation.
-
-See the [Stage 4 rendering results](docs/stage4-results.md) and [Stage 5 release results](docs/stage5-results.md) for the tested scope and limitations.
-
-### Phase 3 — Visualization improvements · Current
-
-- Refine existing visualizations using community feedback.
-
-### Phase 4 — UI improvements · Planned
-
-- Improve scene browsing, controls, and usability.
-
-### Phase 5 — Webcam-reactive visuals · Planned
-
-- Add webcam-driven visual effects.
-
-### Phase 6 — Road to 200 visualizations · Planned
-
-- Expand the collection toward 200 visualizations.
+Favorites are saved locally. See [local settings](docs/local-settings.md) for storage and backup details.
 
 ## Development checks
 
@@ -83,4 +53,6 @@ npm run test:security
 
 The Ogre checks use isolated, headless Chrome sessions on WebGPU and WebGL2. The optional repository security scanner uses Python's standard library; it is not an application dependency. Run `npm run security:staged` before committing. `npm run security:install` installs repository-local commit/push hooks and preserves existing hooks.
 
-Runtime assets are versioned under `src/assets/`. Curated reference sheets are included under `docs/`; original delivery ZIPs, extracted frame sequences, duplicate exports, and scratch scripts stay local and are ignored. The Ogre source asset can be rebuilt with Blender using `scripts/build_ogre.py`; Blender is only needed for authoring the model.
+All required models, textures, and animation data are versioned in this repository. Most runtime assets are under `src/assets/`; Water 7 and Ichiraku also use the two tracked GLBs in `Model assets/Wave6 assets /`. Keep these paths intact. The tracked dragon source ZIP is required only by its optional Blender rebuild script. See [REQUIREMENTS.md](REQUIREMENTS.md) for details.
+
+Generated diagnostics, benchmarks, planning notes, and development reference captures stay local and are ignored. The README preview media and existing asset attribution notices are retained.
