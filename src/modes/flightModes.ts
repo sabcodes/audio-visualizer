@@ -6,6 +6,7 @@ import { sceneDefaults, resizeCamera, disposeScene, approach, beatGate, settleSt
 import { BoneOverlay, ClipPlayer, TempoTracker, createParticles, instantiate, loadTexture, prop, setMorph, whenLoaded, type Figure } from './figures';
 import { createHits } from './hitPulse';
 import { createStormCanyon } from './stormCanyon';
+import { detailDragon, dragonWings } from './dragonDetail';
 import { seededRandom } from '../rendering/diagnostics';
 import dragonUrl from '../assets/models/dragon.glb?url';
 import highPolyDragonUrl from '../assets/models/dragon_hd.glb?url';
@@ -210,9 +211,9 @@ const SHOT_SECONDS = 8;
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /**
- * The Wave 4.5 dragon: 34,784 tris, 77 joints. Its clips are authored as layers over a legs-only `flight_base`, so the
+ * The refined Wave 4.5 dragon retains its 77-joint rig. Clips are authored as layers over a legs-only `flight_base`, so the
  * crossfading one-shot player would unfold the legs; instead `flight_base` holds the legs folded and the wings, neck,
- * tail, jaw and head are all driven from the music with the same wing stroke as the low-poly dragon.
+ * tail, jaw and head are driven from the music; the wings use a continuous, articulated stroke.
  * Bone axes (probed): +X raises either wing and lifts neck and tail, +Z swings neck right and tail left, +X pitches the head down.
  */
 export function createHighPolyDragonMode(): VisualMode {
@@ -226,20 +227,17 @@ export function createHighPolyDragonMode(): VisualMode {
 
   let dragon: Figure | undefined, player: ClipPlayer | undefined;
   const overlay = new BoneOverlay(), tempo = new TempoTracker(), bands = new Float32Array(10);
-  let wings: { root: THREE.Object3D; elbow: THREE.Object3D; hand: THREE.Object3D }[] = [], neck: THREE.Object3D[] = [], tail: THREE.Object3D[] = [];
+  let wings: ReturnType<typeof dragonWings> | undefined, detail: ReturnType<typeof detailDragon> | undefined;
+  let neck: THREE.Object3D[] = [], tail: THREE.Object3D[] = [];
   let head: THREE.Object3D | undefined, jaw: THREE.Object3D | undefined, mouthSocket: THREE.Object3D | undefined, eyes: THREE.MeshStandardMaterial | undefined;
   let pulseExpand: { mesh: THREE.Mesh; index: number }[] = [], pulseContract: { mesh: THREE.Mesh; index: number }[] = [];
   const models = whenLoaded([highPolyDragonUrl], ([model]) => {
     dragon = instantiate(model);
-    // COLOR_0 holds part ids and distances, not colour; three.js would paint the dragon with it.
-    dragon.root.traverse((object) => (object as THREE.Mesh).geometry?.deleteAttribute('color'));
-    for (const material of dragon.materials.values()) { material.vertexColors = false; material.needsUpdate = true; }
+    detail = detailDragon(dragon);
     scene.add(dragon.root);
     player = new ClipPlayer(dragon.root, dragon.clips);
     player.loop('flight_base', 0);
-    wings = (['Left', 'Right'] as const).map((side) => ({
-      root: overlay.track(dragon!.node(`${side}WingRoot`)), elbow: overlay.track(dragon!.node(`${side}WingElbow`)), hand: overlay.track(dragon!.node(`${side}WingHand`)),
-    }));
+    wings = dragonWings(dragon, overlay);
     neck = [1, 2, 3, 4, 5, 6].map((i) => overlay.track(dragon!.node(`Neck${i}`)));
     tail = Array.from({ length: 10 }, (_, i) => overlay.track(dragon!.node(`Tail${i + 1}`)));
     head = overlay.track(dragon.node('Head')); jaw = overlay.track(dragon.node('Jaw')); mouthSocket = dragon.node('socket_mouth');
@@ -251,7 +249,7 @@ export function createHighPolyDragonMode(): VisualMode {
   const mouth = new THREE.Vector3(), throat = new THREE.Vector3(), aim = new THREE.Vector3(), centre = new THREE.Vector3();
   const random = seededRandom(5), skyRandom = seededRandom(77);
   const view = { ...SHOTS[0] }, hits = createHits({ decay: 0.35, interval: 0.22 });
-  let strokePower = 0, stroke = 1, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
+  let strokePower = 0, stroke = 0, wingDepth = 0, loudHold = 0, breathing = -1, roaring = -1, beats = 0, swell = 0, wave = 0, heat = 0, bank = 0, bankTarget = 0;
   return {
     scene, camera,
     ready: models.ready,
@@ -266,15 +264,13 @@ export function createHighPolyDragonMode(): VisualMode {
       sky.update(frame.delta, speed, loudness, frame.reducedFlash ? 0 : impact, skyRandom);
       sky.glow.value = approach(sky.glow.value, loudness, step, 0.3);
       swell = approach(swell, bass, step, 0.08);
-      // Every hit starts a wing beat whose depth comes from how hard it hit and the bounce slider; between hits the
-      // dragon keeps beating at a pace set by the bounce, so the wings follow the music instead of waiting on onsets.
-      // The slider scales the wing beat directly (the response values clamp, so loud music would otherwise hide it).
+      // Hits strengthen the next stroke without restarting the pose mid-flight.
       const gain = ((frame.sensitivity ?? 1.8) / 1.8) ** 0.8;
       hits.update(frame, 0.2);
       if (frame.audio.onset) beats++;
-      if (hits.fired) { stroke = 0; strokePower = Math.min(1, 0.4 + impact * 0.5 + bounce * 0.5); }
-      else if (stroke >= 1 && (bounce > 0.03 || loudness > 0.08)) { stroke = 0; strokePower = Math.min(1, 0.3 + bounce * 0.7); }
-      stroke = Math.min(1, stroke + frame.delta * (1 + bounce * 1.1 * Math.min(1.4, gain)) * Math.max(1, scale));
+      strokePower = hits.fired ? Math.min(1, 0.4 + impact * 0.5 + bounce * 0.5) : strokePower * Math.exp(-step / 0.5);
+      wingDepth = approach(wingDepth, Math.min(1.1, (0.12 + bounce * 0.55 + strokePower * 0.3) * gain), step, 0.16);
+      stroke = (stroke + step * (0.7 + bounce * 0.8 * Math.min(1.4, gain)) * Math.max(1, scale) * motion) % 1;
       if (dragon && player && head && jaw && mouthSocket) {
         // Accents: fire when the music stays loud, a roar on a hard hit every so often, banks between phrases.
         loudHold = loudness > 0.75 ? loudHold + frame.delta : 0;
@@ -284,8 +280,8 @@ export function createHighPolyDragonMode(): VisualMode {
         bankTarget *= Math.exp(-step / 1.4); bank = approach(bank, bankTarget, step, 0.3);
         overlay.reset();
         player.update(frame.delta, scale);
-        const depth = Math.min(1.2, (0.08 + bounce * 0.45 + strokePower * 0.35) * gain), lift = wingStroke(stroke) * motion * depth, lag = wingStroke(Math.max(0, stroke - 0.08)) * motion * depth;
-        for (const wing of wings) { overlay.turn(wing.root, lift); overlay.turn(wing.elbow, lag * 0.6); overlay.turn(wing.hand, lag * 0.4); }
+        const lift = wings?.(stroke, wingDepth * motion, wave) ?? 0;
+        detail?.update(wave, wingDepth * motion);
         wave += frame.delta * (2.5 + bounce * 3) * motion;
         // A roar rears the neck up and opens the jaw; breathing fire does the same, a little longer.
         const rearing = roaring >= 0 ? Math.sin(Math.min(1, roaring / 1.2) * Math.PI) : breathing >= 0 ? Math.sin(Math.min(1, breathing / 2.4) * Math.PI) : 0;
