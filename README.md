@@ -56,3 +56,24 @@ The Ogre checks use isolated, headless Chrome sessions on WebGPU and WebGL2. The
 All required models, textures, and animation data are versioned in this repository. Most runtime assets are under `src/assets/`; Water 7 and Ichiraku also use the two tracked GLBs in `Model assets/Wave6 assets /`. Keep these paths intact. The tracked dragon source ZIP is required only by its optional Blender rebuild script. See [REQUIREMENTS.md](REQUIREMENTS.md) for details.
 
 Generated diagnostics, benchmarks, planning notes, and development reference captures stay local and are ignored. The README preview media and existing asset attribution notices are retained.
+
+## Roadmap
+
+### Phase 1 — Initial set of 100+ music-reactive visualizations
+
+- Choose from 100+ visualizations and animations across a range of designs and effects. Use local music or capture audio from Spotify, YouTube, or Apple Music where supported.
+
+### Phase 2 — WebGPU and WebGL2 improvements and testing
+
+- Added volumetric effects, richer GPU particles, transitions, and improved controls.
+- Tested browser and hardware compatibility, long-session reliability, and renderer recovery. Made the modern visualizer the default entry.
+
+### Phase 3 — Visualization improvements **← We are here**
+
+- Refine visualizations based on community feedback.
+
+### Phase 4 — UI improvements
+
+### Phase 5 — Webcam-driven animations
+
+### Phase 6 — Road to 200 visualizations
