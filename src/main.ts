@@ -11,6 +11,7 @@ import { CalmAudio } from './audio/calmAudio';
 import { AdaptiveResolution } from './rendering/AdaptiveResolution';
 import { parseOutputSettings, type AntialiasingName, type ToneMappingName } from './rendering/outputSettings';
 import { presetBudget, qualityPresets, type QualityPreset } from './rendering/quality';
+import { loadFavorites, saveFavorite } from './settings';
 
 const element = <T extends HTMLElement>(id: string) => {
   const found = document.getElementById(id);
@@ -54,12 +55,10 @@ const quickFavorite = element<HTMLButtonElement>('quick-favorite');
 const favoriteModes = element<HTMLSelectElement>('favorite-modes');
 const quickBloom = element<HTMLInputElement>('quick-bloom');
 const quickExposure = element<HTMLInputElement>('quick-exposure');
-const favoritesKey = 'visualizer.favoriteModes';
+const settingsStatus = element('settings-status');
+const validFavoriteIds = new Set(modeDefinitions.map(definition => definition.id));
 let favorites = new Set<string>();
-try {
-  const saved: unknown = JSON.parse(localStorage.getItem(favoritesKey) ?? '[]');
-  if (Array.isArray(saved)) favorites = new Set(saved.filter((id): id is string => typeof id === 'string' && modeDefinitions.some((definition) => definition.id === id)));
-} catch { /* Favorites remain available for this session if storage is unavailable. */ }
+let favoritesReady = false, favoritesSaving = false;
 const params = new URLSearchParams(location.search);
 mode.replaceChildren(...modeDefinitions.map((definition) => new Option(definition.label, definition.id)));
 if (['auto', 'webgpu', 'webgl2'].includes(params.get('backend') ?? '')) backend.value = params.get('backend')!;
@@ -79,7 +78,7 @@ function syncQuickControls() {
     button.setAttribute('aria-pressed', String(selected));
     button.setAttribute('aria-label', `${selected ? 'Unfavorite' : 'Favorite'} current visualization`);
     button.title = `${selected ? 'Remove' : 'Save'} this visualization ${selected ? 'from' : 'to'} favorites`;
-    button.disabled = mode.disabled;
+    button.disabled = mode.disabled || !favoritesReady || favoritesSaving;
   }
   const options = Array.from(mode.options).filter((option) => favorites.has(option.value)).map((option) => {
     const favorite = new Option(option.text, option.value);
@@ -94,10 +93,15 @@ function syncQuickControls() {
   quickBloom.value = bloom.value;
   quickExposure.value = exposure.value;
 }
-for (const button of [favoriteButton, quickFavorite]) button.addEventListener('click', () => {
-  if (favorites.has(mode.value)) favorites.delete(mode.value); else favorites.add(mode.value);
-  try { localStorage.setItem(favoritesKey, JSON.stringify([...favorites])); } catch { /* Keep session favorites when browser storage is unavailable. */ }
+for (const button of [favoriteButton, quickFavorite]) button.addEventListener('click', async () => {
+  favoritesSaving = true;
+  settingsStatus.hidden = true;
   syncQuickControls();
+  try { favorites = await saveFavorite(mode.value, !favorites.has(mode.value), validFavoriteIds); }
+  catch {
+    settingsStatus.textContent = 'Could not save favorites. Your saved list is unchanged. Try again.';
+    settingsStatus.hidden = false;
+  } finally { favoritesSaving = false; syncQuickControls(); }
 });
 favoriteModes.addEventListener('change', () => {
   if (!favoriteModes.value || favoriteModes.selectedOptions[0]?.disabled || mode.disabled) return;
@@ -112,6 +116,12 @@ for (const [compact, full] of [[quickBloom, bloom], [quickExposure, exposure]]) 
   full.addEventListener('input', () => { compact.value = full.value; });
 }
 syncQuickControls();
+void loadFavorites(validFavoriteIds).then(saved => {
+  favorites = saved; favoritesReady = true; syncQuickControls();
+}).catch(() => {
+  settingsStatus.textContent = 'Could not load favorites. Check that the local server is running, then reload to retry.';
+  settingsStatus.hidden = false;
+});
 const requestedTime = Number(params.get('time'));
 const validTime = params.has('time') && Number.isFinite(requestedTime) && requestedTime >= 0;
 const fixedTime = validTime ? requestedTime : 2;

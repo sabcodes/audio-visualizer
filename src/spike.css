@@ -18,6 +18,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
 pre { font-size: .75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 #status[data-state=error] { color: #ffb8ad; }
 #favorite[aria-pressed=true], #quick-favorite[aria-pressed=true] { color: #ffe19a; border-color: #b69a60; }
+#settings-status { position: fixed; z-index: 30; bottom: 12px; left: 12px; max-width: calc(100vw - 48px); margin: 0; padding: 10px 12px; background: #231c24; border: 1px solid #ae7169; border-radius: 6px; color: #ffb8ad; }
 #quick-controls { position: fixed; z-index: 20; top: 12px; left: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; box-sizing: border-box; max-width: calc(100vw - 24px); padding: 8px 10px; border: 1px solid rgb(180 205 235 / 15%); border-radius: 10px; background: rgb(8 10 20 / 35%); backdrop-filter: blur(8px); opacity: 0; transition: opacity 240ms ease; }
 #quick-controls:hover, #quick-controls:has(:focus-visible), #quick-controls:has(select:open) { opacity: .8; }
 #quick-controls button, #quick-controls select { min-height: 32px; padding: 4px 8px; font-size: .75rem; background: rgb(19 28 48 / 35%); border-color: rgb(180 205 235 / 25%); }

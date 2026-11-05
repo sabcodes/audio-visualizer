@@ -5,6 +5,10 @@ test-results/
 playwright-report/
 *.local
 
+# Project-local user preferences and atomic-save temporary files
+/data/user-settings.json
+/data/user-settings.json.*.tmp
+
 # User-supplied audio fixtures stay local
 *.wav
 *.mp3
