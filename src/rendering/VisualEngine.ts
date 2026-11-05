@@ -1,15 +1,16 @@
 import * as THREE from 'three/webgpu';
 import { initializeBackend, type BackendPreference } from './backendSelection';
-import { ModeRegistry, type ModeFrame, type VisualMode } from '../modes/registry';
+import { ModeRegistry, modeDefinitions, type ModeFrame, type VisualMode } from '../modes/registry';
 import { createOutputPipeline } from './OutputPipeline';
 import { basePixelRatio, presetBudget, type QualityBudget } from './quality';
 import { defaultOutput, toneMappingConstant, type OutputSettings } from './outputSettings';
+import { SnapshotTransition } from './SnapshotTransition';
 
-/** CPU submit cost per frame plus the latest resolved GPU time; GPU is null when unmeasurable. */
-export interface FrameBreakdown { cpuUpdateMs: number; gpuMs: number | null }
+/** Completion is an upper bound including submission/callback overhead, not GPU execution time. */
+export interface FrameBreakdown { cpuUpdateMs: number; gpuMs: number | null; gpuPassMs: number | null; gpuSample: number }
 
 export class VisualEngine {
-  readonly lastFrame: FrameBreakdown = { cpuUpdateMs: 0, gpuMs: null };
+  readonly lastFrame: FrameBreakdown = { cpuUpdateMs: 0, gpuMs: null, gpuPassMs: null, gpuSample: 0 };
   private nextResolve = 0;
   private resolving = false;
   private active?: VisualMode;
@@ -23,6 +24,10 @@ export class VisualEngine {
   /** Latest requested mode, which can differ from activeId while a select is compiling. */
   private requestedId?: string;
   private selectGeneration = 0;
+  private selection: Promise<unknown> = Promise.resolve();
+  private readonly transition = new SnapshotTransition();
+  private transitionSeconds = 0.35;
+  private lastBloom = 0.6;
   private outputSettings: OutputSettings = { ...defaultOutput };
   private pipelineSettings?: OutputSettings;
   /** Test seam (DEV debug hook only): stretches the compile window so lifecycle races are reproducible. */
@@ -66,6 +71,11 @@ export class VisualEngine {
   get output() { return { ...this.outputSettings }; }
   /** AA the active pipeline was actually built with (can lag `output` while a select is pending). */
   get pipelineAa() { return this.pipelineSettings?.aa; }
+  get transitioning() { return this.transition.active; }
+  setTransition(seconds: number, reducedMotion = false) {
+    this.transitionSeconds = reducedMotion ? 0 : seconds;
+    this.transition.setDuration(this.transitionSeconds);
+  }
 
   /** Tone mapping applies immediately; changing AA rebuilds only the active output pipeline. */
   setOutput(settings: OutputSettings) {
@@ -74,7 +84,7 @@ export class VisualEngine {
     this.renderer.toneMapping = toneMappingConstant(settings.toneMapping);
     if (rebuild && this.active) {
       this.pipeline?.dispose();
-      this.pipeline = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter, { aa: settings.aa });
+      this.pipeline = createOutputPipeline(this.renderer, this.active.scene, this.active.camera, this.active.filter, { aa: settings.aa, resolutionScale: this.active.resolutionScale });
       this.pipelineSettings = { ...settings };
     }
   }
@@ -86,6 +96,18 @@ export class VisualEngine {
   async select(mode: string): Promise<boolean> {
     const generation = ++this.selectGeneration;
     this.requestedId = mode;
+    // At most one candidate may own assets/compile work; queued stale requests allocate nothing.
+    const previous = this.selection;
+    const task = (async () => {
+      await previous.catch(() => {});
+      if (generation !== this.selectGeneration || this.disposed) return false;
+      return this.prepareSelection(mode, generation);
+    })();
+    this.selection = task;
+    return task;
+  }
+
+  private async prepareSelection(mode: string, generation: number): Promise<boolean> {
     let candidate: VisualMode | undefined;
     let output: ReturnType<typeof createOutputPipeline> | undefined;
     const candidateSettings = { ...this.outputSettings };
@@ -93,8 +115,15 @@ export class VisualEngine {
       candidate = this.modes.create(mode, this.backend, this.budget);
       // Models load before compiling, so a figure never pops in after the swap.
       await candidate.ready;
-      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa });
+      if (generation !== this.selectGeneration || this.disposed) { candidate.dispose(); return false; }
+      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa, resolutionScale: candidate.resolutionScale });
       await this.renderer.compileAsync(candidate.scene, candidate.camera);
+      output.prepare(this.lastBloom);
+      // Register geometry/storage ownership before compiling kernels, even for superseded candidates.
+      // Simulation hooks run only after activation: legacy hooks can change shared renderer state.
+      await candidate.prepare?.(this.renderer);
+      await this.gpuQueue?.onSubmittedWorkDone();
+      if (this.transitionSeconds > 0 && this.active) await this.transition.prepare(this.renderer);
       if (this.compileDelayMs > 0) await new Promise((done) => setTimeout(done, this.compileDelayMs));
     } catch (error) {
       output?.dispose(); candidate?.dispose();
@@ -102,23 +131,31 @@ export class VisualEngine {
       throw error;
     }
     if (generation !== this.selectGeneration || this.disposed) { output.dispose(); candidate.dispose(); return false; }
-    if (candidateSettings.aa !== this.outputSettings.aa) {
-      // AA changed while compiling; rebuild so the swapped-in pipeline matches the current setting.
-      output.dispose();
-      Object.assign(candidateSettings, this.outputSettings);
-      output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa });
-    }
+    try {
+      if (candidateSettings.aa !== this.outputSettings.aa) {
+        // AA changed while compiling; rebuild so the swapped-in pipeline matches the current setting.
+        output.dispose();
+        Object.assign(candidateSettings, this.outputSettings);
+        output = createOutputPipeline(this.renderer, candidate.scene, candidate.camera, candidate.filter, { aa: candidateSettings.aa, resolutionScale: candidate.resolutionScale });
+        output.prepare(this.lastBloom);
+      }
+      const isCanvas = (id?: string) => modeDefinitions.find(definition => definition.id === id)?.output !== 'dom';
+      if (this.pipeline && this.transitionSeconds > 0 && isCanvas(this.activeId) && isCanvas(mode)) {
+        this.transition.capture(this.renderer, this.dimensions.x, this.dimensions.y, () => this.pipeline!.render(this.lastBloom));
+      } else this.transition.cancel();
+    } catch (error) { output.dispose(); candidate.dispose(); throw error; }
     this.clearMode();
     this.active = candidate;
     this.pipeline = output;
     this.pipelineSettings = candidateSettings;
     this.activeId = mode;
+    this.lastFrame.gpuMs = this.lastFrame.gpuPassMs = null;
     return true;
   }
 
   /** Re-creates the active mode only when its simulation budget changed; otherwise only re-sizes. */
   async setQuality(budget: QualityBudget): Promise<void> {
-    const rebuild = budget.particleScale !== this.budget.particleScale;
+    const rebuild = budget.preset !== this.budget.preset;
     this.budget = budget;
     this.resize(this.lastSize.width, this.lastSize.height, this.lastSize.scale);
     const target = this.requestedId ?? this.activeId;
@@ -140,23 +177,43 @@ export class VisualEngine {
     this.active?.update({ ...frame, aspect: size.x / size.y });
     this.active?.simulate?.(this.renderer);
     this.pipeline?.render(bloom);
+    this.lastBloom = bloom;
+    if (frame.reducedMotion) this.transition.cancel();
+    this.transition.render(this.renderer);
     this.lastFrame.cpuUpdateMs = performance.now() - start;
     this.resolveGpuTime(start);
   }
 
   get gpuTimingAvailable() {
-    return this.backend === 'webgpu' && this.renderer.hasFeature('timestamp-query');
+    return Boolean(this.gpuQueue);
   }
 
-  // Resolves at most every 500 ms off the frame path; r186 reports the most recent frame's summed pass durations.
+  private get gpuQueue() {
+    // The pinned backend exposes its initialized device; @types/three omits that member.
+    return this.backend === 'webgpu' ? (this.renderer.backend as unknown as { device: { queue: { onSubmittedWorkDone(): Promise<void> } } }).device.queue : undefined;
+  }
+
+  // Never use summed pass timestamps as elapsed frame time: pass intervals can overlap on Metal.
+  // Queue completion also includes compute and exposes backlog without summing overlapping work.
   private resolveGpuTime(now: number) {
     if (!this.gpuTimingAvailable || this.resolving || now < this.nextResolve) return;
     this.nextResolve = now + 500;
     this.resolving = true;
-    this.renderer.resolveTimestampsAsync('render')
-      .then((total) => { if (typeof total === 'number') this.lastFrame.gpuMs = total; })
+    const generation = this.selectGeneration;
+    this.gpuQueue!.onSubmittedWorkDone()
+      .then(() => {
+        if (this.disposed || generation !== this.selectGeneration) return;
+        this.lastFrame.gpuMs = performance.now() - now;
+        this.lastFrame.gpuSample++;
+      })
       .catch(() => { this.lastFrame.gpuMs = null; })
       .finally(() => { this.resolving = false; });
+    if (this.renderer.hasFeature('timestamp-query')) {
+      void Promise.all([this.renderer.resolveTimestampsAsync('render'), this.renderer.resolveTimestampsAsync('compute')])
+        .then(values => {
+          if (generation === this.selectGeneration && !this.disposed) this.lastFrame.gpuPassMs = values.reduce<number>((sum, value) => sum + (typeof value === 'number' ? value : 0), 0);
+        }).catch(() => { this.lastFrame.gpuPassMs = null; });
+    }
   }
 
   private clearMode() {
@@ -171,7 +228,9 @@ export class VisualEngine {
     if (this.disposed) return;
     this.disposed = true;
     this.selectGeneration++;
+    await this.selection.catch(() => {});
     this.clearMode();
+    this.transition.dispose();
     this.renderer.domElement.remove();
     await this.renderer.dispose();
   }

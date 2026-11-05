@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { cos, float, instanceIndex, instancedBufferAttribute, sin, uniform, uv, vec2, vec3, texture as sampleTexture } from 'three/tsl';
+import { cos, float, instanceIndex, instancedBufferAttribute, mix, sin, uniform, uv, vec2, vec3, texture as sampleTexture } from 'three/tsl';
 import type { VisualMode } from './types';
 import { sceneDefaults, resizeCamera, colorize, disposeScene } from './shared';
 import { seededRandom } from '../rendering/diagnostics';
@@ -25,24 +25,36 @@ function spriteMaterial() {
   return material;
 }
 function swirl(count: number): VisualMode {
-  const { scene, camera } = sceneDefaults(115);
-  const time = uniform(0), bounce = uniform(0), impact = uniform(0);
+  const { scene, camera } = sceneDefaults(100);
+  camera.position.y = 38; camera.lookAt(0, 0, 0);
+  const time = uniform(0), bounce = uniform(0), impact = uniform(0), flash = uniform(0);
+  const tint = uniform(new THREE.Color());
   const random = seededRandom(42), seeds = new Float32Array(count * 3);
   for (let i = 0; i < seeds.length; i += 3) { seeds[i] = random() * Math.PI * 2; seeds[i + 1] = 16 + random() * 22; seeds[i + 2] = (random() - 0.5) * 18; }
   const seed = instancedBufferAttribute<'vec3'>(new THREE.InstancedBufferAttribute(seeds, 3), 'vec3');
   const angle = seed.x.add(time.mul(0.6).mul(seed.y.div(40).add(0.2)));
-  const radius = seed.y.mul(bounce.mul(1.2).add(1));
+  const curl = sin(angle.mul(3).add(seed.z.mul(0.16)).sub(time.mul(0.4)));
+  const radius = seed.y.mul(bounce.mul(0.75).add(1)).add(curl.mul(2.5));
   const material = spriteMaterial();
-  material.positionNode = vec3(cos(angle).mul(radius), seed.z.mul(bounce.mul(0.5).add(1)), sin(angle).mul(radius));
-  material.scaleNode = vec2(impact.mul(0.35).add(0.55));
+  const lift = sin(angle.mul(2).add(seed.y.mul(0.25))).mul(4).add(curl.mul(bounce.mul(2).add(1)));
+  material.positionNode = vec3(cos(angle).mul(radius), seed.z.mul(bounce.mul(0.35).add(1)).add(lift), sin(angle).mul(radius));
+  // Colour varies through the volume; every seed stays resident on the GPU.
+  const depth = sin(angle).mul(0.5).add(0.5);
+  material.colorNode = mix(tint, vec3(0.3, 0.65, 1), seed.y.sub(16).div(22).mul(0.65)).mul(depth.mul(0.45).add(0.55));
+  material.opacityNode = uv().sub(0.5).length().smoothstep(0.05, 0.5).oneMinus().mul(flash.mul(0.15).add(0.65));
+  material.scaleNode = vec2(impact.mul(0.3).add(0.65).mul(seed.y.div(38).mul(0.45).add(0.55)));
   sprite(material, count, scene);
   const ringMaterial = new THREE.MeshBasicNodeMaterial({ color: 0x333333 });
   scene.add(new THREE.Mesh(new THREE.TorusGeometry(26, 0.12, 8, 128), ringMaterial));
   return {
     scene, camera,
     update(frame) {
-      time.value = frame.time; bounce.value = frame.response.bounce; impact.value = frame.response.impact;
-      resizeCamera(camera, frame.aspect); colorize(material, frame, 0.28);
+      if (!frame.reducedMotion) time.value = frame.time;
+      bounce.value = frame.reducedMotion ? 0 : frame.response.bounce;
+      impact.value = frame.reducedMotion ? 0 : frame.response.impact;
+      flash.value = frame.reducedFlash ? 0 : frame.response.impact;
+      tint.value.setHSL((frame.hue + 0.28) % 1, 0.85, 0.5);
+      resizeCamera(camera, frame.aspect);
     }, dispose: () => disposeScene(scene),
   };
 }
